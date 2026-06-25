@@ -1,0 +1,16 @@
+CREATE TABLE IF NOT EXISTS framework_local_message (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    topic VARCHAR(128) NOT NULL,
+    business_key VARCHAR(256),
+    payload TEXT,
+    status VARCHAR(32) NOT NULL,
+    retry_count INT NOT NULL DEFAULT 0,
+    max_retry INT NOT NULL DEFAULT 3,
+    next_retry_time DATETIME NULL,
+    error_message TEXT,
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_status_next_retry (status, next_retry_time),
+    INDEX idx_topic_business_key (topic, business_key),
+    INDEX idx_create_time (create_time)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='本地消息表';

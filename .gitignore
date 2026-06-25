@@ -1,0 +1,11 @@
+.DS_Store
+target/
+**/target/
+.codegraph/
+
+# IDE/local files
+.idea/
+*.iml
+
+# Logs
+*.log

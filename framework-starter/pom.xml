@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.framework</groupId>
+        <artifactId>framework-boot-starter</artifactId>
+        <version>1.0.0</version>
+    </parent>
+
+    <artifactId>framework-starter</artifactId>
+    <name>framework-starter</name>
+    <description>聚合 Starter：一次引入常用脚手架能力</description>
+
+    <dependencies>
+        <dependency><groupId>com.framework</groupId><artifactId>framework-core</artifactId></dependency>
+        <dependency><groupId>com.framework</groupId><artifactId>framework-web</artifactId></dependency>
+        <dependency><groupId>com.framework</groupId><artifactId>framework-auth</artifactId></dependency>
+        <dependency><groupId>com.framework</groupId><artifactId>framework-security</artifactId></dependency>
+        <dependency><groupId>com.framework</groupId><artifactId>framework-cache</artifactId></dependency>
+        <dependency><groupId>com.framework</groupId><artifactId>framework-lock</artifactId></dependency>
+        <dependency><groupId>com.framework</groupId><artifactId>framework-idempotent</artifactId></dependency>
+        <dependency><groupId>com.framework</groupId><artifactId>framework-crypto</artifactId></dependency>
+        <dependency><groupId>com.framework</groupId><artifactId>framework-log</artifactId></dependency>
+        <dependency><groupId>com.framework</groupId><artifactId>framework-rate-limiter</artifactId></dependency>
+        <dependency><groupId>com.framework</groupId><artifactId>framework-mq</artifactId></dependency>
+        <dependency><groupId>com.framework</groupId><artifactId>framework-retry</artifactId></dependency>
+        <dependency><groupId>com.framework</groupId><artifactId>framework-tools</artifactId></dependency>
+        <dependency><groupId>com.framework</groupId><artifactId>framework-notify</artifactId></dependency>
+        <dependency><groupId>com.framework</groupId><artifactId>framework-local-message</artifactId></dependency>
+        <dependency><groupId>com.framework</groupId><artifactId>framework-excel</artifactId></dependency>
+        <dependency><groupId>com.framework</groupId><artifactId>framework-datasource</artifactId></dependency>
+        <dependency><groupId>com.framework</groupId><artifactId>framework-redis</artifactId></dependency>
+        <dependency><groupId>com.framework</groupId><artifactId>framework-feign</artifactId></dependency>
+        <dependency><groupId>com.framework</groupId><artifactId>framework-monitor</artifactId></dependency>
+        <dependency><groupId>com.framework</groupId><artifactId>framework-job</artifactId></dependency>
+        <dependency><groupId>com.framework</groupId><artifactId>framework-file</artifactId></dependency>
+    </dependencies>
+</project>

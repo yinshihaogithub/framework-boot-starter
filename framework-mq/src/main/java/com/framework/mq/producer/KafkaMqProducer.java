@@ -1,0 +1,58 @@
+package com.framework.mq.producer;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.framework.core.constant.FrameworkConstants;
+import com.framework.core.trace.TraceContext;
+import com.framework.mq.config.MqProperties;
+import com.framework.mq.core.MessageWrapper;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.springframework.kafka.core.KafkaOperations;
+
+import java.nio.charset.StandardCharsets;
+
+/**
+ * Kafka sender adapter.
+ */
+@Slf4j
+public class KafkaMqProducer implements MqMessageSender {
+
+    private final KafkaOperations<String, String> kafkaOperations;
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
+    public KafkaMqProducer(KafkaOperations<String, String> kafkaOperations) {
+        this.kafkaOperations = kafkaOperations;
+    }
+
+    @Override
+    public MqProperties.Provider provider() {
+        return MqProperties.Provider.KAFKA;
+    }
+
+    @Override
+    public <T> void send(String topic, String key, MessageWrapper<T> wrapper) {
+        try {
+            fillTrace(wrapper);
+            String json = objectMapper.writeValueAsString(wrapper);
+            ProducerRecord<String, String> record = new ProducerRecord<>(topic, key, json);
+            record.headers().add(FrameworkConstants.TRACE_ID_HEADER,
+                    wrapper.getTraceId().getBytes(StandardCharsets.UTF_8));
+            if (wrapper.getParentMessageId() != null) {
+                record.headers().add("X-Parent-Message-Id",
+                        wrapper.getParentMessageId().getBytes(StandardCharsets.UTF_8));
+            }
+            kafkaOperations.send(record);
+            log.debug("[Kafka发送] topic={}, key={}, messageId={}, traceId={}",
+                    topic, key, wrapper.getMessageId(), wrapper.getTraceId());
+        } catch (Exception e) {
+            log.error("[Kafka发送失败] topic={}, key={}", topic, key, e);
+            throw new RuntimeException("Kafka消息发送失败", e);
+        }
+    }
+
+    private <T> void fillTrace(MessageWrapper<T> wrapper) {
+        if (wrapper.getTraceId() == null || wrapper.getTraceId().isBlank()) {
+            wrapper.setTraceId(TraceContext.ensureTraceId());
+        }
+    }
+}
