@@ -71,6 +71,29 @@ public class MqAdminDTO {
         private long todayRetrySuccessCount;
         /** 队列列表 */
         private List<MqQueueInfo> queues;
+        /** MQ运行配置 */
+        private MqRuntimeInfo runtime;
+    }
+
+    @Data
+    @Accessors(chain = true)
+    public static class MqRuntimeInfo {
+        private boolean enabled;
+        private String provider;
+        private boolean deadLetterEnabled;
+        private String deadLetterQueue;
+        private int maxRetry;
+        private long retryFixedDelay;
+        private String failedMessageTableName;
+        private List<MqProviderStatus> providers;
+    }
+
+    @Data
+    @Accessors(chain = true)
+    public static class MqProviderStatus {
+        private String provider;
+        private boolean active;
+        private boolean available;
     }
 
     @Data

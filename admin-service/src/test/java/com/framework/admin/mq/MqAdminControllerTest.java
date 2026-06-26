@@ -8,6 +8,8 @@ import com.framework.mq.deadletter.DeadLetterHandler;
 import com.framework.mq.deadletter.MqAdminDTO;
 import com.framework.mq.deadletter.MqFailedMessage;
 import com.framework.mq.deadletter.MqFailedMessageRepository;
+import com.framework.mq.producer.MqMessageSender;
+import com.framework.mq.core.MessageWrapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.support.StaticApplicationContext;
@@ -27,6 +29,8 @@ class MqAdminControllerTest {
     @Test
     void returnsEmptyPageWhenMqRuntimeIsNotEnabled() {
         MqAdminController controller = new MqAdminController(
+                provider(null),
+                provider(null),
                 provider(null),
                 provider(null),
                 provider(null),
@@ -52,6 +56,8 @@ class MqAdminControllerTest {
         MqAdminController controller = new MqAdminController(
                 provider(handler),
                 provider(null),
+                provider(new MqProperties()),
+                provider(null),
                 provider(null),
                 new StaticApplicationContext(),
                 auditService());
@@ -62,6 +68,36 @@ class MqAdminControllerTest {
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getData().getTotal()).isEqualTo(1);
         assertThat(result.getData().getRecords().get(0).getId()).isEqualTo(1L);
+    }
+
+    @Test
+    void returnsRuntimeInfoWithProviderAvailability() {
+        MqProperties properties = new MqProperties();
+        properties.setProvider(MqProperties.Provider.RABBIT);
+        MqAdminController controller = new MqAdminController(
+                provider(null),
+                provider(null),
+                provider(properties),
+                provider(sender(MqProperties.Provider.RABBIT)),
+                provider(null),
+                new StaticApplicationContext(),
+                auditService());
+
+        Result<MqAdminDTO.MqStats> result = controller.stats();
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getData().getRuntime().getProvider()).isEqualTo("RABBIT");
+        assertThat(result.getData().getRuntime().isDeadLetterEnabled()).isTrue();
+        assertThat(result.getData().getRuntime().getFailedMessageTableName())
+                .isEqualTo("framework_mq_failed_message");
+        assertThat(result.getData().getRuntime().getProviders())
+                .extracting(MqAdminDTO.MqProviderStatus::getProvider,
+                        MqAdminDTO.MqProviderStatus::isActive,
+                        MqAdminDTO.MqProviderStatus::isAvailable)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple("RABBIT", true, true),
+                        org.assertj.core.groups.Tuple.tuple("KAFKA", false, false),
+                        org.assertj.core.groups.Tuple.tuple("ROCKET", false, false));
     }
 
     private static MqFailedMessage failedMessage(Long id, String traceId, String status) {
@@ -108,6 +144,19 @@ class MqAdminControllerTest {
             @Override
             public Stream<T> stream() {
                 return value == null ? Stream.empty() : Stream.of(value);
+            }
+        };
+    }
+
+    private static MqMessageSender sender(MqProperties.Provider provider) {
+        return new MqMessageSender() {
+            @Override
+            public MqProperties.Provider provider() {
+                return provider;
+            }
+
+            @Override
+            public <T> void send(String destination, String routingKey, MessageWrapper<T> wrapper) {
             }
         };
     }

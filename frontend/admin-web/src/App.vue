@@ -371,6 +371,48 @@
           <el-card shadow="never">
             <template #header>
               <div class="section-head">
+                <span>运行配置</span>
+                <el-tag size="small" :type="mqStats?.runtime?.enabled ? 'success' : 'info'">
+                  {{ mqStats?.runtime?.enabled ? '已启用' : '未启用' }}
+                </el-tag>
+              </div>
+            </template>
+            <div class="runtime-grid">
+              <div class="runtime-item">
+                <span>当前 Provider</span>
+                <strong>{{ mqStats?.runtime?.provider || '-' }}</strong>
+              </div>
+              <div class="runtime-item">
+                <span>死信队列</span>
+                <strong>{{ mqStats?.runtime?.deadLetterQueue || '-' }}</strong>
+              </div>
+              <div class="runtime-item">
+                <span>最大重试</span>
+                <strong>{{ mqStats?.runtime?.maxRetry ?? 0 }}</strong>
+              </div>
+              <div class="runtime-item">
+                <span>重试间隔</span>
+                <strong>{{ mqStats?.runtime?.retryFixedDelay ?? 0 }} ms</strong>
+              </div>
+              <div class="runtime-item table-name">
+                <span>失败消息表</span>
+                <strong>{{ mqStats?.runtime?.failedMessageTableName || '-' }}</strong>
+              </div>
+            </div>
+            <div class="provider-strip">
+              <el-tag
+                v-for="provider in mqStats?.runtime?.providers ?? []"
+                :key="provider.provider"
+                :type="providerTagType(provider)"
+                effect="plain"
+              >
+                {{ provider.provider }} · {{ provider.active ? '当前' : provider.available ? '可用' : '未接入' }}
+              </el-tag>
+            </div>
+          </el-card>
+          <el-card shadow="never">
+            <template #header>
+              <div class="section-head">
                 <span>失败消息</span>
                 <div class="actions">
                   <el-select v-model="mqQuery.status" clearable placeholder="状态" class="filter">
@@ -1110,6 +1152,7 @@ import {
   type LocalMessage,
   type MenuItem,
   type MqFailedMessage,
+  type MqProviderStatus,
   type MqStats,
   type NotifyRecord,
   type NotifyTemplate,
@@ -2274,6 +2317,13 @@ function mqStatusType(status?: string) {
   return 'info'
 }
 
+function providerTagType(provider: MqProviderStatus) {
+  if (provider.active && provider.available) return 'success'
+  if (provider.active) return 'warning'
+  if (provider.available) return 'primary'
+  return 'info'
+}
+
 function localStatusType(status?: string) {
   if (status === 'FAILED') return 'danger'
   if (status === 'SUCCESS') return 'success'
@@ -2704,6 +2754,23 @@ function formatRuntime(value: unknown) {
 .runtime-item span {
   color: #71717a;
   font-size: 12px;
+}
+
+.runtime-item strong {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  color: #18181b;
+}
+
+.runtime-item.table-name {
+  grid-column: span 2;
+}
+
+.provider-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
 }
 
 .trace-timeline {

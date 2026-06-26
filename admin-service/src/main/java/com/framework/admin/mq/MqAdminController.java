@@ -4,10 +4,12 @@ import com.framework.admin.audit.AdminAuditService;
 import com.framework.auth.context.UserContextHolder;
 import com.framework.core.result.PageResult;
 import com.framework.core.result.Result;
+import com.framework.mq.config.MqProperties;
 import com.framework.mq.deadletter.DeadLetterHandler;
 import com.framework.mq.deadletter.MqAdminDTO;
 import com.framework.mq.deadletter.MqFailedMessage;
 import com.framework.mq.deadletter.MqRetryScheduler;
+import com.framework.mq.producer.MqMessageSender;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
@@ -29,8 +31,10 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Properties;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -48,17 +52,23 @@ public class MqAdminController {
 
     private final ObjectProvider<DeadLetterHandler> deadLetterHandlerProvider;
     private final ObjectProvider<MqRetryScheduler> retrySchedulerProvider;
+    private final ObjectProvider<MqProperties> mqPropertiesProvider;
+    private final ObjectProvider<MqMessageSender> messageSenderProvider;
     private final ObjectProvider<RabbitAdmin> rabbitAdminProvider;
     private final ApplicationContext applicationContext;
     private final AdminAuditService auditService;
 
     public MqAdminController(ObjectProvider<DeadLetterHandler> deadLetterHandlerProvider,
                              ObjectProvider<MqRetryScheduler> retrySchedulerProvider,
+                             ObjectProvider<MqProperties> mqPropertiesProvider,
+                             ObjectProvider<MqMessageSender> messageSenderProvider,
                              ObjectProvider<RabbitAdmin> rabbitAdminProvider,
                              ApplicationContext applicationContext,
                              AdminAuditService auditService) {
         this.deadLetterHandlerProvider = deadLetterHandlerProvider;
         this.retrySchedulerProvider = retrySchedulerProvider;
+        this.mqPropertiesProvider = mqPropertiesProvider;
+        this.messageSenderProvider = messageSenderProvider;
         this.rabbitAdminProvider = rabbitAdminProvider;
         this.applicationContext = applicationContext;
         this.auditService = auditService;
@@ -83,6 +93,7 @@ public class MqAdminController {
             stats.setTotalCount(store.size());
         }
         stats.setQueues(getQueueInfos());
+        stats.setRuntime(getRuntimeInfo());
         return Result.success(stats);
     }
 
@@ -269,6 +280,40 @@ public class MqAdminController {
             log.debug("获取队列信息失败: {}", e.getMessage());
         }
         return queues;
+    }
+
+    private MqAdminDTO.MqRuntimeInfo getRuntimeInfo() {
+        MqProperties properties = mqPropertiesProvider.getIfAvailable();
+        MqAdminDTO.MqRuntimeInfo info = new MqAdminDTO.MqRuntimeInfo();
+        if (properties == null) {
+            return info.setEnabled(false)
+                    .setProvider("NONE")
+                    .setDeadLetterEnabled(false)
+                    .setMaxRetry(0)
+                    .setRetryFixedDelay(0)
+                    .setProviders(providerStatuses(null));
+        }
+        return info.setEnabled(properties.isEnabled())
+                .setProvider(properties.getProvider().name())
+                .setDeadLetterEnabled(properties.getDeadLetter().isEnabled())
+                .setDeadLetterQueue(properties.getDeadLetter().getQueue())
+                .setMaxRetry(properties.getMaxRetry())
+                .setRetryFixedDelay(properties.getRetry().getFixedDelay())
+                .setFailedMessageTableName(properties.getFailedMessageTableName())
+                .setProviders(providerStatuses(properties.getProvider()));
+    }
+
+    private List<MqAdminDTO.MqProviderStatus> providerStatuses(MqProperties.Provider activeProvider) {
+        Set<MqProperties.Provider> availableProviders = messageSenderProvider.stream()
+                .map(MqMessageSender::provider)
+                .collect(Collectors.toCollection(() -> EnumSet.noneOf(MqProperties.Provider.class)));
+        return List.of(MqProperties.Provider.RABBIT, MqProperties.Provider.KAFKA, MqProperties.Provider.ROCKET)
+                .stream()
+                .map(provider -> new MqAdminDTO.MqProviderStatus()
+                        .setProvider(provider.name())
+                        .setActive(provider == activeProvider)
+                        .setAvailable(availableProviders.contains(provider)))
+                .toList();
     }
 
     private void fillRabbitQueueMetrics(RabbitAdmin rabbitAdmin, Queue queue, MqAdminDTO.MqQueueInfo info) {

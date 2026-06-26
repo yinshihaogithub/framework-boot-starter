@@ -30,6 +30,24 @@ export interface MqStats {
   exhaustedCount: number
   totalCount: number
   queues: MqQueueInfo[]
+  runtime?: MqRuntimeInfo
+}
+
+export interface MqRuntimeInfo {
+  enabled: boolean
+  provider: string
+  deadLetterEnabled: boolean
+  deadLetterQueue?: string
+  maxRetry: number
+  retryFixedDelay: number
+  failedMessageTableName?: string
+  providers: MqProviderStatus[]
+}
+
+export interface MqProviderStatus {
+  provider: string
+  active: boolean
+  available: boolean
 }
 
 export interface MqQueueInfo {
