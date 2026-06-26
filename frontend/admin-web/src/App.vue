@@ -36,6 +36,11 @@
         </nav>
       </div>
       <div class="header-actions">
+        <el-input v-model="traceKeyword" clearable placeholder="Trace ID" class="header-trace" @keyup.enter="searchTrace">
+          <template #prefix>
+            <el-icon><Search /></el-icon>
+          </template>
+        </el-input>
         <el-badge value="1" class="header-badge">
           <el-button :icon="Bell" circle />
         </el-badge>
@@ -87,19 +92,6 @@
           <div>
             <div class="page-title">{{ greetingTitle }}</div>
             <div class="page-meta">{{ viewTitle }} · {{ currentUser?.roles?.join(', ') || 'ADMIN' }}</div>
-          </div>
-          <div class="topbar-actions">
-            <el-input v-model="traceKeyword" clearable placeholder="Trace ID" class="trace-input" @keyup.enter="searchTrace">
-              <template #prefix>
-                <el-icon><Search /></el-icon>
-              </template>
-            </el-input>
-            <el-tooltip content="刷新">
-              <el-button :icon="Refresh" circle @click="refreshCurrent" />
-            </el-tooltip>
-            <el-tooltip content="退出">
-              <el-button :icon="SwitchButton" circle @click="logout" />
-            </el-tooltip>
           </div>
         </el-header>
 
@@ -2354,6 +2346,10 @@ function formatRuntime(value: unknown) {
   gap: 10px;
 }
 
+.header-trace {
+  width: 220px;
+}
+
 .top-nav {
   gap: 24px;
 }
@@ -2581,7 +2577,6 @@ function formatRuntime(value: unknown) {
   font-size: 13px;
 }
 
-.topbar-actions,
 .actions,
 .section-head {
   display: flex;
@@ -2591,10 +2586,6 @@ function formatRuntime(value: unknown) {
 
 .section-head {
   justify-content: space-between;
-}
-
-.trace-input {
-  width: 220px;
 }
 
 .content {
@@ -2846,6 +2837,11 @@ function formatRuntime(value: unknown) {
 }
 
 @media (max-width: 960px) {
+  .header-trace,
+  .top-nav {
+    display: none;
+  }
+
   .sidebar {
     width: 76px !important;
   }
@@ -2889,9 +2885,6 @@ function formatRuntime(value: unknown) {
     flex-direction: column;
   }
 
-  .trace-input {
-    width: min(72vw, 320px);
-  }
 }
 
 @media (max-width: 640px) {

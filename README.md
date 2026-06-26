@@ -235,7 +235,7 @@ cp .env.example .env
 - 管理后台: http://localhost:5173
 - 后台 API: http://localhost:8081
 - 默认账号: `admin`
-- 默认密码: `admin123`
+- 默认密码: `Admin@123`
 
 也可以只启动基础组件后本地跑服务：
 

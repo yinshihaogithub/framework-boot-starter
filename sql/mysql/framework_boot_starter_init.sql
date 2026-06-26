@@ -298,8 +298,8 @@ ON DUPLICATE KEY UPDATE role_name = VALUES(role_name), status = VALUES(status);
 
 INSERT INTO sys_user (id, tenant_id, dept_id, username, nickname, mobile, email, password_hash, status)
 VALUES (1, 1, 1, 'admin', '系统管理员', '13800000000', 'admin@example.com',
-        '$2a$10$GnDLWgU4wvo0DLT1Rmadsu5G7fp4hz4mS38Lk64P6kzmqjm.QoZgC', 'ENABLED')
-ON DUPLICATE KEY UPDATE nickname = VALUES(nickname), status = VALUES(status);
+        '$2a$10$iTzdWgLkeKBCb.m7F1DTd.mANVTILQBpxCa.U2YJ/iHUT6ZhU2NX2', 'ENABLED')
+ON DUPLICATE KEY UPDATE nickname = VALUES(nickname), password_hash = VALUES(password_hash), status = VALUES(status);
 
 INSERT IGNORE INTO sys_user_role (user_id, role_id) VALUES (1, 1);
 
