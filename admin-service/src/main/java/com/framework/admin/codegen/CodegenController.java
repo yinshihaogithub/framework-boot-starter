@@ -102,6 +102,12 @@ public class CodegenController {
         List<CodegenModels.GeneratedFile> files = new ArrayList<>();
         files.add(file(entityName + ".java", "src/main/java/" + packagePath(entityPackage(options)) + "/" + entityName + ".java",
                 "java", generateEntity(table, columns, options)));
+        files.add(file(entityName + "CreateRequest.java", "src/main/java/" + packagePath(dtoPackage(options)) + "/" + entityName + "CreateRequest.java",
+                "java", generateCreateRequest(columns, options)));
+        files.add(file(entityName + "UpdateRequest.java", "src/main/java/" + packagePath(dtoPackage(options)) + "/" + entityName + "UpdateRequest.java",
+                "java", generateUpdateRequest(columns, options)));
+        files.add(file(entityName + "VO.java", "src/main/java/" + packagePath(voPackage(options)) + "/" + entityName + "VO.java",
+                "java", generateVO(table, columns, options)));
         files.add(file(entityName + "Mapper.java", "src/main/java/" + packagePath(mapperPackage(options)) + "/" + entityName + "Mapper.java",
                 "java", generateMapper(table, columns, options)));
         files.add(file(entityName + "Service.java", "src/main/java/" + packagePath(servicePackage(options)) + "/" + entityName + "Service.java",
@@ -119,12 +125,7 @@ public class CodegenController {
                                   CodegenOptions options) {
         StringBuilder builder = new StringBuilder();
         builder.append("package ").append(entityPackage(options)).append(";\n\n");
-        if (hasJavaType(columns, "BigDecimal")) {
-            builder.append("import java.math.BigDecimal;\n");
-        }
-        if (hasJavaType(columns, "LocalDateTime")) {
-            builder.append("import java.time.LocalDateTime;\n");
-        }
+        appendJavaTypeImports(builder, columns);
         builder.append("import lombok.Data;\n");
         builder.append("import lombok.experimental.Accessors;\n\n");
         builder.append("/**\n");
@@ -138,6 +139,43 @@ public class CodegenController {
             }
             builder.append("    private ").append(column.getJavaType()).append(" ").append(column.getJavaField()).append(";\n\n");
         }
+        builder.append("}\n");
+        return builder.toString();
+    }
+
+    private String generateCreateRequest(List<CodegenModels.ColumnInfo> columns, CodegenOptions options) {
+        return generateModel(dtoPackage(options), options.entityName() + "CreateRequest",
+                "新增" + options.entityName() + "请求", columns.stream()
+                        .filter(CodegenController::isInsertableColumn)
+                        .toList());
+    }
+
+    private String generateUpdateRequest(List<CodegenModels.ColumnInfo> columns, CodegenOptions options) {
+        return generateModel(dtoPackage(options), options.entityName() + "UpdateRequest",
+                "更新" + options.entityName() + "请求", columns.stream()
+                        .filter(CodegenController::isEditableColumn)
+                        .toList());
+    }
+
+    private String generateVO(CodegenModels.TableInfo table, List<CodegenModels.ColumnInfo> columns,
+                              CodegenOptions options) {
+        return generateModel(voPackage(options), options.entityName() + "VO",
+                defaultText(table.getTableComment(), table.getTableName()) + "展示对象", columns);
+    }
+
+    private String generateModel(String packageName, String className, String description,
+                                 List<CodegenModels.ColumnInfo> columns) {
+        StringBuilder builder = new StringBuilder();
+        builder.append("package ").append(packageName).append(";\n\n");
+        appendJavaTypeImports(builder, columns);
+        builder.append("import lombok.Data;\n");
+        builder.append("import lombok.experimental.Accessors;\n\n");
+        builder.append("/**\n");
+        builder.append(" * ").append(description).append(".\n");
+        builder.append(" */\n");
+        builder.append("@Data\n@Accessors(chain = true)\n");
+        builder.append("public class ").append(className).append(" {\n\n");
+        appendFields(builder, columns);
         builder.append("}\n");
         return builder.toString();
     }
@@ -207,10 +245,22 @@ public class CodegenController {
     private String generateService(List<CodegenModels.ColumnInfo> columns, CodegenOptions options) {
         String entity = options.entityName();
         String mapperName = entity + "Mapper";
+        String createRequest = entity + "CreateRequest";
+        String updateRequest = entity + "UpdateRequest";
+        String vo = entity + "VO";
         CodegenModels.ColumnInfo primaryKey = primaryKey(columns);
+        List<CodegenModels.ColumnInfo> insertColumns = columns.stream()
+                .filter(CodegenController::isInsertableColumn)
+                .toList();
+        List<CodegenModels.ColumnInfo> updateColumns = columns.stream()
+                .filter(CodegenController::isEditableColumn)
+                .toList();
         return """
                 package %s;
 
+                import %s.%s;
+                import %s.%s;
+                import %s.%s;
                 import %s.%s;
                 import %s.%s;
                 import com.framework.core.result.PageResult;
@@ -238,48 +288,69 @@ public class CodegenController {
                         int safePageNum = pageNum > 0 ? pageNum : DEFAULT_PAGE_NUM;
                         int safePageSize = pageSize > 0 ? Math.min(pageSize, MAX_PAGE_SIZE) : DEFAULT_PAGE_SIZE;
                         int offset = (safePageNum - 1) * safePageSize;
-                        List<%s> records = mapper.list(offset, safePageSize);
+                        List<%s> records = mapper.list(offset, safePageSize).stream()
+                                .map(this::toVO)
+                                .toList();
                         return PageResult.of(records, mapper.count(), safePageNum, safePageSize);
                     }
 
                     public %s findById(%s id) {
-                        return mapper.findById(id);
+                        return toVO(mapper.findById(id));
                     }
 
                     public %s create(%s request) {
                         return transactionTemplate.execute(status -> {
-                            mapper.insert(request);
-                            return request.get%s();
+                            %s entity = new %s();
+                %s            mapper.insert(entity);
+                            return entity.get%s();
                         });
                     }
 
                     public void update(%s id, %s request) {
                         transactionTemplate.executeWithoutResult(status -> {
-                            request.set%s(id);
-                            mapper.update(request);
+                            %s entity = new %s();
+                            entity.set%s(id);
+                %s            mapper.update(entity);
                         });
                     }
 
                     public void delete(%s id) {
                         transactionTemplate.executeWithoutResult(status -> mapper.deleteById(id));
                     }
+
+                    private %s toVO(%s entity) {
+                        if (entity == null) {
+                            return null;
+                        }
+                        return new %s()
+                %s                ;
+                    }
                 }
-                """.formatted(servicePackage(options), entityPackage(options), entity, mapperPackage(options), mapperName,
+                """.formatted(servicePackage(options),
+                dtoPackage(options), createRequest, dtoPackage(options), updateRequest,
+                entityPackage(options), entity, mapperPackage(options), mapperName, voPackage(options), vo,
                 entity, mapperName, entity, mapperName,
-                entity, entity, entity, primaryKey.getJavaType(),
-                primaryKey.getJavaType(), entity, upperFirst(primaryKey.getJavaField()),
-                primaryKey.getJavaType(), entity, upperFirst(primaryKey.getJavaField()),
-                primaryKey.getJavaType());
+                vo, vo, vo, primaryKey.getJavaType(),
+                primaryKey.getJavaType(), createRequest, entity, entity, assignmentStatements(insertColumns, "request", "entity", 12),
+                upperFirst(primaryKey.getJavaField()),
+                primaryKey.getJavaType(), updateRequest, entity, entity, upperFirst(primaryKey.getJavaField()),
+                assignmentStatements(updateColumns, "request", "entity", 12),
+                primaryKey.getJavaType(), vo, entity, vo, voSetters(columns, "entity", 16));
     }
 
     private String generateController(List<CodegenModels.ColumnInfo> columns, CodegenOptions options) {
         String entity = options.entityName();
         String serviceName = entity + "Service";
+        String createRequest = entity + "CreateRequest";
+        String updateRequest = entity + "UpdateRequest";
+        String vo = entity + "VO";
         CodegenModels.ColumnInfo primaryKey = primaryKey(columns);
         String moduleKebab = toKebab(options.moduleName());
         return """
                 package %s;
 
+                import %s.%s;
+                import %s.%s;
                 import %s.%s;
                 import %s.%s;
                 import com.framework.core.result.PageResult;
@@ -314,6 +385,12 @@ public class CodegenController {
                         return Result.success(service.page(pageNum, pageSize));
                     }
 
+                    @Operation(summary = "详情")
+                    @GetMapping("/{id}")
+                    public Result<%s> detail(@PathVariable %s id) {
+                        return Result.success(service.findById(id));
+                    }
+
                     @Operation(summary = "新增")
                     @PostMapping
                     public Result<%s> create(@RequestBody %s request) {
@@ -334,10 +411,13 @@ public class CodegenController {
                         return Result.success("已删除");
                     }
                 }
-                """.formatted(controllerPackage(options), entityPackage(options), entity, servicePackage(options), serviceName,
+                """.formatted(controllerPackage(options),
+                dtoPackage(options), createRequest, dtoPackage(options), updateRequest,
+                servicePackage(options), serviceName, voPackage(options), vo,
                 moduleKebab, entity, entity, entity,
-                serviceName, entity, serviceName, entity,
-                primaryKey.getJavaType(), entity, primaryKey.getJavaType(), entity, primaryKey.getJavaType());
+                serviceName, entity, serviceName,
+                vo, vo, primaryKey.getJavaType(), primaryKey.getJavaType(), createRequest,
+                primaryKey.getJavaType(), updateRequest, primaryKey.getJavaType());
     }
 
     private String generateVue(CodegenModels.TableInfo table, List<CodegenModels.ColumnInfo> columns,
@@ -345,6 +425,7 @@ public class CodegenController {
         String entity = options.entityName();
         String moduleKebab = toKebab(options.moduleName());
         String variable = lowerFirst(entity);
+        CodegenModels.ColumnInfo primaryKey = primaryKey(columns);
         StringBuilder fields = new StringBuilder();
         StringBuilder form = new StringBuilder();
         StringBuilder columnsVue = new StringBuilder();
@@ -405,7 +486,7 @@ public class CodegenController {
 
                 const page = reactive({ records: [] as %s[], total: 0, pageNum: 1, pageSize: 20 })
                 const dialogVisible = ref(false)
-                const editingId = ref<number>()
+                const editingId = ref<%s['%s']>()
                 const editableFields = %s
                 const form = reactive<Record<string, unknown>>({
                 %s})
@@ -424,7 +505,7 @@ public class CodegenController {
                 }
 
                 function openEdit(row: %s) {
-                  editingId.value = Number(row.id)
+                  editingId.value = row.%s
                   editableFields.forEach((field) => (form[field] = row[field as keyof %s]))
                   dialogVisible.value = true
                 }
@@ -440,13 +521,14 @@ public class CodegenController {
                 }
 
                 async function remove(row: %s) {
-                  await axios.delete(`/admin/%s/${row.id}`)
+                  await axios.delete(`/admin/%s/${row.%s}`)
                   await loadPage()
                 }
                 </script>
                 """.formatted(defaultText(table.getTableComment(), table.getTableName()), columnsVue,
-                entity, fields, entity, editableFieldNames(columns), form, moduleKebab,
-                entity, entity, moduleKebab, moduleKebab, entity, moduleKebab);
+                entity, fields, entity, entity, primaryKey.getJavaField(), editableFieldNames(columns), form, moduleKebab,
+                entity, primaryKey.getJavaField(), entity, moduleKebab, moduleKebab, entity, moduleKebab,
+                primaryKey.getJavaField());
     }
 
     private String generateMenuSql(CodegenOptions options) {
@@ -476,6 +558,14 @@ public class CodegenController {
 
     private static String entityPackage(CodegenOptions options) {
         return options.modulePackage() + ".entity";
+    }
+
+    private static String dtoPackage(CodegenOptions options) {
+        return options.modulePackage() + ".dto";
+    }
+
+    private static String voPackage(CodegenOptions options) {
+        return options.modulePackage() + ".vo";
     }
 
     private static String mapperPackage(CodegenOptions options) {
@@ -543,6 +633,24 @@ public class CodegenController {
         return columns.stream().anyMatch(column -> javaType.equals(column.getJavaType()));
     }
 
+    private static void appendJavaTypeImports(StringBuilder builder, List<CodegenModels.ColumnInfo> columns) {
+        if (hasJavaType(columns, "BigDecimal")) {
+            builder.append("import java.math.BigDecimal;\n");
+        }
+        if (hasJavaType(columns, "LocalDateTime")) {
+            builder.append("import java.time.LocalDateTime;\n");
+        }
+    }
+
+    private static void appendFields(StringBuilder builder, List<CodegenModels.ColumnInfo> columns) {
+        for (CodegenModels.ColumnInfo column : columns) {
+            if (!isBlank(column.getColumnComment())) {
+                builder.append("    /** ").append(column.getColumnComment()).append(" */\n");
+            }
+            builder.append("    private ").append(column.getJavaType()).append(" ").append(column.getJavaField()).append(";\n\n");
+        }
+    }
+
     private static CodegenModels.ColumnInfo primaryKey(List<CodegenModels.ColumnInfo> columns) {
         return columns.stream()
                 .filter(column -> Boolean.TRUE.equals(column.getPrimaryKey()))
@@ -603,6 +711,31 @@ public class CodegenController {
                 .map(column -> "`" + column.getColumnName() + "` = #{" + column.getJavaField() + "}")
                 .reduce((left, right) -> left + ", " + right)
                 .orElse("");
+    }
+
+    private static String assignmentStatements(List<CodegenModels.ColumnInfo> columns, String source,
+                                               String target, int indent) {
+        String spaces = " ".repeat(indent);
+        StringBuilder builder = new StringBuilder();
+        for (CodegenModels.ColumnInfo column : columns) {
+            String method = upperFirst(column.getJavaField());
+            builder.append(spaces)
+                    .append(target).append(".set").append(method)
+                    .append("(").append(source).append(".get").append(method).append("());\n");
+        }
+        return builder.toString();
+    }
+
+    private static String voSetters(List<CodegenModels.ColumnInfo> columns, String source, int indent) {
+        String spaces = " ".repeat(indent);
+        StringBuilder builder = new StringBuilder();
+        for (CodegenModels.ColumnInfo column : columns) {
+            String method = upperFirst(column.getJavaField());
+            builder.append(spaces)
+                    .append(".set").append(method)
+                    .append("(").append(source).append(".get").append(method).append("())\n");
+        }
+        return builder.toString();
     }
 
     private static String placeholders(int count) {

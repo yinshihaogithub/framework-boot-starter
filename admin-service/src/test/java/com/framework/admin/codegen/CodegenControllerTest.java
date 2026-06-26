@@ -49,11 +49,15 @@ class CodegenControllerTest {
         assertThat(result.isSuccess()).isTrue();
         List<CodegenModels.GeneratedFile> files = result.getData().getFiles();
         assertThat(files).extracting(CodegenModels.GeneratedFile::getFileName)
-                .containsExactly("UserDemo.java", "UserDemoMapper.java", "UserDemoService.java",
+                .containsExactly("UserDemo.java", "UserDemoCreateRequest.java", "UserDemoUpdateRequest.java",
+                        "UserDemoVO.java", "UserDemoMapper.java", "UserDemoService.java",
                         "UserDemoController.java", "UserDemoPage.vue", "user-demo_menu.sql");
         assertThat(files).extracting(CodegenModels.GeneratedFile::getFilePath)
                 .containsExactly(
                         "src/main/java/com/framework/admin/generated/userdemo/entity/UserDemo.java",
+                        "src/main/java/com/framework/admin/generated/userdemo/dto/UserDemoCreateRequest.java",
+                        "src/main/java/com/framework/admin/generated/userdemo/dto/UserDemoUpdateRequest.java",
+                        "src/main/java/com/framework/admin/generated/userdemo/vo/UserDemoVO.java",
                         "src/main/java/com/framework/admin/generated/userdemo/mapper/UserDemoMapper.java",
                         "src/main/java/com/framework/admin/generated/userdemo/service/UserDemoService.java",
                         "src/main/java/com/framework/admin/generated/userdemo/controller/UserDemoController.java",
@@ -62,13 +66,38 @@ class CodegenControllerTest {
         assertThat(file(files, "UserDemo.java").getContent())
                 .contains("package com.framework.admin.generated.userdemo.entity;")
                 .contains("public class UserDemo");
+        assertThat(file(files, "UserDemoCreateRequest.java").getContent())
+                .contains("package com.framework.admin.generated.userdemo.dto;")
+                .contains("public class UserDemoCreateRequest")
+                .contains("private Long tenantId;")
+                .contains("private String username;")
+                .doesNotContain("private Long id;")
+                .doesNotContain("private LocalDateTime createTime;");
+        assertThat(file(files, "UserDemoUpdateRequest.java").getContent())
+                .contains("package com.framework.admin.generated.userdemo.dto;")
+                .contains("public class UserDemoUpdateRequest")
+                .contains("private String status;")
+                .doesNotContain("private Long id;")
+                .doesNotContain("private LocalDateTime updateTime;");
+        assertThat(file(files, "UserDemoVO.java").getContent())
+                .contains("package com.framework.admin.generated.userdemo.vo;")
+                .contains("public class UserDemoVO")
+                .contains("private Long id;")
+                .contains("private LocalDateTime createTime;")
+                .contains("private LocalDateTime updateTime;");
         assertThat(file(files, "UserDemoController.java").getContent())
                 .contains("package com.framework.admin.generated.userdemo.controller;")
-                .contains("import com.framework.admin.generated.userdemo.entity.UserDemo;")
+                .contains("import com.framework.admin.generated.userdemo.dto.UserDemoCreateRequest;")
+                .contains("import com.framework.admin.generated.userdemo.dto.UserDemoUpdateRequest;")
                 .contains("import com.framework.admin.generated.userdemo.service.UserDemoService;")
+                .contains("import com.framework.admin.generated.userdemo.vo.UserDemoVO;")
                 .contains("@RequestMapping(\"/admin/user-demo\")")
                 .contains("private final UserDemoService service")
-                .contains("return Result.success(service.page(pageNum, pageSize))");
+                .contains("public Result<PageResult<UserDemoVO>> page")
+                .contains("public Result<UserDemoVO> detail(@PathVariable Long id)")
+                .contains("public Result<Long> create(@RequestBody UserDemoCreateRequest request)")
+                .contains("public Result<String> update(@PathVariable Long id, @RequestBody UserDemoUpdateRequest request)")
+                .doesNotContain("import com.framework.admin.generated.userdemo.entity.UserDemo;");
         assertThat(file(files, "user-demo_menu.sql").getContent()).contains("'user-demo:view'");
 
         String mapperContent = file(files, "UserDemoMapper.java").getContent();
@@ -88,17 +117,26 @@ class CodegenControllerTest {
         String serviceContent = file(files, "UserDemoService.java").getContent();
         assertThat(serviceContent)
                 .contains("package com.framework.admin.generated.userdemo.service;")
+                .contains("import com.framework.admin.generated.userdemo.dto.UserDemoCreateRequest;")
+                .contains("import com.framework.admin.generated.userdemo.dto.UserDemoUpdateRequest;")
                 .contains("import com.framework.admin.generated.userdemo.entity.UserDemo;")
                 .contains("import com.framework.admin.generated.userdemo.mapper.UserDemoMapper;")
+                .contains("import com.framework.admin.generated.userdemo.vo.UserDemoVO;")
                 .contains("private final TransactionTemplate transactionTemplate")
+                .contains("public PageResult<UserDemoVO> page")
+                .contains("List<UserDemoVO> records = mapper.list(offset, safePageSize).stream()")
                 .contains("transactionTemplate.execute(status ->")
                 .contains("transactionTemplate.executeWithoutResult(status ->")
-                .contains("mapper.insert(request)")
-                .contains("mapper.update(request)");
+                .contains("entity.setTenantId(request.getTenantId());")
+                .contains("mapper.insert(entity)")
+                .contains("mapper.update(entity)")
+                .contains("private UserDemoVO toVO(UserDemo entity)")
+                .contains(".setUsername(entity.getUsername())");
         assertThat(serviceContent).doesNotContain("@Transactional");
 
         String vueContent = file(files, "UserDemoPage.vue").getContent();
         assertThat(vueContent).contains("interface UserDemo");
+        assertThat(vueContent).contains("const editingId = ref<UserDemo['id']>()");
         assertThat(vueContent).contains("const editableFields = ['tenantId', 'username', 'status']");
         assertThat(vueContent).doesNotContain("createTime: undefined");
         assertThat(vueContent).doesNotContain("updateTime: undefined");
