@@ -61,6 +61,12 @@
       </div>
     </el-header>
 
+    <div class="mobile-view-switch">
+      <el-select :model-value="activeView" size="large" @change="selectView">
+        <el-option v-for="item in mobileNavOptions" :key="item.value" :label="item.label" :value="item.value" />
+      </el-select>
+    </div>
+
     <el-container class="shell-body">
       <el-aside width="250px" class="sidebar">
         <div class="sidebar-section">控制台</div>
@@ -1122,6 +1128,10 @@ type NavItem = {
   view?: ViewName
   children: NavItem[]
 }
+type NavOption = {
+  value: ViewName
+  label: string
+}
 
 const viewTitles: Record<ViewName, string> = {
   dashboard: '数据看板',
@@ -1324,6 +1334,7 @@ const deptQuery = reactive({ tenantId: 1 as number | undefined })
 
 const viewTitle = computed(() => viewTitles[activeView.value])
 const navMenus = computed(() => buildNavItems(currentUser.value?.menus ?? []))
+const mobileNavOptions = computed(() => buildNavOptions(navMenus.value))
 const userInitial = computed(() => (currentUser.value?.username || 'A').slice(0, 1).toUpperCase())
 const greetingTitle = computed(() => {
   if (activeView.value !== 'dashboard') {
@@ -2186,6 +2197,14 @@ function selectView(index: string) {
   refreshCurrent()
 }
 
+function buildNavOptions(items: NavItem[], prefix = ''): NavOption[] {
+  return items.flatMap((item) => {
+    const label = prefix ? `${prefix} / ${item.title}` : item.title
+    const current = item.view ? [{ value: item.view, label }] : []
+    return [...current, ...buildNavOptions(item.children, label)]
+  })
+}
+
 function flattenMenus(items: MenuItem[]): MenuItem[] {
   return items.flatMap((item) => [item, ...flattenMenus(item.children ?? [])])
 }
@@ -2392,6 +2411,17 @@ function formatRuntime(value: unknown) {
 
 .shell-body {
   min-height: calc(100vh - 60px);
+}
+
+.mobile-view-switch {
+  display: none;
+  padding: 10px 14px;
+  border-bottom: 1px solid #f1f1f1;
+  background: #fff;
+}
+
+.mobile-view-switch :deep(.el-select) {
+  width: 100%;
 }
 
 .sidebar {
@@ -2888,6 +2918,55 @@ function formatRuntime(value: unknown) {
 }
 
 @media (max-width: 640px) {
+  .app-header {
+    padding: 0 10px;
+  }
+
+  .brand-name {
+    display: none;
+  }
+
+  .header-actions {
+    gap: 8px;
+  }
+
+  .header-actions :deep(.el-button.is-circle) {
+    width: 34px;
+    height: 34px;
+  }
+
+  .user-chip {
+    max-width: 126px;
+    padding-right: 10px;
+  }
+
+  .user-chip span:not(.user-avatar) {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mobile-view-switch {
+    display: block;
+  }
+
+  .shell-body {
+    min-height: calc(100vh - 117px);
+  }
+
+  .sidebar {
+    display: none;
+  }
+
+  .topbar {
+    min-height: 70px;
+    padding: 10px 14px 0;
+  }
+
+  .page-title {
+    font-size: 24px;
+  }
+
   .content {
     padding: 14px;
   }
