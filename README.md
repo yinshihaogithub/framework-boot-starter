@@ -248,8 +248,7 @@ mysql -uroot -proot framework_demo < sql/mysql/framework_boot_starter_init.sql
 管理后台默认库名是 `framework_admin`：
 
 ```bash
-mysql -uroot -proot -e "CREATE DATABASE IF NOT EXISTS framework_admin DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
-mysql -uroot -proot framework_admin < sql/mysql/framework_boot_starter_init.sql
+./scripts/init-mysql.sh
 ```
 
 本地启动 `admin-service`：
