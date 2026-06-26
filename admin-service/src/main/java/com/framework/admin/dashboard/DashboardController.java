@@ -132,8 +132,7 @@ public class DashboardController {
                 module("framework-redis", "com.framework.redis.config.RedisAutoConfiguration"),
                 module("framework-feign", "com.framework.feign.config.FeignAutoConfiguration"),
                 module("framework-monitor", "com.framework.monitor.health.FrameworkHealthIndicator"),
-                module("framework-file", "com.framework.file.service.FileStorageService"),
-                module("framework-job", "com.framework.job.service.JobHandler"));
+                module("framework-file", "com.framework.file.service.FileStorageService"));
     }
 
     private ModuleStatus module(String name, String markerClass) {

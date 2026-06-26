@@ -48,7 +48,7 @@ mysql -uroot -proot framework_admin < sql/mysql/framework_boot_starter_init.sql
 
 | 用户名 | 密码 |
 | --- | --- |
-| `admin` | `admin123` |
+| `admin` | `Admin@123` |
 
 前端入口在 `frontend/admin-web`，Compose 一键启动：
 
