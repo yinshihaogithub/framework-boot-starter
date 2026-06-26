@@ -301,43 +301,6 @@ export interface ExcelTaskResult {
   fileSize: number
 }
 
-export interface CodegenTable {
-  tableName: string
-  tableComment?: string
-  tableRows?: number
-  engine?: string
-  createTime?: string
-  updateTime?: string
-}
-
-export interface CodegenColumn {
-  columnName: string
-  columnType?: string
-  dataType?: string
-  columnComment?: string
-  nullable?: boolean
-  primaryKey?: boolean
-  autoIncrement?: boolean
-  columnDefault?: string
-  ordinalPosition?: number
-  javaType?: string
-  javaField?: string
-  tsType?: string
-}
-
-export interface CodegenFile {
-  fileName: string
-  filePath: string
-  language: string
-  content: string
-}
-
-export interface CodegenPreview {
-  table: CodegenTable
-  columns: CodegenColumn[]
-  files: CodegenFile[]
-}
-
 const http = axios.create({
   baseURL: '',
   timeout: 10000
@@ -442,10 +405,6 @@ export const api = {
   createDemoFailureTask: (data: Record<string, unknown>) =>
     postData<ExcelTaskResult>('/admin/excel/tasks/demo-failure', data),
   excelErrors: (taskId: number) => getData<ExcelErrorRecord[]>(`/admin/excel/tasks/${taskId}/errors`),
-  codegenTables: (params: Record<string, unknown>) =>
-    getData<PageResult<CodegenTable>>('/admin/codegen/tables', params),
-  codegenColumns: (tableName: string) => getData<CodegenColumn[]>(`/admin/codegen/tables/${tableName}/columns`),
-  codegenPreview: (data: Record<string, unknown>) => postData<CodegenPreview>('/admin/codegen/preview', data),
   users: (params: Record<string, unknown>) => getData<PageResult<AdminUser>>('/admin/system/users', params),
   tenants: () => getData<Tenant[]>('/admin/system/tenants'),
   createTenant: (data: Record<string, unknown>) => postData<number>('/admin/system/tenants', data),

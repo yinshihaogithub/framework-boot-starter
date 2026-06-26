@@ -25,6 +25,6 @@
 | `framework-job` | XXL-JOB 执行器接入 | XXL-JOB、MySQL(admin 可选) | 默认不启用 executor，启用时属性层校验 admin/appName/端口/日志路径/日志保留天数并归一化文本配置，JobHandler 名称按白名单校验后同时进入本地 facade 和 XXL-JOB registry，JobService 手动触发按归一化名称查询，随模块提供独立的 XXL-JOB admin MySQL 初始化脚本 |
 | `framework-file` | 文件存储抽象 | 本地文件系统默认 | 存储服务可替换，默认实现带 basePath/大小/扩展名/key 启动与访问安全约束和元数据，上传原始文件名路径片段会被归一化且缺失文件名时回退安全默认名，返回元数据使用安全展示文件名 |
 | `framework-starter` | 聚合依赖 | 默认运行时模块 | 聚合常用运行时框架模块，不引入 demo 和 job |
-| `admin-service` | 管理后台聚合服务 | framework-starter、MySQL、MQ/Redis 可选 | 应用层模块，聚合 Dashboard、租户/部门/用户/角色/菜单系统管理、MQ 失败消息/人工补偿、本地消息表、通知模板/发送记录、Excel 任务/错误明细、代码生成预览、日志审计、traceId 查询和监控 API；不反向依赖到 framework 模块 |
-| `frontend/admin-web` | 管理后台前端 | Vue3、Vite、Element Plus | 首屏即管理控制台，包含 Dashboard、系统管理、MQ 管理、本地消息、通知中心、Excel 中心、代码生成、日志中心和监控中心页面，通过 Vite proxy 访问 `admin-service` |
+| `admin-service` | 管理后台聚合服务 | framework-starter、MySQL、MQ/Redis 可选 | 应用层模块，聚合 Dashboard、租户/部门/用户/角色/菜单系统管理、MQ 失败消息/人工补偿、本地消息表、通知模板/发送记录、Excel 任务/错误明细、日志审计、traceId 查询和监控 API；不反向依赖到 framework 模块 |
+| `frontend/admin-web` | 管理后台前端 | Vue3、Vite、Element Plus | 首屏即管理控制台，包含 Dashboard、系统管理、MQ 管理、本地消息、通知中心、Excel 中心、日志中心和监控中心页面，通过 Vite proxy 访问 `admin-service` |
 | `demo` | 示例应用 | MySQL、Redis、MQ 可选 | 默认 MySQL，接入根聚合初始化脚本，演示关键能力 |

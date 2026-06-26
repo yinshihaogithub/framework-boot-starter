@@ -1157,7 +1157,6 @@ public Result payFallback(PayRequest req) {
 |---|---|
 | framework-cache | 多级缓存+防穿透击穿雪崩（pom已有，代码待补） |
 | framework-gateway | Spring Cloud Gateway 封装 |
-| framework-codegen | 代码生成器 |
 
 ## 验收标准
 

@@ -321,7 +321,6 @@ VALUES
     (14, 0, 'MENU', 'Excel 中心', 'excel', 'Excel', 'excel:view', 'Files', 90, 1),
     (15, 2, 'MENU', '租户管理', 'system/tenants', 'SystemTenants', 'system:tenant:view', 'OfficeBuilding', 21, 1),
     (16, 2, 'MENU', '部门管理', 'system/depts', 'SystemDepts', 'system:dept:view', 'MostlyCloudy', 22, 1),
-    (17, 0, 'MENU', '代码生成', 'codegen', 'Codegen', 'codegen:view', 'Document', 100, 1),
     (18, 0, 'MENU', '登录日志', 'login-logs', 'LoginLogs', 'log:login:view', 'Document', 31, 1),
     (101, 3, 'BUTTON', '新增用户', NULL, NULL, 'system:user:create', NULL, 1, 0),
     (102, 3, 'BUTTON', '重置密码', NULL, NULL, 'system:user:reset-password', NULL, 2, 0),
@@ -330,8 +329,7 @@ VALUES
     (105, 13, 'BUTTON', '发送测试通知', NULL, NULL, 'notify:send-test', NULL, 1, 0),
     (106, 14, 'BUTTON', '创建Excel任务', NULL, NULL, 'excel:task:create', NULL, 1, 0),
     (107, 15, 'BUTTON', '新增租户', NULL, NULL, 'system:tenant:create', NULL, 1, 0),
-    (108, 16, 'BUTTON', '新增部门', NULL, NULL, 'system:dept:create', NULL, 1, 0),
-    (109, 17, 'BUTTON', '生成预览', NULL, NULL, 'codegen:preview', NULL, 1, 0)
+    (108, 16, 'BUTTON', '新增部门', NULL, NULL, 'system:dept:create', NULL, 1, 0)
 ON DUPLICATE KEY UPDATE menu_name = VALUES(menu_name), route_path = VALUES(route_path),
     component = VALUES(component), permission = VALUES(permission), icon = VALUES(icon),
     sort_order = VALUES(sort_order), visible = VALUES(visible);

@@ -29,7 +29,7 @@ Java 框架脚手架 —— 开箱即用的后端基础能力。
 | `framework-job` | 任务：XXL-JOB 执行器自动配置、JobHandler 注册和本地触发 |
 | `framework-file` | 文件：统一文件模型、本地存储默认实现、对象存储扩展点 |
 | `framework-starter` | 聚合 Starter：一次引入常用脚手架能力 |
-| `admin-service` | 管理后台服务：登录认证、系统管理、Dashboard、MQ 补偿、本地消息、日志审计、代码生成、监控 API |
+| `admin-service` | 管理后台服务：登录认证、系统管理、Dashboard、MQ 补偿、本地消息、日志审计、监控 API |
 | `frontend/admin-web` | 管理后台前端：登录页、系统管理、运维控制台，Vue3 + Vite + Element Plus |
 | `demo` | 示例启动模块：演示全部能力 |
 
@@ -172,13 +172,6 @@ MQ 治理第一版已经按工程级后台闭环实现：`framework-mq` 保留 R
 继续提供 EasyExcel 导入导出服务，后台提供导入导出任务、错误明细和示例导出任务。相关管理数据统一落 MySQL，
 初始化脚本包含 `framework_notify_template`、`framework_notify_record`、`framework_excel_task` 和
 `framework_excel_error`。
-
-代码生成中心已按脚手架第一版闭环接入 `admin-service`：后台从当前 MySQL 库的 `information_schema`
-读取表和字段，前端可选择数据表、配置包名/模块名/实体名，并预览 Entity、Mapper、Service、Controller、
-Vue 页面和菜单 SQL。生成代码采用 `Controller -> Service -> Mapper` 三层结构，Mapper 使用 MyBatis
-注解 SQL，Java 文件按 `{module}.entity`、`{module}.mapper`、`{module}.service`、`{module}.controller`
-分包输出；写操作在 Service 中用 `TransactionTemplate` 做本地手动事务。当前默认只生成预览，
-不直接写入工程文件，避免误覆盖业务代码。
 
 ### 6. 建议落地顺序
 

@@ -628,85 +628,6 @@
           </el-card>
         </section>
 
-        <section v-if="activeView === 'codegen'" class="view two-columns codegen-layout">
-          <el-card shadow="never">
-            <template #header>
-              <div class="section-head">
-                <span>数据表</span>
-                <div class="actions">
-                  <el-input v-model="codegenQuery.keyword" clearable placeholder="表名/备注" class="filter wide" @keyup.enter="loadCodegenTables" />
-                  <el-button :icon="Search" circle type="primary" @click="loadCodegenTables" />
-                </div>
-              </div>
-            </template>
-            <el-table :data="codegenTables.records" height="520" stripe highlight-current-row @current-change="selectCodegenTable">
-              <el-table-column prop="tableName" label="表名" min-width="190" show-overflow-tooltip />
-              <el-table-column prop="tableComment" label="备注" min-width="160" show-overflow-tooltip />
-              <el-table-column prop="tableRows" label="行数" width="86" />
-              <el-table-column label="操作" width="86" fixed="right">
-                <template #default="{ row }">
-                  <el-button :icon="View" circle size="small" @click.stop="selectCodegenTable(row)" />
-                </template>
-              </el-table-column>
-            </el-table>
-            <el-pagination v-model:current-page="codegenQuery.pageNum" v-model:page-size="codegenQuery.pageSize" class="pager" layout="total, prev, pager, next" :total="codegenTables.total" @change="loadCodegenTables" />
-          </el-card>
-
-          <div class="view">
-            <el-card shadow="never">
-              <template #header>
-                <div class="section-head">
-                  <span>生成配置</span>
-                  <el-tag size="small" type="info">{{ codegenForm.tableName || '未选择表' }}</el-tag>
-                </div>
-              </template>
-              <el-form label-width="92px">
-                <el-form-item label="表名"><el-input v-model="codegenForm.tableName" disabled /></el-form-item>
-                <el-form-item label="包名"><el-input v-model="codegenForm.packageName" /></el-form-item>
-                <el-form-item label="模块名"><el-input v-model="codegenForm.moduleName" /></el-form-item>
-                <el-form-item label="实体名"><el-input v-model="codegenForm.entityName" /></el-form-item>
-                <el-form-item label="作者"><el-input v-model="codegenForm.author" /></el-form-item>
-              </el-form>
-              <div class="codegen-actions">
-                <el-button type="primary" :icon="Document" :disabled="!codegenForm.tableName" @click="previewCodegen">生成预览</el-button>
-                <el-button :icon="Refresh" @click="loadCodegenTables">刷新表</el-button>
-              </div>
-            </el-card>
-
-            <el-card shadow="never">
-              <template #header><div class="section-head"><span>字段</span><el-tag size="small">{{ codegenColumns.length }}</el-tag></div></template>
-              <el-table :data="codegenColumns" height="240" stripe>
-                <el-table-column prop="columnName" label="列名" min-width="140" show-overflow-tooltip />
-                <el-table-column prop="javaField" label="字段" min-width="130" show-overflow-tooltip />
-                <el-table-column prop="columnType" label="类型" min-width="120" show-overflow-tooltip />
-                <el-table-column prop="javaType" label="Java" width="118" />
-                <el-table-column label="键" width="86">
-                  <template #default="{ row }">
-                    <el-tag v-if="row.primaryKey" size="small">PK</el-tag>
-                    <el-tag v-else-if="row.autoIncrement" size="small" type="info">AI</el-tag>
-                    <span v-else>-</span>
-                  </template>
-                </el-table-column>
-              </el-table>
-            </el-card>
-          </div>
-
-          <el-card v-if="codegenPreview" class="codegen-preview" shadow="never">
-            <template #header>
-              <div class="section-head">
-                <span>代码预览</span>
-                <el-tag size="small">{{ codegenPreview.files.length }} files</el-tag>
-              </div>
-            </template>
-            <el-tabs tab-position="left" class="code-tabs">
-              <el-tab-pane v-for="file in codegenPreview.files" :key="file.filePath" :label="file.fileName">
-                <div class="code-file-path">{{ file.filePath }}</div>
-                <pre class="code-preview">{{ file.content }}</pre>
-              </el-tab-pane>
-            </el-tabs>
-          </el-card>
-        </section>
-
         <section v-if="activeView === 'trace'" class="view">
           <div class="metrics compact">
             <div class="metric"><span>日志</span><strong>{{ traceDetail?.summary?.logs ?? 0 }}</strong></div>
@@ -1137,9 +1058,6 @@ import {
   getToken,
   setToken,
   type AdminUser,
-  type CodegenColumn,
-  type CodegenPreview,
-  type CodegenTable,
   type ConfigItem,
   type CurrentUser,
   type DashboardSummary,
@@ -1163,7 +1081,7 @@ import {
   type TraceDetail
 } from './api/client'
 
-type ViewName = 'dashboard' | 'system-tenants' | 'system-depts' | 'system-users' | 'system-roles' | 'system-menus' | 'system-dicts' | 'system-configs' | 'mq' | 'local' | 'notify' | 'excel' | 'codegen' | 'logs' | 'login-logs' | 'trace' | 'monitor'
+type ViewName = 'dashboard' | 'system-tenants' | 'system-depts' | 'system-users' | 'system-roles' | 'system-menus' | 'system-dicts' | 'system-configs' | 'mq' | 'local' | 'notify' | 'excel' | 'logs' | 'login-logs' | 'trace' | 'monitor'
 type NavItem = {
   index: string
   title: string
@@ -1189,7 +1107,6 @@ const viewTitles: Record<ViewName, string> = {
   local: '本地消息',
   notify: '通知中心',
   excel: 'Excel 中心',
-  codegen: '代码生成',
   logs: '日志中心',
   'login-logs': '登录日志',
   trace: '链路追踪',
@@ -1209,7 +1126,6 @@ const componentViewMap: Record<string, ViewName> = {
   LocalMessage: 'local',
   Notify: 'notify',
   Excel: 'excel',
-  Codegen: 'codegen',
   Logs: 'logs',
   LoginLogs: 'login-logs',
   Trace: 'trace',
@@ -1230,7 +1146,6 @@ const routeViewMap: Record<string, ViewName> = {
   local: 'local',
   notify: 'notify',
   excel: 'excel',
-  codegen: 'codegen',
   logs: 'logs',
   'login-logs': 'login-logs',
   trace: 'trace',
@@ -1272,9 +1187,6 @@ const notifyRecords = reactive<PageResult<NotifyRecord>>({ records: [], total: 0
 const excelStats = ref<Record<string, number>>({})
 const excelTasks = reactive<PageResult<ExcelTask>>({ records: [], total: 0, pageNum: 1, pageSize: 20, pages: 0 })
 const excelErrors = ref<ExcelErrorRecord[]>([])
-const codegenTables = reactive<PageResult<CodegenTable>>({ records: [], total: 0, pageNum: 1, pageSize: 20, pages: 0 })
-const codegenColumns = ref<CodegenColumn[]>([])
-const codegenPreview = ref<CodegenPreview>()
 const logs = reactive<PageResult<OperationLog>>({ records: [], total: 0, pageNum: 1, pageSize: 20, pages: 0 })
 const loginLogs = reactive<PageResult<LoginLog>>({ records: [], total: 0, pageNum: 1, pageSize: 20, pages: 0 })
 const traceDetail = ref<TraceDetail>()
@@ -1356,20 +1268,11 @@ const notifyForm = reactive({
   webhookUrl: '',
   status: 'ENABLED'
 })
-const codegenForm = reactive({
-  tableName: '',
-  packageName: 'com.framework.admin.generated',
-  moduleName: '',
-  entityName: '',
-  author: 'framework'
-})
-
 const mqQuery = reactive({ status: '', traceId: '', pageNum: 1, pageSize: 20 })
 const localQuery = reactive({ status: '', topic: '', pageNum: 1, pageSize: 20 })
 const notifyQuery = reactive({ keyword: '', channel: '', status: '', pageNum: 1, pageSize: 20 })
 const notifyRecordQuery = reactive<{ channel: string; success: boolean | ''; pageNum: number; pageSize: number }>({ channel: '', success: '', pageNum: 1, pageSize: 20 })
 const excelQuery = reactive({ taskType: '', status: '', pageNum: 1, pageSize: 20 })
-const codegenQuery = reactive({ keyword: '', pageNum: 1, pageSize: 20 })
 const logQuery = reactive({ logType: '', traceId: '', pageNum: 1, pageSize: 20 })
 const loginLogQuery = reactive<{ username: string; success: boolean | ''; pageNum: number; pageSize: number }>({ username: '', success: '', pageNum: 1, pageSize: 20 })
 const userQuery = reactive({ keyword: '', status: '', pageNum: 1, pageSize: 20 })
@@ -1442,7 +1345,6 @@ async function refreshCurrent() {
     if (activeView.value === 'local') await loadLocal()
     if (activeView.value === 'notify') await loadNotify()
     if (activeView.value === 'excel') await loadExcel()
-    if (activeView.value === 'codegen') await loadCodegenTables()
     if (activeView.value === 'logs') await loadLogs()
     if (activeView.value === 'login-logs') await loadLoginLogs()
     if (activeView.value === 'trace') await loadTrace()
@@ -1530,33 +1432,6 @@ async function loadExcel() {
   excelStats.value = await api.excelStats()
   const page = await api.excelTasks(excelQuery)
   Object.assign(excelTasks, page)
-}
-
-async function loadCodegenTables() {
-  const page = await api.codegenTables(codegenQuery)
-  Object.assign(codegenTables, page)
-  if (!codegenForm.tableName && page.records.length > 0) {
-    await selectCodegenTable(page.records[0])
-  }
-}
-
-async function selectCodegenTable(row?: CodegenTable) {
-  if (!row) return
-  codegenForm.tableName = row.tableName
-  codegenForm.moduleName = toModuleName(row.tableName)
-  codegenForm.entityName = toEntityName(row.tableName)
-  codegenPreview.value = undefined
-  codegenColumns.value = await api.codegenColumns(row.tableName)
-}
-
-async function previewCodegen() {
-  if (!codegenForm.tableName) {
-    ElMessage.warning('请先选择数据表')
-    return
-  }
-  codegenPreview.value = await api.codegenPreview(codegenForm)
-  codegenColumns.value = codegenPreview.value.columns
-  ElMessage.success('预览已生成')
 }
 
 async function loadLogs() {
@@ -2264,26 +2139,6 @@ function deptParentOptions() {
   return [{ id: 0, deptName: '根部门' }, ...flattenDepts(depts.value)]
 }
 
-function toEntityName(tableName: string) {
-  return toCamel(tableName.replace(/^(sys_|framework_|t_)/, ''), true)
-}
-
-function toModuleName(tableName: string) {
-  return toCamel(tableName.replace(/^(sys_|framework_|t_)/, ''), false)
-}
-
-function toCamel(value: string, upperFirst: boolean) {
-  return value
-    .split(/[_\-\s]+/)
-    .filter(Boolean)
-    .map((part, index) => {
-      const lower = part.toLowerCase()
-      if (index === 0 && !upperFirst) return lower
-      return lower.charAt(0).toUpperCase() + lower.slice(1)
-    })
-    .join('')
-}
-
 async function confirmDelete(message: string) {
   await ElMessageBox.confirm(message, '确认删除', {
     type: 'warning',
@@ -2775,46 +2630,6 @@ function formatRuntime(value: unknown) {
 
 .trace-timeline {
   padding: 8px 6px 0;
-}
-
-.codegen-layout {
-  align-items: start;
-}
-
-.codegen-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-}
-
-.codegen-preview {
-  grid-column: 1 / -1;
-}
-
-.code-tabs {
-  min-height: 520px;
-}
-
-.code-file-path {
-  margin-bottom: 10px;
-  color: #71717a;
-  font-size: 12px;
-  word-break: break-all;
-}
-
-.code-preview {
-  margin: 0;
-  min-height: 460px;
-  max-height: 620px;
-  overflow: auto;
-  padding: 14px;
-  border-radius: 8px;
-  border: 1px solid #27272a;
-  background: #18181b;
-  color: #e4e4e7;
-  font-size: 13px;
-  line-height: 1.6;
-  white-space: pre;
 }
 
 .trace-event {

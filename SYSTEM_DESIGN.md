@@ -686,7 +686,6 @@ HTTP请求 → TraceIdFilter生成traceId → MDC → 日志输出
 
 ### Phase 4: 智能化
 
-- [ ] AI 代码生成（基于脚手架模板）
 - [ ] 智能监控告警（异常预测）
 - [ ] 自动容量规划
 - [ ] AIOps 故障自愈
