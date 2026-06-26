@@ -5,8 +5,6 @@ import lombok.extern.slf4j.Slf4j;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 /**
  * Default job facade implementation.
@@ -17,8 +15,7 @@ public class DefaultJobService implements JobService {
     private final Map<String, JobHandler> handlers;
 
     public DefaultJobService(List<JobHandler> handlers) {
-        this.handlers = handlers.stream()
-                .collect(Collectors.toMap(JobHandler::name, Function.identity(), (left, right) -> left));
+        this.handlers = JobHandlerRegistry.from(handlers);
     }
 
     @Override
@@ -28,7 +25,8 @@ public class DefaultJobService implements JobService {
 
     @Override
     public boolean run(String name) {
-        JobHandler handler = handlers.get(name);
+        String normalizedName = JobHandlerRegistry.normalize(name);
+        JobHandler handler = handlers.get(normalizedName);
         if (handler == null) {
             return false;
         }
@@ -36,7 +34,7 @@ public class DefaultJobService implements JobService {
             handler.execute();
             return true;
         } catch (Exception e) {
-            log.error("[任务执行失败] name={}", name, e);
+            log.error("[任务执行失败] name={}", normalizedName, e);
             return false;
         }
     }

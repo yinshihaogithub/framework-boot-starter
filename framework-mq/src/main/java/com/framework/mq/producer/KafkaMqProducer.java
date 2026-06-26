@@ -2,7 +2,6 @@ package com.framework.mq.producer;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.framework.core.constant.FrameworkConstants;
-import com.framework.core.trace.TraceContext;
 import com.framework.mq.config.MqProperties;
 import com.framework.mq.core.MessageWrapper;
 import lombok.extern.slf4j.Slf4j;
@@ -10,6 +9,7 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.springframework.kafka.core.KafkaOperations;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Objects;
 
 /**
  * Kafka sender adapter.
@@ -21,7 +21,7 @@ public class KafkaMqProducer implements MqMessageSender {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public KafkaMqProducer(KafkaOperations<String, String> kafkaOperations) {
-        this.kafkaOperations = kafkaOperations;
+        this.kafkaOperations = Objects.requireNonNull(kafkaOperations, "kafkaOperations must not be null");
     }
 
     @Override
@@ -31,8 +31,9 @@ public class KafkaMqProducer implements MqMessageSender {
 
     @Override
     public <T> void send(String topic, String key, MessageWrapper<T> wrapper) {
+        MqSendSupport.requireText(topic, "topic");
+        MqSendSupport.fillTrace(wrapper);
         try {
-            fillTrace(wrapper);
             String json = objectMapper.writeValueAsString(wrapper);
             ProducerRecord<String, String> record = new ProducerRecord<>(topic, key, json);
             record.headers().add(FrameworkConstants.TRACE_ID_HEADER,
@@ -47,12 +48,6 @@ public class KafkaMqProducer implements MqMessageSender {
         } catch (Exception e) {
             log.error("[Kafka发送失败] topic={}, key={}", topic, key, e);
             throw new RuntimeException("Kafka消息发送失败", e);
-        }
-    }
-
-    private <T> void fillTrace(MessageWrapper<T> wrapper) {
-        if (wrapper.getTraceId() == null || wrapper.getTraceId().isBlank()) {
-            wrapper.setTraceId(TraceContext.ensureTraceId());
         }
     }
 }

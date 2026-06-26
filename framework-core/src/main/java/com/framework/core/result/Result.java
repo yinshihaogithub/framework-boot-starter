@@ -1,5 +1,6 @@
 package com.framework.core.result;
 
+import com.framework.core.trace.TraceContext;
 import lombok.Data;
 import java.io.Serializable;
 
@@ -13,9 +14,11 @@ public class Result<T> implements Serializable {
     private String message;
     private T data;
     private long timestamp;
+    private String traceId;
 
     private Result() {
         this.timestamp = System.currentTimeMillis();
+        this.traceId = TraceContext.getTraceId();
     }
 
     public static <T> Result<T> success() {

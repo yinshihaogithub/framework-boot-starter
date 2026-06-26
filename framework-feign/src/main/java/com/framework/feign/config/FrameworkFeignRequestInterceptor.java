@@ -9,6 +9,10 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+
 /**
  * Relays configured incoming request headers to outgoing Feign calls.
  */
@@ -17,21 +21,45 @@ public class FrameworkFeignRequestInterceptor implements RequestInterceptor {
     private final FeignProperties properties;
 
     public FrameworkFeignRequestInterceptor(FeignProperties properties) {
-        this.properties = properties;
+        this.properties = Objects.requireNonNull(properties, "properties must not be null");
     }
 
     @Override
     public void apply(RequestTemplate template) {
         HttpServletRequest request = currentRequest();
-        for (String header : properties.getRelayHeaders()) {
-            String value = request == null ? null : request.getHeader(header);
-            if (!StringUtils.hasText(value) && FrameworkConstants.TRACE_ID_HEADER.equalsIgnoreCase(header)) {
-                value = TraceContext.ensureTraceId();
+        for (String header : relayHeaders()) {
+            if (!StringUtils.hasText(header)) {
+                continue;
+            }
+            String headerName = FeignProperties.validateRelayHeaderName(header);
+            String value = request == null ? null : request.getHeader(headerName);
+            if (FrameworkConstants.TRACE_ID_HEADER.equalsIgnoreCase(headerName)) {
+                value = TraceContext.normalizeTraceId(value);
+                if (!StringUtils.hasText(value)) {
+                    value = TraceContext.ensureTraceId();
+                }
             }
             if (StringUtils.hasText(value)) {
-                template.header(header, value);
+                template.header(headerName, value);
             }
         }
+    }
+
+    private List<String> relayHeaders() {
+        List<String> relayHeaders = properties.getRelayHeaders();
+        if (relayHeaders == null || relayHeaders.isEmpty()) {
+            return List.of(FrameworkConstants.TRACE_ID_HEADER);
+        }
+        List<String> normalizedHeaders = new ArrayList<>();
+        for (String header : relayHeaders) {
+            if (!StringUtils.hasText(header)) {
+                continue;
+            }
+            normalizedHeaders.add(FeignProperties.validateRelayHeaderName(header));
+        }
+        return normalizedHeaders.isEmpty()
+                ? List.of(FrameworkConstants.TRACE_ID_HEADER)
+                : normalizedHeaders;
     }
 
     private HttpServletRequest currentRequest() {

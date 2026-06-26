@@ -22,6 +22,12 @@
 | `TreeUtils` | 树形结构工具（列表转树/树转列表） |
 | `DateUtils` | 日期时间工具（格式化/解析/转换/差值） |
 
+## 工程约束
+
+- `SnowflakeIdGenerator` 只接受 0-1023 的 workerId，生成 ID 趋势递增并保留 workerId 位。
+- `TreeUtils.buildTree` 支持根节点 parentId 为 `null`，空列表或 `null` 返回空列表；节点 ID 必填且唯一，自引用或环形父子关系会快速失败；`flatten(null, ...)` 返回空列表。
+- `DateUtils` 固定使用 `Asia/Shanghai` 作为默认转换时区，避免机器默认时区影响结果。
+
 ## SnowflakeIdGenerator 雪花 ID
 
 ### ID 结构

@@ -67,11 +67,6 @@ public class XssFilter implements Filter {
             return result;
         }
 
-        @Override
-        public String getHeader(String name) {
-            return escape(super.getHeader(name));
-        }
-
         /**
          * HTML 特殊字符转义
          */

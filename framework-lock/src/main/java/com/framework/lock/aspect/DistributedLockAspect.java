@@ -50,6 +50,7 @@ public class DistributedLockAspect {
         MethodSignature signature = (MethodSignature) joinPoint.getSignature();
         Method method = AopUtils.getMostSpecificMethod(signature.getMethod(), joinPoint.getTarget().getClass());
         DistributedLock annotation = method.getAnnotation(DistributedLock.class);
+        validate(annotation, method);
 
         // 解析 SpEL key
         String lockKey = LOCK_KEY_PREFIX + resolveKey(annotation.key(), signature, method, joinPoint.getArgs());
@@ -86,6 +87,18 @@ public class DistributedLockAspect {
         }
     }
 
+    private void validate(DistributedLock annotation, Method method) {
+        if (annotation.waitTime() < 0) {
+            throw new IllegalArgumentException("@DistributedLock waitTime must be greater than or equal to 0: " + method);
+        }
+        if (annotation.leaseTime() != -1 && annotation.leaseTime() <= 0) {
+            throw new IllegalArgumentException("@DistributedLock leaseTime must be -1 or greater than 0: " + method);
+        }
+        if (annotation.unit() == null) {
+            throw new IllegalArgumentException("@DistributedLock unit must not be null: " + method);
+        }
+    }
+
     /**
      * 解析 SpEL 表达式
      * 支持 #{#param.field} 和 #{#param} 格式
@@ -95,7 +108,7 @@ public class DistributedLockAspect {
             throw new IllegalArgumentException("@DistributedLock key must not be blank: " + method);
         }
         if (!keyExpression.contains("#")) {
-            return keyExpression;
+            return keyExpression.trim();
         }
 
         StandardEvaluationContext context = new StandardEvaluationContext();
@@ -109,8 +122,15 @@ public class DistributedLockAspect {
             Object value = keyExpression.contains("#{")
                     ? PARSER.parseExpression(keyExpression, TEMPLATE_PARSER_CONTEXT).getValue(context)
                     : PARSER.parseExpression(keyExpression).getValue(context);
-            return value != null ? value.toString() : "null";
+            String resolved = value != null ? value.toString() : null;
+            if (!StringUtils.hasText(resolved)) {
+                throw new IllegalArgumentException("@DistributedLock key must not resolve to blank: " + method);
+            }
+            return resolved.trim();
         } catch (Exception e) {
+            if (e instanceof IllegalArgumentException) {
+                throw e;
+            }
             throw new IllegalArgumentException("@DistributedLock key SpEL parse failed: " + keyExpression, e);
         }
     }

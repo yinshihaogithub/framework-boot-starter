@@ -40,7 +40,7 @@ public abstract class AbstractMessageWrapperConsumer<T> {
         Map<String, String> previousContext = TraceContext.copyContextMap();
         try {
             MessageWrapper<T> wrapper = decode(body);
-            TraceContext.getOrCreateTraceId(firstText(wrapper.getTraceId(), headerTraceId));
+            TraceContext.getOrCreateTraceId(firstTraceId(wrapper.getTraceId(), headerTraceId));
 
             String idempotentKey = firstText(wrapper.getBusinessKey(), fallbackMessageId, wrapper.getMessageId());
             if (isAlreadyConsumed(idempotentKey)) {
@@ -78,8 +78,21 @@ public abstract class AbstractMessageWrapperConsumer<T> {
 
     private String firstText(String... values) {
         for (String value : values) {
-            if (value != null && !value.isBlank()) {
-                return value;
+            if (value != null) {
+                String trimmed = value.trim();
+                if (!trimmed.isBlank()) {
+                    return trimmed;
+                }
+            }
+        }
+        return null;
+    }
+
+    private String firstTraceId(String... values) {
+        for (String value : values) {
+            String traceId = TraceContext.normalizeTraceId(value);
+            if (traceId != null) {
+                return traceId;
             }
         }
         return null;

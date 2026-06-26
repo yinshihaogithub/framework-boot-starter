@@ -31,11 +31,17 @@ public class FrameworkMetaObjectHandler implements MetaObjectHandler {
         if (!properties.getAudit().isEnabled()) {
             return;
         }
-        fillIfSetterExists(metaObject, properties.getAudit().getUpdateTimeField(), LocalDateTime.now());
+        setIfSetterExists(metaObject, properties.getAudit().getUpdateTimeField(), LocalDateTime.now());
     }
 
     private void fillIfSetterExists(MetaObject metaObject, String fieldName, Object value) {
         if (metaObject.hasSetter(fieldName) && metaObject.getValue(fieldName) == null) {
+            metaObject.setValue(fieldName, value);
+        }
+    }
+
+    private void setIfSetterExists(MetaObject metaObject, String fieldName, Object value) {
+        if (metaObject.hasSetter(fieldName)) {
             metaObject.setValue(fieldName, value);
         }
     }

@@ -6,6 +6,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class LocalOnlyCacheServiceTest {
 
@@ -40,5 +41,28 @@ class LocalOnlyCacheServiceTest {
         assertThat(cacheService.exists("user:1")).isFalse();
         assertThat(cacheService.exists("user:2")).isFalse();
         assertThat(cacheService.exists("order:1")).isTrue();
+    }
+
+    @Test
+    void rejectsNullLoaderBeforeAccessingCache() {
+        LocalOnlyCacheService cacheService = new LocalOnlyCacheService(new LocalCacheService(100, 60));
+
+        assertThatThrownBy(() -> cacheService.get("user:1", String.class, null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("loader must not be null");
+    }
+
+    @Test
+    void rejectsInvalidTtlBeforeCallingLoader() {
+        LocalOnlyCacheService cacheService = new LocalOnlyCacheService(new LocalCacheService(100, 60));
+        AtomicInteger loads = new AtomicInteger();
+
+        assertThatThrownBy(() -> cacheService.get("user:1", String.class, () -> {
+            loads.incrementAndGet();
+            return "alice";
+        }, 0, TimeUnit.SECONDS))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("ttl must be greater than 0");
+        assertThat(loads).hasValue(0);
     }
 }

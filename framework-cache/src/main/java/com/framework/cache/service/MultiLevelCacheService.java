@@ -2,6 +2,9 @@ package com.framework.cache.service;
 
 import lombok.extern.slf4j.Slf4j;
 
+import java.util.Objects;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
@@ -13,23 +16,39 @@ import java.util.function.Supplier;
 @Slf4j
 public class MultiLevelCacheService implements CacheService {
 
+    private static final long DELAYED_DELETE_DELAY_MILLIS = 500L;
+
     private final LocalCacheService localCache;
     private final RedisCacheService redisCache;
+    private final ScheduledExecutorService delayedDeleteExecutor;
 
     public MultiLevelCacheService(LocalCacheService localCache, RedisCacheService redisCache) {
-        this.localCache = localCache;
-        this.redisCache = redisCache;
+        this(localCache, redisCache, Executors.newSingleThreadScheduledExecutor(runnable -> {
+            Thread thread = new Thread(runnable, "framework-cache-delayed-delete");
+            thread.setDaemon(true);
+            return thread;
+        }));
+    }
+
+    MultiLevelCacheService(LocalCacheService localCache,
+                           RedisCacheService redisCache,
+                           ScheduledExecutorService delayedDeleteExecutor) {
+        this.localCache = Objects.requireNonNull(localCache, "localCache must not be null");
+        this.redisCache = Objects.requireNonNull(redisCache, "redisCache must not be null");
+        this.delayedDeleteExecutor = Objects.requireNonNull(delayedDeleteExecutor,
+                "delayedDeleteExecutor must not be null");
     }
 
     @Override
     public void set(String key, Object value) {
-        set(key, value, 3600, TimeUnit.SECONDS);
+        redisCache.set(key, value);
+        localCache.set(key, value);
     }
 
     @Override
     public void set(String key, Object value, long ttl, TimeUnit unit) {
         redisCache.set(key, value, ttl, unit);
-        localCache.set(key, value);
+        localCache.set(key, value, ttl, unit);
     }
 
     @Override
@@ -51,11 +70,22 @@ public class MultiLevelCacheService implements CacheService {
 
     @Override
     public <T> T get(String key, Class<T> type, Supplier<T> loader) {
-        return get(key, type, loader, 3600, TimeUnit.SECONDS);
+        CacheSupport.requireLoader(loader);
+        T localValue = localCache.get(key, type);
+        if (localValue != null) {
+            return localValue;
+        }
+        T redisValue = redisCache.get(key, type, loader);
+        if (redisValue != null) {
+            localCache.set(key, redisValue);
+        }
+        return redisValue;
     }
 
     @Override
     public <T> T get(String key, Class<T> type, Supplier<T> loader, long ttl, TimeUnit unit) {
+        CacheSupport.requireLoader(loader);
+        CacheSupport.requireTtl(ttl, unit);
         // L1
         T localValue = localCache.get(key, type);
         if (localValue != null) {
@@ -65,7 +95,7 @@ public class MultiLevelCacheService implements CacheService {
         // L2（含防穿透/击穿）
         T redisValue = redisCache.get(key, type, loader, ttl, unit);
         if (redisValue != null) {
-            localCache.set(key, redisValue);
+            localCache.set(key, redisValue, ttl, unit);
         }
         return redisValue;
     }
@@ -76,15 +106,13 @@ public class MultiLevelCacheService implements CacheService {
         redisCache.delete(key);
         localCache.delete(key);
 
-        // 延迟 500ms 再删一次 Redis（防止并发场景下脏数据回填）
-        new Thread(() -> {
+        delayedDeleteExecutor.schedule(() -> {
             try {
-                Thread.sleep(500);
                 redisCache.delete(key);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
+            } catch (Exception e) {
+                log.warn("[多级缓存] 延迟删除 Redis 缓存失败 key={}", key, e);
             }
-        }).start();
+        }, DELAYED_DELETE_DELAY_MILLIS, TimeUnit.MILLISECONDS);
     }
 
     @Override
@@ -101,6 +129,7 @@ public class MultiLevelCacheService implements CacheService {
     @Override
     public void expire(String key, long ttl, TimeUnit unit) {
         redisCache.expire(key, ttl, unit);
+        localCache.expire(key, ttl, unit);
     }
 
     @Override
@@ -112,5 +141,9 @@ public class MultiLevelCacheService implements CacheService {
     public void clear() {
         localCache.clear();
         redisCache.clear();
+    }
+
+    public void shutdown() {
+        delayedDeleteExecutor.shutdown();
     }
 }

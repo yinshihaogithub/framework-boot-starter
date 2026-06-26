@@ -24,6 +24,8 @@ import java.util.List;
 @Slf4j
 public class MqRetryScheduler {
 
+    private static final String LEGACY_MESSAGE_TYPE = "LegacyMessage";
+
     private final DeadLetterHandler deadLetterHandler;
     private final MqMessageSenderRegistry senderRegistry;
     private final int maxRetry;
@@ -54,7 +56,7 @@ public class MqRetryScheduler {
             if (!MqFailedMessage.STATUS_PENDING.equals(msg.getStatus())) {
                 continue;
             }
-            if (msg.getNextRetryTime() != null && msg.getNextRetryTime().before(now)) {
+            if (msg.getNextRetryTime() == null || !msg.getNextRetryTime().after(now)) {
                 toRetry.add(msg);
             }
         }
@@ -144,17 +146,19 @@ public class MqRetryScheduler {
         if (msg == null) {
             return false;
         }
+        String normalizedOperator = normalize(operator);
+        String normalizedRemark = normalize(remark);
 
         try {
             senderRegistry.activeSender().send(msg.getExchange(), msg.getRoutingKey(), restoreWrapper(msg));
             msg.setStatus(MqFailedMessage.STATUS_MANUAL);
-            msg.setOperator(operator);
-            msg.setCompensateRemark(remark);
+            msg.setOperator(normalizedOperator);
+            msg.setCompensateRemark(normalizedRemark);
             msg.setRetryCount(msg.getRetryCount() + 1);
             msg.setUpdateTime(new Date());
             deadLetterHandler.updateRecord(msg);
             log.info("[手动重发] id={}, messageId={}, traceId={}, operator={}",
-                    id, msg.getMessageId(), msg.getTraceId(), operator);
+                    id, msg.getMessageId(), msg.getTraceId(), normalizedOperator);
             return true;
         } catch (Exception e) {
             log.error("[手动重发失败] id={}, error={}", id, e.getMessage());
@@ -173,6 +177,9 @@ public class MqRetryScheduler {
      * 批量手动重发
      */
     public MqAdminDTO.ManualRetryResult batchManualRetry(List<Long> ids, String operator, String remark) {
+        if (ids == null) {
+            throw new IllegalArgumentException("ids must not be null");
+        }
         MqAdminDTO.ManualRetryResult result = new MqAdminDTO.ManualRetryResult();
         result.setTotal(ids.size());
         List<String> failedMessages = new ArrayList<>();
@@ -211,7 +218,7 @@ public class MqRetryScheduler {
             legacyPayload = true;
         }
         if (wrapper == null) {
-            wrapper = MessageWrapper.of(msg.getBusinessKey(), msg.getMessageType(), msg.getPayload());
+            wrapper = MessageWrapper.of(msg.getBusinessKey(), messageType(msg), msg.getPayload());
         }
         if (legacyPayload) {
             fillRecordMetadata(wrapper, msg);
@@ -245,7 +252,7 @@ public class MqRetryScheduler {
             wrapper.setBusinessKey(msg.getBusinessKey());
         }
         if (isBlank(wrapper.getType())) {
-            wrapper.setType(msg.getMessageType());
+            wrapper.setType(messageType(msg));
         }
     }
 
@@ -254,10 +261,22 @@ public class MqRetryScheduler {
         wrapper.setTraceId(msg.getTraceId());
         wrapper.setParentMessageId(msg.getParentMessageId());
         wrapper.setBusinessKey(msg.getBusinessKey());
-        wrapper.setType(msg.getMessageType());
+        wrapper.setType(messageType(msg));
+    }
+
+    private String messageType(MqFailedMessage msg) {
+        return isBlank(msg.getMessageType()) ? LEGACY_MESSAGE_TYPE : msg.getMessageType();
     }
 
     private boolean isBlank(String value) {
         return value == null || value.isBlank();
+    }
+
+    private String normalize(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 }

@@ -21,7 +21,8 @@
 | `JwtUtils` | JWT 工具：签发/解析/校验 accessToken 与 refreshToken |
 | `SessionManager` | 会话管理：登录/登出/刷新/黑名单/多端互踢/强制下线，accessToken 绑定 Redis 会话 |
 | `SmsSender` | 短信发送扩展点，默认日志实现，业务方可替换为云厂商实现 |
-| `TokenAuthFilter` | Token 认证过滤器：白名单放行 + accessToken 校验 + 从会话恢复用户上下文 |
+| `PasswordExpireService` | 密码过期策略：记录密码修改时间、检查过期状态、读取剩余有效天数 |
+| `TokenAuthFilter` | Token 认证过滤器：白名单放行 + accessToken 校验 + 从会话恢复用户上下文，请求结束恢复入口前 ThreadLocal |
 | `LoginUser` | 登录用户信息（userId/username/tenantId/deviceId/roles/permissions） |
 | `UserContextHolder` | 基于 ThreadLocal 的当前登录用户上下文 |
 | `AuthAutoConfiguration` | 自动配置，读取 yaml 配置初始化 Bean |
@@ -51,9 +52,21 @@ framework:
     sms:
       code-expire-seconds: 300
       resend-interval-seconds: 60
+    password:
+      expire-days: 0                            # 密码过期天数，0 表示关闭
+    oauth2:
+      enabled: false
+      authorization-uri: https://oauth.example.com/authorize
+      token-uri: https://oauth.example.com/token
+      user-info-uri: https://oauth.example.com/userinfo
+      client-id: your-client-id
+      client-secret: your-client-secret
+      redirect-uri: https://app.example.com/oauth2/callback
+      scopes: read:user
 ```
 
 `prod` / `production` profile 下必须显式配置 `framework.auth.jwt.secret`，不能使用默认密钥。
+启动期会校验 JWT 密钥和过期时间、会话超时、登录失败锁定、短信验证码时间窗、密码过期天数与白名单路径；`refresh-token-expire` 必须大于 `access-token-expire`，短信重发间隔必须小于验证码有效期。登录失败计数、账号锁定、失败计数清理和解锁会在写 Redis 前归一化 `username` 首尾空格，并拒绝空白用户名。`oauth2.enabled=true` 时，授权地址、Token 地址、用户信息地址、clientId、clientSecret、redirectUri 和 scopes 都必须配置。
 如果没有 `StringRedisTemplate`，模块仍会注册 `JwtUtils` 和 `SmsSender`，Redis 相关的会话、短信验证码、过滤器 Bean 会自动跳过。
 
 ## 使用示例
@@ -128,6 +141,23 @@ public SmsSender smsSender() {
 }
 ```
 
+### 密码过期策略
+
+```java
+@Autowired
+private PasswordExpireService passwordExpireService;
+
+public void checkLoginPassword(Long userId) {
+    passwordExpireService.checkPasswordExpired(userId);
+}
+
+public void afterPasswordChanged(Long userId) {
+    passwordExpireService.recordPasswordChange(userId);
+}
+```
+
+`framework.auth.password.expire-days = 0` 时策略关闭，不写入 Redis。启用后 `userId` 必须为正数；Redis 中密码修改时间如果被污染为非数字值，会记录 WARN 并重置为当前时间，避免脏数据中断登录链路。
+
 ## Token 规范
 
 | 属性 | accessToken | refreshToken |
@@ -144,6 +174,7 @@ public SmsSender smsSender() {
 |---|---|---|---|
 | `framework:session:{userId}:{deviceId}` | Hash | 2h | 用户会话，保存 refreshToken、roles、permissions 等上下文 |
 | `framework:token:blacklist:{token}` | String | Token剩余有效期 | Token 黑名单 |
+| `framework:password:update:{userId}` | String | 密码过期天数 + 7 天 | 密码最后修改时间戳，用于密码过期策略 |
 
 ## 工作流程
 
@@ -155,5 +186,5 @@ public SmsSender smsSender() {
        └─ 校验 Token（含黑名单检查）
             ├─ 无效/过期 → 401
             ├─ 非 accessToken / 会话不存在 → 401
-            └─ 有效 → 从 Redis 会话恢复 LoginUser → 注入 UserContextHolder → 执行业务 → 清理 ThreadLocal
+            └─ 有效 → 从 Redis 会话恢复 LoginUser → 注入 UserContextHolder → 执行业务 → 恢复入口前 ThreadLocal
 ```

@@ -23,6 +23,12 @@
 | `PasswordUtils` | BCrypt 密码哈希与校验 |
 | `DesensitizeUtils` | 数据脱敏（手机/身份证/银行卡/邮箱/姓名） |
 
+## 工程约束
+
+- AES 加密每次生成随机 IV，密文为 Base64 编码的版本头、IV 和密文字节；`decrypt` 兼容历史固定 IV 密文。
+- MD5/SHA 仅用于摘要、指纹、完整性校验，不用于密码存储；密码必须使用 BCrypt。
+- 脱敏工具对无效或过短输入保持原值，避免日志/接口兜底时抛出不必要异常。
+
 ## 使用示例
 
 ### AES 加解密
@@ -34,7 +40,7 @@ String key = AesUtils.generateKey();
 
 // 2. 加密
 String cipherText = AesUtils.encrypt("敏感数据", key);
-// 输出: "Y3J5cHRlZ..." (Base64)
+// 输出: "QUVTM..." (Base64，每次不同)
 
 // 3. 解密
 String plainText = AesUtils.decrypt(cipherText, key);
@@ -83,7 +89,7 @@ DesensitizeUtils.bankCard("6222123456781234"); // 6222 **** **** 1234
 DesensitizeUtils.email("zhangsan@qq.com");    // z***@qq.com
 
 // 姓名
-DesensitizeUtils.name("张三丰");               // 张**丰
+DesensitizeUtils.name("张三丰");               // 张*丰
 DesensitizeUtils.name("张三");                 // 张*
 DesensitizeUtils.name("张");                   // 张
 ```

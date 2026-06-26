@@ -1,12 +1,12 @@
 package com.framework.mq.producer;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.framework.core.trace.TraceContext;
 import com.framework.mq.config.MqProperties;
 import com.framework.mq.core.MessageWrapper;
 import lombok.extern.slf4j.Slf4j;
 
 import java.lang.reflect.Method;
+import java.util.Objects;
 
 /**
  * RocketMQ sender adapter backed by RocketMQTemplate when present.
@@ -19,7 +19,7 @@ public class RocketMqProducer implements MqMessageSender {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public RocketMqProducer(Object rocketMQTemplate) {
-        this.rocketMQTemplate = rocketMQTemplate;
+        this.rocketMQTemplate = Objects.requireNonNull(rocketMQTemplate, "rocketMQTemplate must not be null");
         this.syncSend = resolveSyncSend(rocketMQTemplate.getClass());
     }
 
@@ -30,8 +30,9 @@ public class RocketMqProducer implements MqMessageSender {
 
     @Override
     public <T> void send(String topic, String tag, MessageWrapper<T> wrapper) {
+        MqSendSupport.requireText(topic, "topic");
+        MqSendSupport.fillTrace(wrapper);
         try {
-            fillTrace(wrapper);
             String destination = (tag == null || tag.isBlank()) ? topic : topic + ":" + tag;
             String json = objectMapper.writeValueAsString(wrapper);
             syncSend.invoke(rocketMQTemplate, destination, json);
@@ -48,12 +49,6 @@ public class RocketMqProducer implements MqMessageSender {
             return templateClass.getMethod("syncSend", String.class, Object.class);
         } catch (NoSuchMethodException e) {
             throw new IllegalStateException("RocketMQTemplate.syncSend(String, Object) is required", e);
-        }
-    }
-
-    private <T> void fillTrace(MessageWrapper<T> wrapper) {
-        if (wrapper.getTraceId() == null || wrapper.getTraceId().isBlank()) {
-            wrapper.setTraceId(TraceContext.ensureTraceId());
         }
     }
 }

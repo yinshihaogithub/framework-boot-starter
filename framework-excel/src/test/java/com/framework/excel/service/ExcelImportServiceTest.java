@@ -1,16 +1,30 @@
 package com.framework.excel.service;
 
 import com.alibaba.excel.annotation.ExcelProperty;
+import com.alibaba.excel.EasyExcel;
 import com.framework.excel.config.ExcelProperties;
 import com.framework.excel.model.ExcelImportResult;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class ExcelImportServiceTest {
+
+    @Test
+    void rejectsInvalidMaxRowsAtConstruction() {
+        ExcelProperties properties = new ExcelProperties();
+        properties.setMaxRows(0);
+
+        assertThatThrownBy(() -> new ExcelImportService(properties))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("framework.excel.max-rows must be greater than 0");
+    }
 
     @Test
     void returnsErrorResultForInvalidInputStream() {
@@ -36,8 +50,76 @@ class ExcelImportServiceTest {
         assertThat(result.getErrors().get(0).getMessage()).contains("inputStream must not be null");
     }
 
-    static class ImportRow {
+    @Test
+    void returnsErrorResultWhenHeaderDoesNotMatchRowClass() {
+        ExcelImportService importService = new ExcelImportService(new ExcelProperties());
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        EasyExcel.write(outputStream, WrongHeaderRow.class)
+                .sheet("Sheet1")
+                .doWrite(List.of(new WrongHeaderRow("alice")));
+
+        ExcelImportResult<ImportRow> result = importService.importExcel(
+                new ByteArrayInputStream(outputStream.toByteArray()),
+                ImportRow.class
+        );
+
+        assertThat(result.hasErrors()).isTrue();
+        assertThat(result.successCount()).isZero();
+        assertThat(result.getErrors().get(0).getMessage()).contains("header mismatch");
+    }
+
+    @Test
+    void trimsHeaderCellsBeforeComparingWithRowClass() {
+        ExcelImportService importService = new ExcelImportService(new ExcelProperties());
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        EasyExcel.write(outputStream, HeaderWithWhitespaceRow.class)
+                .sheet("Sheet1")
+                .doWrite(List.of(new HeaderWithWhitespaceRow("alice")));
+
+        ExcelImportResult<ImportRow> result = importService.importExcel(
+                new ByteArrayInputStream(outputStream.toByteArray()),
+                ImportRow.class
+        );
+
+        assertThat(result.hasErrors()).isFalse();
+        assertThat(result.successCount()).isEqualTo(1);
+    }
+
+    public static class ImportRow {
         @ExcelProperty("Name")
         private String name;
+
+        public ImportRow() {
+        }
+
+        public String getName() {
+            return name;
+        }
+
+        public void setName(String name) {
+            this.name = name;
+        }
+    }
+
+    static class WrongHeaderRow {
+        @ExcelProperty("Wrong")
+        private final String name;
+
+        WrongHeaderRow(String name) {
+            this.name = name;
+        }
+    }
+
+    static class HeaderWithWhitespaceRow {
+        @ExcelProperty(" Name ")
+        private final String name;
+
+        HeaderWithWhitespaceRow(String name) {
+            this.name = name;
+        }
+
+        public String getName() {
+            return name;
+        }
     }
 }

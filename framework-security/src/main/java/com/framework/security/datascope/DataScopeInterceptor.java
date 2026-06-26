@@ -16,6 +16,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.Map;
 import java.util.Properties;
+import java.util.regex.Pattern;
 
 /**
  * 数据权限 MyBatis 拦截器
@@ -33,6 +34,10 @@ import java.util.Properties;
                 args = {MappedStatement.class, Object.class, RowBounds.class, ResultHandler.class})
 })
 public class DataScopeInterceptor implements Interceptor {
+
+    private static final Pattern WHERE_PATTERN = Pattern.compile("(?i)\\bwhere\\b");
+    private static final Pattern TAIL_CLAUSE_PATTERN = Pattern.compile(
+            "(?i)\\s+(group\\s+by|order\\s+by|having|limit|offset)\\b");
 
     @Override
     public Object intercept(Invocation invocation) throws Throwable {
@@ -60,7 +65,7 @@ public class DataScopeInterceptor implements Interceptor {
         // 拼接 SQL
         BoundSql boundSql = ms.getBoundSql(parameter);
         String originalSql = boundSql.getSql();
-        String newSql = originalSql + " AND (" + scopeSql + ")";
+        String newSql = appendScopeSql(originalSql, scopeSql);
 
         // 重建 MappedStatement
         BoundSql newBoundSql = new BoundSql(ms.getConfiguration(), newSql,
@@ -82,6 +87,19 @@ public class DataScopeInterceptor implements Interceptor {
         invocation.getArgs()[0] = newMs;
 
         return invocation.proceed();
+    }
+
+    static String appendScopeSql(String originalSql, String scopeSql) {
+        if (originalSql == null || originalSql.isBlank() || scopeSql == null || scopeSql.isBlank()) {
+            return originalSql;
+        }
+        String sql = originalSql.trim();
+        var matcher = TAIL_CLAUSE_PATTERN.matcher(sql);
+        int insertIndex = matcher.find() ? matcher.start() : sql.length();
+        String head = sql.substring(0, insertIndex);
+        String tail = sql.substring(insertIndex);
+        String connector = WHERE_PATTERN.matcher(head).find() ? " AND " : " WHERE ";
+        return head + connector + "(" + scopeSql.trim() + ")" + tail;
     }
 
     /**

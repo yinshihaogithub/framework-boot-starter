@@ -19,4 +19,35 @@ class DatasourceAutoConfigurationTest {
                 .hasSingleBean(MybatisPlusInterceptor.class)
                 .hasSingleBean(FrameworkMetaObjectHandler.class));
     }
+
+    @Test
+    void autoConfigurationRejectsInvalidDatasourcePropertiesAtStartup() {
+        contextRunner
+                .withPropertyValues("framework.datasource.max-limit=0")
+                .run(context -> assertThat(context)
+                        .hasFailed()
+                        .getFailure()
+                        .hasMessageContaining("framework.datasource.max-limit"));
+
+        contextRunner
+                .withPropertyValues("framework.datasource.audit.create-time-field= ")
+                .run(context -> assertThat(context)
+                        .hasFailed()
+                        .getFailure()
+                        .hasMessageContaining("framework.datasource.audit.create-time-field"));
+
+        contextRunner
+                .withPropertyValues("framework.datasource.db-type=POSTGRE_SQL")
+                .run(context -> assertThat(context)
+                        .hasFailed()
+                        .getFailure()
+                        .hasMessageContaining("framework.datasource.db-type must be MYSQL"));
+
+        contextRunner
+                .withPropertyValues("framework.datasource.audit.update-time-field=updated-at")
+                .run(context -> assertThat(context)
+                        .hasFailed()
+                        .getFailure()
+                        .hasMessageContaining("framework.datasource.audit.update-time-field must be a valid Java field name"));
+    }
 }

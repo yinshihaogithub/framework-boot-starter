@@ -21,7 +21,7 @@
     key = "",                        // 限流 key（可选，支持 SpEL 模板）
     limit = 100,                     // 时间窗口内允许的请求数，必须 > 0
     window = 60,                     // 时间窗口大小，必须 > 0
-    unit = TimeUnit.SECONDS,         // 时间单位，默认 SECONDS
+    unit = TimeUnit.SECONDS,         // 时间单位，仅支持 SECONDS / MINUTES / HOURS
     limitType = LimitType.GLOBAL,    // 限流维度，默认 GLOBAL
     message = "请求过于频繁，请稍后再试"  // 限流提示
 )
@@ -36,7 +36,7 @@
 | `USER` | `framework:rate:user:{userId}:{Class}:{method}` | 按用户限流 |
 | `DEFAULT` | `framework:rate:default:{Class}:{method}` | 默认（等同 GLOBAL） |
 
-配置 `key` 后，`{Class}:{method}` 会替换为自定义 key，例如 `api:user:#{#userId}` 会解析为 `api:user:42`。SpEL 上下文支持参数名、`#p0` / `#a0` 索引参数和 `#args` 数组。
+配置 `key` 后，`{Class}:{method}` 会替换为自定义 key，例如 `api:user:#{#userId}` 会解析为 `api:user:42`。SpEL 上下文支持参数名、`#p0` / `#a0` 索引参数和 `#args` 数组；显式配置的 key 解析失败或解析为空会快速抛出配置异常，不会退回默认方法维度，写入 Redisson 前会归一化首尾空格。
 
 ## 使用示例
 
@@ -92,7 +92,8 @@ public Result getUser(@PathVariable Long userId) {
 - `RateType.OVERALL`：集群总速率（所有实例共享限流计数）
 - `trySetRate()` 幂等设置，重复调用不会覆盖
 - `tryAcquire()` 非阻塞获取令牌，获取不到立即返回
-- `limit` 和 `window` 非法时会快速抛出配置异常，不访问 Redis
+- `limit`、`window`、`unit` 和显式 key 非法时会快速抛出稳定的配置异常，不访问 Redis
+- 显式 key 支持 SpEL 模板，解析结果在写入 Redisson 前会去除首尾空白，避免隐形空格制造不同限流桶
 
 ## Redis Key
 

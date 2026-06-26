@@ -23,6 +23,15 @@ class IdempotentAutoConfigurationImportsTest {
                 .hasSingleBean(IdempotentAspect.class));
     }
 
+    @Test
+    void autoConfigurationBacksOffWithoutRedisTemplate() {
+        new ApplicationContextRunner()
+                .withConfiguration(AutoConfigurations.of(IdempotentAutoConfiguration.class))
+                .run(context -> assertThat(context)
+                        .hasNotFailed()
+                        .doesNotHaveBean(IdempotentAspect.class));
+    }
+
     private static RedisConnectionFactory redisConnectionFactory() {
         return (RedisConnectionFactory) Proxy.newProxyInstance(
                 RedisConnectionFactory.class.getClassLoader(),

@@ -20,4 +20,19 @@ class FileAutoConfigurationTest {
                 .hasSingleBean(FileStorageService.class)
                 .hasSingleBean(LocalFileStorageService.class));
     }
+
+    @Test
+    void autoConfigurationRejectsInvalidFilePropertiesAtStartup() {
+        assertInvalidProperty("framework.file.base-path= ", "framework.file.base-path");
+        assertInvalidProperty("framework.file.max-size=0", "framework.file.max-size");
+        assertInvalidProperty("framework.file.allowed-extensions[0]= ", "framework.file.allowed-extensions");
+    }
+
+    private void assertInvalidProperty(String property, String message) {
+        contextRunner
+                .withPropertyValues(property)
+                .run(context -> assertThat(context).hasFailed()
+                        .getFailure()
+                        .hasMessageContaining(message));
+    }
 }

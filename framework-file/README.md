@@ -30,6 +30,8 @@ framework:
       - xlsx
 ```
 
+启动期会校验 `base-path` 不能为空，`max-size` 必须大于 0，`allowed-extensions` 不能包含空白值。扩展名可带或不带点号，匹配时会统一按小写处理。
+
 业务方可以自定义 `FileStorageService` 接入 MinIO、OSS 或 COS。
 
 ## 使用示例
@@ -41,7 +43,7 @@ private FileStorageService fileStorageService;
 StoredFile file = fileStorageService.store(originalFilename, inputStream);
 ```
 
-`StoredFile` 会返回 `key`、原始文件名、文件大小、访问 URL 和 `contentType`。本地默认实现会校验空输入、文件大小和扩展名，写入超限失败时会清理已写入的临时内容。
+`StoredFile` 会返回 `key`、安全展示文件名、文件大小、访问 URL 和 `contentType`。本地默认实现会校验 `base-path`、`max-size`、空输入、文件大小、扩展名和读取/删除时的 key 安全，上传原始文件名会去掉路径片段并归一到安全字符，`StoredFile.originalFilename` 返回的也是归一后的安全名；缺少有效文件名时回退为 `file`，写入超限失败时会清理已写入的临时内容。
 
 ## 装配行为
 

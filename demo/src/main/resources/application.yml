@@ -1,0 +1,186 @@
+# Tomcat
+server:
+  port: 8080
+  servlet:
+    context-path: /
+
+# Spring
+spring:
+  application:
+    name: framework-demo
+  datasource:
+    url: jdbc:mysql://localhost:3306/framework_demo?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: root
+    password: root
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  sql:
+    init:
+      mode: always
+      continue-on-error: false
+      schema-locations:
+        - optional:file:./sql/mysql/framework_boot_starter_init.sql
+        - optional:file:../sql/mysql/framework_boot_starter_init.sql
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: Asia/Shanghai
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      database: 0
+      timeout: 5000ms
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: guest
+    password: guest
+    virtual-host: /
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    listener:
+      simple:
+        acknowledge-mode: manual
+        prefetch: 10
+        concurrency: 3
+        max-concurrency: 10
+        retry:
+          enabled: true
+          max-attempts: 3
+          initial-interval: 1000ms
+
+# Redisson
+redisson:
+  config: |
+    singleServerConfig:
+      address: "redis://localhost:6379"
+      database: 0
+
+# Framework 配置
+framework:
+  auth:
+    enabled: true
+    jwt:
+      secret: framework-demo-secret-key-must-be-at-least-32-chars-long
+      access-token-expire: 7200       # 2小时
+      refresh-token-expire: 604800    # 7天
+    session-timeout: 7200
+    white-list:
+      - /api/demo/public
+      - /auth/**
+      - /actuator/**
+      - /swagger-ui/**
+      - /v3/api-docs/**
+    login:
+      max-fail-count: 5
+      lock-duration-minutes: 30
+    sms:
+      code-expire-seconds: 300
+      resend-interval-seconds: 60
+  security:
+    enabled: true
+  cache:
+    enabled: true
+    multi-level: true
+    local:
+      max-size: 10000
+      expire-after-write: 300
+    remote:
+      default-ttl: 3600
+  lock:
+    enabled: true
+  idempotent:
+    enabled: true
+  rate-limiter:
+    enabled: true
+  log:
+    enabled: true
+    api-sample-rate: 0
+    retention-days: 30
+    db-storage:
+      enabled: false
+  mq:
+    enabled: true
+    provider: RABBIT
+    auto-create-table: true
+    failed-message-table-name: framework_mq_failed_message
+    max-retry: 3
+    dead-letter:
+      enabled: true
+      queue: framework.dead.letter.queue
+    retry:
+      fixed-delay: 30000
+  notify:
+    enabled: true
+    default-channel: LOG
+    webhook:
+      url:
+      timeout: 3s
+  local-message:
+    enabled: true
+    table-name: framework_local_message
+    auto-create-table: true
+    max-retry: 3
+    batch-size: 100
+    retry-interval: 1m
+    scheduler:
+      enabled: true
+      fixed-delay: 30000
+  excel:
+    enabled: true
+    default-sheet-name: Sheet1
+    max-rows: 100000
+  datasource:
+    enabled: true
+    db-type: MYSQL
+    max-limit: 1000
+  redis:
+    enabled: true
+    key-prefix: framework-demo
+    default-ttl: 1h
+    lock-ttl: 30s
+  feign:
+    enabled: true
+    relay-headers:
+      - Authorization
+      - X-Trace-Id
+      - X-Tenant-Id
+  monitor:
+    enabled: true
+    application-name: framework-demo
+  job:
+    enabled: false
+    admin-addresses: http://127.0.0.1:8080/xxl-job-admin
+    app-name: framework-demo-job
+    port: 9999
+    log-path: ${java.io.tmpdir}/xxl-job/jobhandler
+    log-retention-days: 30
+  file:
+    enabled: true
+    base-path: ${java.io.tmpdir}/framework-demo-files
+    public-url-prefix: /files
+  circuit-breaker:
+    configs:
+      demo:
+        failure-rate-threshold: 50
+        slow-call-duration-threshold: 2000
+        slow-call-rate-threshold: 0.5
+        sliding-window-size: 100
+        minimum-number-of-calls: 10
+        wait-duration-in-open-state-seconds: 30
+        permitted-number-of-calls-in-half-open-state: 10
+        automatic-transition-from-open-to-half-open-enabled: true
+
+# SpringDoc
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+  api-docs:
+    path: /v3/api-docs
+
+# 日志
+logging:
+  level:
+    root: INFO
+    com.framework: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] [%X{traceId}] %-5level %logger{36} - %msg%n"

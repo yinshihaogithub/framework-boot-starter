@@ -51,4 +51,28 @@ class LogAutoConfigurationImportsTest {
             }
         });
     }
+
+    @Test
+    void autoConfigurationRejectsInvalidLogPropertiesAtStartup() {
+        contextRunner
+                .withPropertyValues("framework.log.api-sample-rate=-1")
+                .run(context -> assertThat(context)
+                        .hasFailed()
+                        .getFailure()
+                        .hasMessageContaining("framework.log.api-sample-rate"));
+
+        contextRunner
+                .withPropertyValues("framework.log.api-sample-rate=101")
+                .run(context -> assertThat(context)
+                        .hasFailed()
+                        .getFailure()
+                        .hasMessageContaining("framework.log.api-sample-rate"));
+
+        contextRunner
+                .withPropertyValues("framework.log.retention-days=0")
+                .run(context -> assertThat(context)
+                        .hasFailed()
+                        .getFailure()
+                        .hasMessageContaining("framework.log.retention-days"));
+    }
 }

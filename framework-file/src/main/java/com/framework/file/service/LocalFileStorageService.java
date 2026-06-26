@@ -10,6 +10,7 @@ import java.net.URLConnection;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -20,7 +21,8 @@ public class LocalFileStorageService implements FileStorageService {
     private final FileProperties properties;
 
     public LocalFileStorageService(FileProperties properties) {
-        this.properties = properties;
+        this.properties = Objects.requireNonNull(properties, "file properties must not be null");
+        properties.validate();
     }
 
     @Override
@@ -37,7 +39,7 @@ public class LocalFileStorageService implements FileStorageService {
         try {
             long size = copyWithLimit(inputStream, target);
             String contentType = contentType(target, safeFilename);
-            return new StoredFile(key, originalFilename, size, publicUrl(key), contentType);
+            return new StoredFile(key, safeFilename, size, publicUrl(key), contentType);
         } catch (IOException | RuntimeException e) {
             Files.deleteIfExists(target);
             throw e;
@@ -55,8 +57,22 @@ public class LocalFileStorageService implements FileStorageService {
     }
 
     private String sanitize(String value) {
-        String filename = value == null || value.isBlank() ? "file" : Path.of(value).getFileName().toString();
-        return filename.replaceAll("[^A-Za-z0-9._-]", "_");
+        String filename = filename(value);
+        String safeFilename = filename.replaceAll("[^A-Za-z0-9._-]", "_");
+        return safeFilename.isBlank() ? "file" : safeFilename;
+    }
+
+    private String filename(String value) {
+        if (value == null || value.isBlank()) {
+            return "file";
+        }
+        String normalized = value.replace('\\', '/');
+        int index = normalized.lastIndexOf('/');
+        String filename = index < 0 ? normalized : normalized.substring(index + 1);
+        if (filename.isBlank() || ".".equals(filename) || "..".equals(filename)) {
+            return "file";
+        }
+        return filename;
     }
 
     private Path basePath() {
@@ -64,8 +80,14 @@ public class LocalFileStorageService implements FileStorageService {
     }
 
     private Path resolveKey(String key) {
+        if (key == null || key.isBlank()) {
+            throw new IllegalArgumentException("file key must not be blank");
+        }
+        if (!key.equals(sanitize(key))) {
+            throw new IllegalArgumentException("file key is not allowed");
+        }
         Path basePath = basePath();
-        Path target = basePath.resolve(sanitize(key)).normalize();
+        Path target = basePath.resolve(key).normalize();
         if (!target.startsWith(basePath)) {
             throw new IllegalArgumentException("file key is not allowed");
         }

@@ -35,10 +35,14 @@ public class RetryAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     public CircuitBreakerRegistry circuitBreakerRegistry(CircuitBreakerProperties properties) {
+        if (properties == null) {
+            throw new IllegalArgumentException("framework.circuit-breaker must not be null");
+        }
         Map<String, io.github.resilience4j.circuitbreaker.CircuitBreakerConfig> configs = new LinkedHashMap<>();
 
         // 注册全局默认配置
         if (properties.getDefaultConfig() != null) {
+            validateConfig("framework.circuit-breaker.default-config", properties.getDefaultConfig());
             io.github.resilience4j.circuitbreaker.CircuitBreakerConfig defaultConfig = buildConfig(properties.getDefaultConfig());
             configs.put("default", defaultConfig);
         }
@@ -46,10 +50,15 @@ public class RetryAutoConfiguration {
         // 注册各服务独立配置
         if (properties.getConfigs() != null) {
             properties.getConfigs().forEach((name, config) -> {
+                if (name == null || name.isBlank()) {
+                    throw new IllegalArgumentException("framework.circuit-breaker.configs name must not be blank");
+                }
+                String prefix = "framework.circuit-breaker.configs." + name.trim();
+                validateConfig(prefix, config);
                 io.github.resilience4j.circuitbreaker.CircuitBreakerConfig cbConfig = buildConfig(config);
-                configs.put(name, cbConfig);
+                configs.put(name.trim(), cbConfig);
                 log.info("[熔断配置] 已注册 name={}, failureRate={}, timeout={}ms",
-                        name, cbConfig.getFailureRateThreshold(),
+                        name.trim(), cbConfig.getFailureRateThreshold(),
                         cbConfig.getSlowCallDurationThreshold().toMillis());
             });
         }
@@ -69,6 +78,36 @@ public class RetryAutoConfiguration {
                 .permittedNumberOfCallsInHalfOpenState(props.getPermittedNumberOfCallsInHalfOpenState())
                 .automaticTransitionFromOpenToHalfOpenEnabled(props.isAutomaticTransitionFromOpenToHalfOpenEnabled())
                 .build();
+    }
+
+    private void validateConfig(String prefix, com.framework.retry.circuitbreaker.CircuitBreakerConfig props) {
+        if (props == null) {
+            throw new IllegalArgumentException(prefix + " must not be null");
+        }
+        if (props.getFailureRateThreshold() <= 0 || props.getFailureRateThreshold() > 100) {
+            throw new IllegalArgumentException(prefix + ".failure-rate-threshold must be greater than 0 and less than or equal to 100");
+        }
+        if (props.getSlowCallDurationThreshold() <= 0) {
+            throw new IllegalArgumentException(prefix + ".slow-call-duration-threshold must be greater than 0");
+        }
+        if (props.getSlowCallRateThreshold() <= 0 || props.getSlowCallRateThreshold() > 1) {
+            throw new IllegalArgumentException(prefix + ".slow-call-rate-threshold must be greater than 0 and less than or equal to 1");
+        }
+        if (props.getSlidingWindowSize() <= 0) {
+            throw new IllegalArgumentException(prefix + ".sliding-window-size must be greater than 0");
+        }
+        if (props.getMinimumNumberOfCalls() <= 0) {
+            throw new IllegalArgumentException(prefix + ".minimum-number-of-calls must be greater than 0");
+        }
+        if (props.getMinimumNumberOfCalls() > props.getSlidingWindowSize()) {
+            throw new IllegalArgumentException(prefix + ".minimum-number-of-calls must be less than or equal to sliding-window-size");
+        }
+        if (props.getWaitDurationInOpenStateSeconds() <= 0) {
+            throw new IllegalArgumentException(prefix + ".wait-duration-in-open-state-seconds must be greater than 0");
+        }
+        if (props.getPermittedNumberOfCallsInHalfOpenState() <= 0) {
+            throw new IllegalArgumentException(prefix + ".permitted-number-of-calls-in-half-open-state must be greater than 0");
+        }
     }
 
     /**

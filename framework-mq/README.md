@@ -12,7 +12,7 @@
 </dependency>
 ```
 
-> 推荐配置 MySQL + Redis，再按业务选择 RabbitMQ / Kafka / RocketMQ。MySQL 保存失败消息和人工补偿记录，Redis 仅用于消费幂等缓存。未提供对应 provider Bean 或 `DataSource` 时，相关 Bean 会自动跳过，避免 starter 直接拖垮启动。
+> 推荐配置 MySQL + Redis，再按业务选择 RabbitMQ / Kafka / RocketMQ。MySQL 保存失败消息和人工补偿记录，Redis 仅用于消费幂等缓存。未提供 Redis 时消费者仍可消费消息，只是不做跨进程幂等缓存；未提供对应 provider Bean 或 `DataSource` 时，相关 Bean 会自动跳过，避免 starter 直接拖垮启动。
 
 ## 配置
 
@@ -52,6 +52,10 @@ RabbitMQ 下 `RabbitTemplate` 已启用 publisher confirm / returns callback 的
 
 MySQL 初始化脚本：`framework-mq/src/main/resources/db/mysql/framework_mq.sql`。工程根目录也提供聚合脚本：`sql/mysql/framework_boot_starter_init.sql`。
 
+失败消息 JDBC repository 和自动建表器会校验 `JdbcTemplate` 和动态表名，表名只允许字母、数字和下划线；字段映射会保留 `messageId`、`traceId`、上游消息 ID、业务 key、消息类型、租户、操作人、来源和人工补偿备注。已处理记录清理只删除 `SUCCESS`、`EXHAUSTED`、`MANUAL` 终态记录，不会误删待补偿消息。
+
+配置启动期会快速校验：`max-retry` 必须大于 0，`retry.fixed-delay` 必须大于 0，`dead-letter.queue` 在启用死信监听时不能为空，`failed-message-table-name` 只能包含字母、数字和下划线。
+
 ## 核心类
 
 | 类 | 说明 |
@@ -69,8 +73,9 @@ MySQL 初始化脚本：`framework-mq/src/main/resources/db/mysql/framework_mq.s
 | `MqQueueBuilder` | RabbitMQ 队列声明工具：Direct/Topic/DLX/Delay |
 | `DeadLetterHandler` | 死信处理器：监听死信队列，持久化失败记录到 MySQL |
 | `MqRetryScheduler` | 重试调度器：定时扫描失败消息，指数退避重试 |
-| `MqAdminController` | 管理控制台 REST API |
 | `MqAutoConfiguration` | 自动配置类 |
+
+发送入口会校验 `payload`、消息类型、`messageId`、topic/routingKey 和延迟/TTL 参数；非法消息会在进入 MQ 客户端前抛出清晰异常。
 
 ## 装配行为
 
@@ -81,7 +86,7 @@ MySQL 初始化脚本：`framework-mq/src/main/resources/db/mysql/framework_mq.s
 | 有 `rocketMQTemplate` | `RocketMqProducer` |
 | 有任意 provider sender | `MqMessageSenderRegistry` |
 | 有 `DataSource` | `MqFailedMessageRepository` / `MqTableInitializer` / `DeadLetterHandler` |
-| 同时有 provider sender + MySQL | 重试调度器和管理控制台 |
+| 同时有 provider sender + MySQL | 重试调度器 |
 | 同时有 Rabbit + MySQL | Rabbit 死信监听器 |
 
 ## 使用示例
@@ -227,13 +232,14 @@ protected void doConsume(MessageWrapper<OrderDTO> wrapper) {
 | 能力 | 说明 |
 |---|---|
 | 反序列化 | 自动将 JSON 反序列化为 `MessageWrapper<T>` |
-| 幂等消费 | 基于 Redis SETNX，key = businessKey 或 messageId，TTL 7天 |
+| 幂等消费 | 基于 Redis SETNX，key = businessKey 或 messageId，写入 Redis 前归一化首尾空格，TTL 7天；缺少 Redis 时跳过幂等缓存 |
 | 手动 ACK | 消费成功 `basicAck`，失败 `basicNack`（不重新入队） |
 | 重试控制 | 重试次数 < 3 时 NACK 进入死信重试；≥ 3 时 ACK 进入死信兜底 |
-| traceId 传播 | 生产者写入 `X-Trace-Id` Header，消费者恢复 MDC |
-| 死信兜底 | 超过重试次数的消息由 `DeadLetterHandler` 持久化到 MySQL |
+| traceId 传播 | 生产者写入 `X-Trace-Id` Header，消费者恢复 MDC，消费结束后恢复调用方上下文 |
+| 字符集 | RabbitMQ body、Kafka header 等字节数据统一按 UTF-8 解码，避免平台默认编码导致消息体乱码 |
+| 死信兜底 | 超过重试次数的消息由 `DeadLetterHandler` 持久化到 MySQL，并在处理结束后恢复进入前的 MDC 上下文 |
 
-Kafka/RocketMQ 使用 `AbstractMessageWrapperConsumer` 同一套解码、traceId 恢复和幂等标记；异常继续抛给业务使用的 listener 容器，由 Kafka/RocketMQ 自身重试/DLQ 策略接管。
+Kafka/RocketMQ 使用 `AbstractMessageWrapperConsumer` 同一套解码、traceId 恢复和幂等标记；异常继续抛给业务使用的 listener 容器，由 Kafka/RocketMQ 自身重试/DLQ 策略接管。Kafka trace header 存在但 value 为空时会按未提供 header 处理，统一消费逻辑会跳过非法 wrapper/header traceId 候选并使用第一个合法 traceId，避免 provider 脏 header 或脏消息体中断消费链路。
 
 ## 重试机制
 
@@ -248,11 +254,11 @@ Kafka/RocketMQ 使用 `AbstractMessageWrapperConsumer` 同一套解码、traceId
         → ≥ 3 → EXHAUSTED（等待人工处理）
 ```
 
-自动重试和人工重发都会优先从失败记录的 `payload` 还原原始 `MessageWrapper`，保留 `messageId`、`traceId`、`parentMessageId`、`businessKey` 和 `type`。历史 raw payload 记录会使用失败表里的元数据补齐包装层，避免补偿链路生成新的消息身份。
+自动重试和人工重发都会优先从失败记录的 `payload` 还原原始 `MessageWrapper`，保留 `messageId`、`traceId`、`parentMessageId`、`businessKey` 和 `type`。历史 raw payload 记录会使用失败表里的元数据补齐包装层，避免补偿链路生成新的消息身份。自动重试扫描会把 `nextRetryTime` 为空的 `PENDING` 记录视为立即到期，避免历史或手工导入记录永久挂起。人工重发的 `operator` 和 `remark` 入库前会 trim，空白值按未提供处理，避免审计字段被表单空格污染。
 
 ## 管理控制台
 
-### REST API
+管理控制台 REST API 已迁移到应用层 `admin-service`，`framework-mq` 只保留 MQ 发送、消费、死信、重试和仓储能力。
 
 | 接口 | 方法 | 路径 | 功能 |
 |---|---|---|---|

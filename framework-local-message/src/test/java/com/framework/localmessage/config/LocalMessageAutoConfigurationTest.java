@@ -45,6 +45,28 @@ class LocalMessageAutoConfigurationTest {
                 });
     }
 
+    @Test
+    void autoConfigurationRejectsInvalidLocalMessagePropertiesAtStartup() {
+        assertInvalidProperty("framework.local-message.table-name=framework-local-message",
+                "framework.local-message.table-name");
+        assertInvalidProperty("framework.local-message.max-retry=0",
+                "framework.local-message.max-retry");
+        assertInvalidProperty("framework.local-message.batch-size=0",
+                "framework.local-message.batch-size");
+        assertInvalidProperty("framework.local-message.retry-interval=0s",
+                "framework.local-message.retry-interval");
+        assertInvalidProperty("framework.local-message.scheduler.fixed-delay=0",
+                "framework.local-message.scheduler.fixed-delay");
+    }
+
+    private void assertInvalidProperty(String property, String message) {
+        contextRunner
+                .withPropertyValues(property)
+                .run(context -> assertThat(context).hasFailed()
+                        .getFailure()
+                        .hasMessageContaining(message));
+    }
+
     private static DataSource dataSource() {
         return new ThrowingDataSource();
     }

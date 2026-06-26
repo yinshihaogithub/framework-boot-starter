@@ -21,7 +21,9 @@
 | `GlobalExceptionHandler` | 全局异常处理器，`@RestControllerAdvice` 捕获所有异常转为 `Result` |
 | `TraceIdFilter` | 链路追踪过滤器，注入 traceId 到 MDC 和响应头 |
 | `CorsConfig` | CORS 跨域配置 |
-| `WebAutoConfiguration` | ObjectMapper Bean 配置 |
+| `XssFilter` | 转义请求参数中的 HTML 特殊字符，不改写认证和链路 Header |
+| `SqlInjectionInterceptor` | MyBatis SQL 注入特征拦截，避免误伤正常参数化 INSERT/UPDATE/DELETE |
+| `WebAutoConfiguration` | 基于 Spring Jackson builder 创建 ObjectMapper Bean，支持 JavaTime 等常用模块 |
 
 ## 功能说明
 
@@ -61,6 +63,7 @@ public Result<User> getUser(@PathVariable Long id) {
 - 请求进入时从 Header `X-Trace-Id` 获取，不存在则自动生成 UUID（去横线）
 - 写入 MDC（日志可按 `%X{traceId}` 输出）
 - 响应头返回 `X-Trace-Id`
+- 请求结束后恢复进入过滤器前的 MDC 上下文，避免复用线程或嵌套调用时污染调用方 trace
 
 日志配置示例（logback-spring.xml）：
 
@@ -89,3 +92,9 @@ public Result<Void> create(@Valid @RequestBody UserDTO dto) {
     return Result.success();
 }
 ```
+
+### 5. SQL 注入防护
+
+`SqlInjectionInterceptor` 针对 MyBatis 最终 SQL 做额外风险特征检查，覆盖注释符、`UNION SELECT`、堆叠语句、`DROP TABLE`、命令执行和时间盲注等特征。
+
+正常参数化 `INSERT`、`UPDATE`、`DELETE` 不会因为 DML 关键字本身被拦截；业务仍应优先使用 MyBatis 参数绑定，不要拼接用户输入。

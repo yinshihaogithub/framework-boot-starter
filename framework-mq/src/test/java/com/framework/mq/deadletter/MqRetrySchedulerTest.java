@@ -15,6 +15,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class MqRetrySchedulerTest {
 
@@ -37,7 +38,7 @@ class MqRetrySchedulerTest {
                 3
         );
 
-        boolean result = scheduler.manualRetry(1L, "ops-user", "fixed inventory");
+        boolean result = scheduler.manualRetry(1L, " ops-user ", " fixed inventory ");
 
         assertThat(result).isTrue();
         assertThat(sender.destination).isEqualTo("order.exchange");
@@ -80,6 +81,60 @@ class MqRetrySchedulerTest {
         assertThat(sender.wrapper.getBusinessKey()).isEqualTo("ORDER-2");
         assertThat(sender.wrapper.getType()).isEqualTo("LegacyEvent");
         assertThat(sender.wrapper.getPayload()).isEqualTo("{\"legacy\":true}");
+    }
+
+    @Test
+    void manualRetryUsesLegacyTypeWhenFailedRecordMissesMessageType() {
+        MqFailedMessage failedMessage = failedMessage("{\"legacy\":true}");
+        failedMessage.setMessageType(null);
+        InMemoryMqFailedMessageRepository repository = new InMemoryMqFailedMessageRepository(List.of(failedMessage));
+        DeadLetterHandler deadLetterHandler = new DeadLetterHandler(repository, new MqProperties());
+        RecordingSender sender = new RecordingSender();
+        MqRetryScheduler scheduler = new MqRetryScheduler(
+                deadLetterHandler,
+                new MqMessageSenderRegistry(properties(MqProperties.Provider.RABBIT), List.of(sender)),
+                3
+        );
+
+        boolean result = scheduler.manualRetry(1L, "ops-user");
+
+        assertThat(result).isTrue();
+        assertThat(sender.wrapper.getType()).isEqualTo("LegacyMessage");
+    }
+
+    @Test
+    void scanAndRetryTreatsNullNextRetryTimeAsDueImmediately() {
+        MqFailedMessage failedMessage = failedMessage("{\"legacy\":true}");
+        failedMessage.setNextRetryTime(null);
+        InMemoryMqFailedMessageRepository repository = new InMemoryMqFailedMessageRepository(List.of(failedMessage));
+        DeadLetterHandler deadLetterHandler = new DeadLetterHandler(repository, new MqProperties());
+        RecordingSender sender = new RecordingSender();
+        MqRetryScheduler scheduler = new MqRetryScheduler(
+                deadLetterHandler,
+                new MqMessageSenderRegistry(properties(MqProperties.Provider.RABBIT), List.of(sender)),
+                3
+        );
+
+        scheduler.scanAndRetry();
+
+        assertThat(sender.wrapper).isNotNull();
+        MqFailedMessage saved = repository.findById(1L).orElseThrow();
+        assertThat(saved.getRetryCount()).isEqualTo(1);
+        assertThat(saved.getStatus()).isEqualTo(MqFailedMessage.STATUS_PENDING);
+        assertThat(saved.getNextRetryTime()).isNotNull();
+    }
+
+    @Test
+    void batchManualRetryRejectsNullIdsWithClearException() {
+        MqRetryScheduler scheduler = new MqRetryScheduler(
+                new DeadLetterHandler(new InMemoryMqFailedMessageRepository(List.of()), new MqProperties()),
+                new MqMessageSenderRegistry(properties(MqProperties.Provider.RABBIT), List.of(new RecordingSender())),
+                3
+        );
+
+        assertThatThrownBy(() -> scheduler.batchManualRetry(null, "ops-user"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("ids");
     }
 
     private static MqFailedMessage failedMessage(String payload) {

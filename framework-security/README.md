@@ -110,6 +110,10 @@ LoginUser loginUser = sessionManager.createSession(
 
 `PermissionAspect` 从 `UserContextHolder.get()` 读取当前用户的角色和权限进行校验；请求结束后 `TokenAuthFilter` 会清理 ThreadLocal，避免线程复用造成用户串号。
 
+## 数据权限
+
+`DataScopeInterceptor` 只在 Mapper 方法标注 `@DataScope` 时生效。拼接权限条件时会根据原 SQL 是否已有 `WHERE` 自动选择 `WHERE` 或 `AND`，并把条件插入到 `GROUP BY`、`ORDER BY`、`HAVING`、`LIMIT`、`OFFSET` 等尾部子句之前，避免无 `WHERE` 查询或分页/排序查询被拼成非法 SQL。
+
 ## 异常处理
 
 | 场景 | 异常 | 业务码 |

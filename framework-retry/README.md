@@ -36,6 +36,8 @@ framework:
         slow-call-duration-threshold: 1500
 ```
 
+`failure-rate-threshold` 使用 0-100 百分比表达；`slow-call-rate-threshold` 使用 0-1 比例表达并转换为 Resilience4j 百分比。配置名不能为空，`default-config` 和 `configs.*` 中的阈值、窗口大小、最小请求量、半开请求数和打开状态等待时间会在启动期快速校验。
+
 ## 核心类
 
 | 类 | 说明 |
@@ -54,14 +56,16 @@ framework:
 @Retry(
     maxAttempts = 3,              // 最大重试次数（不含首次），默认 3
     strategy = RetryStrategy.FIXED, // 重试策略：FIXED / EXPONENTIAL，默认 FIXED
-    initialInterval = 1000,       // 初始等待间隔（ms），默认 1000
-    multiplier = 2.0,             // 指数退避乘数（仅 EXPONENTIAL），默认 2.0
-    maxInterval = 30000,          // 最大等待间隔（ms），默认 30000
+    initialInterval = 1000,       // 初始等待间隔（ms），必须 >= 0
+    multiplier = 2.0,             // 指数退避乘数（仅 EXPONENTIAL），必须为有限正数
+    maxInterval = 30000,          // 最大等待间隔（ms），必须 > 0
     retryFor = {},                // 需重试的异常类型（为空则所有异常重试）
     noRetryFor = {},              // 不重试的异常类型（优先于 retryFor）
     fallback = ""                 // 重试耗尽后的回调方法名
 )
 ```
+
+`maxAttempts` 必须大于等于 0；`maxAttempts = 0` 表示只执行首次调用，不做额外重试。`maxInterval` 必须大于 0，指数退避的 `multiplier` 必须是有限正数。配置非法时会在业务方法执行前快速失败。
 
 ### 固定间隔重试
 
@@ -93,7 +97,7 @@ public String callApi() {
        noRetryFor = {BusinessException.class})
 public String callApi() throws IOException {
     // 只有 IOException/TimeoutException 才重试
-    // BusinessException 立即抛出不重试
+    // BusinessException 立即抛出不重试，也不会进入重试耗尽 fallback
     return httpClient.get(url);
 }
 ```
@@ -113,6 +117,8 @@ public Result callApiFallback() {
 }
 ```
 
+fallback 只在“可重试异常重试耗尽”后调用；`noRetryFor` 或不匹配 `retryFor` 的异常会直接抛出原异常，避免错误降级掩盖业务问题。
+
 ## @CircuitBreaker 使用
 
 ### 注解参数
@@ -127,6 +133,9 @@ public Result callApiFallback() {
     waitDurationInOpenState = 30    // 熔断持续时间（秒），默认 30
 )
 ```
+
+注解里的 `failureRate` 使用 0-1 比例表达，切面会转换为 Resilience4j 需要的百分比阈值；例如 `0.25` 表示 25%。
+`name` 不能为空，`timeout`、`failureRate`、`slidingWindowSize`、`waitDurationInOpenState` 会在业务方法进入熔断器前快速校验，避免非法注解参数落到底层运行时异常。
 
 ### 熔断降级
 

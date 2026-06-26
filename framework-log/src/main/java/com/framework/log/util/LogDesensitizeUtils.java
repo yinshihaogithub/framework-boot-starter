@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import java.util.Set;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
@@ -31,6 +32,9 @@ public class LogDesensitizeUtils {
     private static final Pattern IDCARD_PATTERN = Pattern.compile("(\\d{3})\\d{11}(\\d{4})");
     /** 邮箱脱敏正则 */
     private static final Pattern EMAIL_PATTERN = Pattern.compile("([a-zA-Z0-9])[a-zA-Z0-9._-]*@([a-zA-Z0-9.-]+)");
+    /** key=value 敏感参数，覆盖 query string / form-urlencoded 日志 */
+    private static final Pattern KEY_VALUE_PATTERN = Pattern.compile(
+            "(^|[?&\\s,;])([^=\\s&;,?]+)=([^&\\s;,]+)");
 
     /**
      * 对 JSON 字符串中的敏感字段进行脱敏
@@ -56,7 +60,16 @@ public class LogDesensitizeUtils {
      * 递归脱敏 JSON 节点
      */
     private static void desensitizeNode(com.fasterxml.jackson.databind.JsonNode node) {
-        if (node == null || !node.isObject()) {
+        if (node == null) {
+            return;
+        }
+        if (node.isArray()) {
+            for (com.fasterxml.jackson.databind.JsonNode element : node) {
+                desensitizeNode(element);
+            }
+            return;
+        }
+        if (!node.isObject()) {
             return;
         }
         // 不直接修改不可变节点，需要转换为可变节点
@@ -111,9 +124,35 @@ public class LogDesensitizeUtils {
      * 非 JSON 字符串的正则脱敏
      */
     private static String desensitizeByRegex(String text) {
-        String result = PHONE_PATTERN.matcher(text).replaceAll("$1****$2");
+        String result = desensitizeKeyValuePairs(text);
+        result = PHONE_PATTERN.matcher(result).replaceAll("$1****$2");
         result = IDCARD_PATTERN.matcher(result).replaceAll("$1***********$2");
         result = EMAIL_PATTERN.matcher(result).replaceAll("$1***@$2");
         return result;
+    }
+
+    private static String desensitizeKeyValuePairs(String text) {
+        Matcher matcher = KEY_VALUE_PATTERN.matcher(text);
+        StringBuilder result = new StringBuilder();
+        while (matcher.find()) {
+            String separator = matcher.group(1);
+            String key = matcher.group(2);
+            String value = matcher.group(3);
+            String replacement = separator + key + "=" + desensitizeValueByKey(key, value);
+            matcher.appendReplacement(result, Matcher.quoteReplacement(replacement));
+        }
+        matcher.appendTail(result);
+        return result.toString();
+    }
+
+    private static String desensitizeValueByKey(String key, String value) {
+        String lowerName = key.toLowerCase();
+        if (SENSITIVE_FIELDS.contains(lowerName)) {
+            return "***";
+        }
+        if (PARTIAL_FIELDS.contains(lowerName)) {
+            return desensitizeValue(lowerName, value);
+        }
+        return value;
     }
 }

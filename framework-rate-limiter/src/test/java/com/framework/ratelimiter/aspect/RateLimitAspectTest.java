@@ -45,6 +45,16 @@ class RateLimitAspectTest {
     }
 
     @Test
+    void trimsResolvedConfiguredKeyBeforeUsingRedis() {
+        RecordingRedisson redisson = new RecordingRedisson(true);
+        RateLimitedService service = proxy(new RateLimitedService(), redisson.client());
+
+        assertThat(service.byKey(" custom:key ")).isEqualTo("ok");
+
+        assertThat(redisson.keys).containsExactly("framework:rate:global:custom:key");
+    }
+
+    @Test
     void buildsIpKeyFromForwardedHeader() {
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/limited");
         request.addHeader("X-Forwarded-For", "203.0.113.10, 10.0.0.1");
@@ -81,6 +91,41 @@ class RateLimitAspectTest {
         assertThat(redisson.keys).isEmpty();
     }
 
+    @Test
+    void rejectsUnsupportedTimeUnitBeforeUsingRedis() {
+        RecordingRedisson redisson = new RecordingRedisson(true);
+        RateLimitedService service = proxy(new RateLimitedService(), redisson.client());
+
+        assertThatThrownBy(service::unsupportedUnit)
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("unit");
+        assertThat(redisson.keys).isEmpty();
+    }
+
+    @Test
+    void rejectsNullResolvedConfiguredKeyBeforeUsingRedis() {
+        RecordingRedisson redisson = new RecordingRedisson(true);
+        RateLimitedService service = proxy(new RateLimitedService(), redisson.client());
+
+        assertThatThrownBy(() -> service.nullKey(null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("key");
+        assertThat(redisson.keys).isEmpty();
+        assertThat(service.invocations).isZero();
+    }
+
+    @Test
+    void rejectsInvalidSpelKeyBeforeUsingRedis() {
+        RecordingRedisson redisson = new RecordingRedisson(true);
+        RateLimitedService service = proxy(new RateLimitedService(), redisson.client());
+
+        assertThatThrownBy(service::invalidSpelKey)
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("@RateLimit key SpEL parse failed");
+        assertThat(redisson.keys).isEmpty();
+        assertThat(service.invocations).isZero();
+    }
+
     private static RateLimitedService proxy(RateLimitedService target, RedissonClient redissonClient) {
         AspectJProxyFactory factory = new AspectJProxyFactory(target);
         factory.addAspect(new RateLimitAspect(redissonClient));
@@ -93,6 +138,12 @@ class RateLimitAspectTest {
         @RateLimit(key = "api:user:#{#userId}", limit = 5, window = 2,
                 unit = TimeUnit.MINUTES, limitType = RateLimit.LimitType.DEFAULT)
         public String byUser(Long userId) {
+            invocations++;
+            return "ok";
+        }
+
+        @RateLimit(key = "#{#key}", limit = 1, window = 1)
+        public String byKey(String key) {
             invocations++;
             return "ok";
         }
@@ -111,6 +162,24 @@ class RateLimitAspectTest {
 
         @RateLimit(limit = 0, window = 1)
         public String invalid() {
+            invocations++;
+            return "ok";
+        }
+
+        @RateLimit(limit = 1, window = 100, unit = TimeUnit.MILLISECONDS)
+        public String unsupportedUnit() {
+            invocations++;
+            return "ok";
+        }
+
+        @RateLimit(key = "#{#userId}", limit = 1, window = 1)
+        public String nullKey(Long userId) {
+            invocations++;
+            return "ok";
+        }
+
+        @RateLimit(key = "api:#{#missing.value}", limit = 1, window = 1)
+        public String invalidSpelKey() {
             invocations++;
             return "ok";
         }

@@ -25,6 +25,6 @@ public abstract class AbstractKafkaMqConsumer<T> extends AbstractMessageWrapperC
 
     private String traceId(ConsumerRecord<String, String> record) {
         Header header = record.headers().lastHeader(FrameworkConstants.TRACE_ID_HEADER);
-        return header == null ? null : new String(header.value(), StandardCharsets.UTF_8);
+        return header == null || header.value() == null ? null : new String(header.value(), StandardCharsets.UTF_8);
     }
 }

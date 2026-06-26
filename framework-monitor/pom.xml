@@ -19,6 +19,16 @@
             <artifactId>framework-core</artifactId>
         </dependency>
         <dependency>
+            <groupId>com.framework</groupId>
+            <artifactId>framework-job</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.framework</groupId>
+            <artifactId>framework-tools</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>

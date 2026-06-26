@@ -13,9 +13,6 @@ import org.springframework.context.annotation.Import;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
 import com.framework.security.service.PermissionCacheService;
-import org.apache.ibatis.session.SqlSessionFactory;
-
-import java.util.List;
 
 /**
  * Security 模块自动配置
@@ -34,13 +31,9 @@ public class SecurityAutoConfiguration {
     @Bean
     @ConditionalOnClass(name = "org.apache.ibatis.session.SqlSessionFactory")
     @ConditionalOnMissingBean
-    public DataScopeInterceptor dataScopeInterceptor(List<SqlSessionFactory> sqlSessionFactoryList) {
-        DataScopeInterceptor interceptor = new DataScopeInterceptor();
-        for (SqlSessionFactory factory : sqlSessionFactoryList) {
-            factory.getConfiguration().addInterceptor(interceptor);
-        }
+    public DataScopeInterceptor dataScopeInterceptor() {
         log.info("[Security] 数据权限拦截器已注册");
-        return interceptor;
+        return new DataScopeInterceptor();
     }
 
     /**

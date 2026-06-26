@@ -1,6 +1,5 @@
 package com.framework.mq.config;
 
-import com.framework.mq.admin.MqAdminController;
 import com.framework.mq.deadletter.DeadLetterHandler;
 import com.framework.mq.deadletter.MqFailedMessageRepository;
 import com.framework.mq.deadletter.MqRetryScheduler;
@@ -55,8 +54,7 @@ class MqAutoConfigurationTest {
                         .hasSingleBean(MqProducer.class)
                         .hasSingleBean(MqMessageSenderRegistry.class)
                         .doesNotHaveBean(DeadLetterHandler.class)
-                        .doesNotHaveBean(MqRetryScheduler.class)
-                        .doesNotHaveBean(MqAdminController.class));
+                        .doesNotHaveBean(MqRetryScheduler.class));
     }
 
     @Test
@@ -78,13 +76,12 @@ class MqAutoConfigurationTest {
                         .hasSingleBean(MqProperties.class)
                         .hasSingleBean(MqTableInitializer.class)
                         .hasSingleBean(MqFailedMessageRepository.class)
-                        .doesNotHaveBean(DeadLetterHandler.class)
-                        .doesNotHaveBean(MqRetryScheduler.class)
-                        .doesNotHaveBean(MqAdminController.class));
+                        .hasSingleBean(DeadLetterHandler.class)
+                        .doesNotHaveBean(MqRetryScheduler.class));
     }
 
     @Test
-    void autoConfigurationRegistersMqManagementWhenRabbitAndRepositoryExist() {
+    void autoConfigurationRegistersMqRuntimeWhenRabbitAndRepositoryExist() {
         contextRunner
                 .withBean(ConnectionFactory.class, MqAutoConfigurationTest::connectionFactory)
                 .withBean(MqFailedMessageRepository.class, InMemoryMqFailedMessageRepository::new)
@@ -92,8 +89,38 @@ class MqAutoConfigurationTest {
                         .hasSingleBean(MqProperties.class)
                         .hasSingleBean(MqMessageSenderRegistry.class)
                         .hasSingleBean(DeadLetterHandler.class)
-                        .hasSingleBean(MqRetryScheduler.class)
-                        .hasSingleBean(MqAdminController.class));
+                        .hasSingleBean(MqRetryScheduler.class));
+    }
+
+    @Test
+    void autoConfigurationRejectsInvalidMqPropertiesAtStartup() {
+        contextRunner
+                .withPropertyValues("framework.mq.max-retry=0")
+                .run(context -> assertThat(context)
+                        .hasFailed()
+                        .getFailure()
+                        .hasMessageContaining("framework.mq.max-retry"));
+
+        contextRunner
+                .withPropertyValues("framework.mq.retry.fixed-delay=0")
+                .run(context -> assertThat(context)
+                        .hasFailed()
+                        .getFailure()
+                        .hasMessageContaining("framework.mq.retry.fixed-delay"));
+
+        contextRunner
+                .withPropertyValues("framework.mq.dead-letter.queue= ")
+                .run(context -> assertThat(context)
+                        .hasFailed()
+                        .getFailure()
+                        .hasMessageContaining("framework.mq.dead-letter.queue"));
+
+        contextRunner
+                .withPropertyValues("framework.mq.failed-message-table-name=framework-mq-failed-message")
+                .run(context -> assertThat(context)
+                        .hasFailed()
+                        .getFailure()
+                        .hasMessageContaining("framework.mq.failed-message-table-name"));
     }
 
     private static KafkaOperations<String, String> kafkaOperations() {

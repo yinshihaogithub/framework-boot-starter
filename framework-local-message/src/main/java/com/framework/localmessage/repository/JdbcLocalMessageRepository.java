@@ -12,6 +12,7 @@ import java.sql.Statement;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 
 /**
@@ -23,8 +24,14 @@ public class JdbcLocalMessageRepository implements LocalMessageRepository {
     private final String tableName;
     private final RowMapper<LocalMessage> rowMapper = (rs, rowNum) -> new LocalMessage()
             .setId(rs.getLong("id"))
+            .setMessageId(rs.getString("message_id"))
+            .setTraceId(rs.getString("trace_id"))
+            .setParentMessageId(rs.getString("parent_message_id"))
             .setTopic(rs.getString("topic"))
             .setBusinessKey(rs.getString("business_key"))
+            .setTenantId(rs.getString("tenant_id"))
+            .setOperator(rs.getString("operator"))
+            .setSource(rs.getString("source"))
             .setPayload(rs.getString("payload"))
             .setStatus(LocalMessageStatus.valueOf(rs.getString("status")))
             .setRetryCount(rs.getInt("retry_count"))
@@ -35,7 +42,7 @@ public class JdbcLocalMessageRepository implements LocalMessageRepository {
             .setUpdateTime(toLocalDateTime(rs.getTimestamp("update_time")));
 
     public JdbcLocalMessageRepository(JdbcTemplate jdbcTemplate, String tableName) {
-        this.jdbcTemplate = jdbcTemplate;
+        this.jdbcTemplate = Objects.requireNonNull(jdbcTemplate, "jdbcTemplate must not be null");
         this.tableName = validateTableName(tableName);
     }
 
@@ -52,9 +59,9 @@ public class JdbcLocalMessageRepository implements LocalMessageRepository {
             jdbcTemplate.update(connection -> {
                 PreparedStatement ps = connection.prepareStatement("""
                         INSERT INTO %s
-                        (topic, business_key, payload, status, retry_count, max_retry,
-                         next_retry_time, error_message, create_time, update_time)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        (message_id, trace_id, parent_message_id, topic, business_key, tenant_id, operator, source,
+                         payload, status, retry_count, max_retry, next_retry_time, error_message, create_time, update_time)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """.formatted(tableName), Statement.RETURN_GENERATED_KEYS);
                 bindMessage(ps, message);
                 return ps;
@@ -68,8 +75,14 @@ public class JdbcLocalMessageRepository implements LocalMessageRepository {
 
         jdbcTemplate.update("""
                         UPDATE %s SET
+                            message_id = ?,
+                            trace_id = ?,
+                            parent_message_id = ?,
                             topic = ?,
                             business_key = ?,
+                            tenant_id = ?,
+                            operator = ?,
+                            source = ?,
                             payload = ?,
                             status = ?,
                             retry_count = ?,
@@ -80,8 +93,14 @@ public class JdbcLocalMessageRepository implements LocalMessageRepository {
                             update_time = ?
                         WHERE id = ?
                         """.formatted(tableName),
+                message.getMessageId(),
+                message.getTraceId(),
+                message.getParentMessageId(),
                 message.getTopic(),
                 message.getBusinessKey(),
+                message.getTenantId(),
+                message.getOperator(),
+                message.getSource(),
                 message.getPayload(),
                 message.getStatus().name(),
                 message.getRetryCount(),
@@ -138,16 +157,22 @@ public class JdbcLocalMessageRepository implements LocalMessageRepository {
     }
 
     private static void bindMessage(PreparedStatement ps, LocalMessage message) throws java.sql.SQLException {
-        ps.setString(1, message.getTopic());
-        ps.setString(2, message.getBusinessKey());
-        ps.setString(3, message.getPayload());
-        ps.setString(4, message.getStatus().name());
-        ps.setInt(5, message.getRetryCount());
-        ps.setInt(6, message.getMaxRetry());
-        ps.setTimestamp(7, toTimestamp(message.getNextRetryTime()));
-        ps.setString(8, message.getErrorMessage());
-        ps.setTimestamp(9, toTimestamp(message.getCreateTime()));
-        ps.setTimestamp(10, toTimestamp(message.getUpdateTime()));
+        ps.setString(1, message.getMessageId());
+        ps.setString(2, message.getTraceId());
+        ps.setString(3, message.getParentMessageId());
+        ps.setString(4, message.getTopic());
+        ps.setString(5, message.getBusinessKey());
+        ps.setString(6, message.getTenantId());
+        ps.setString(7, message.getOperator());
+        ps.setString(8, message.getSource());
+        ps.setString(9, message.getPayload());
+        ps.setString(10, message.getStatus().name());
+        ps.setInt(11, message.getRetryCount());
+        ps.setInt(12, message.getMaxRetry());
+        ps.setTimestamp(13, toTimestamp(message.getNextRetryTime()));
+        ps.setString(14, message.getErrorMessage());
+        ps.setTimestamp(15, toTimestamp(message.getCreateTime()));
+        ps.setTimestamp(16, toTimestamp(message.getUpdateTime()));
     }
 
     private static Timestamp toTimestamp(LocalDateTime value) {

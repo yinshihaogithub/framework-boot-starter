@@ -1,0 +1,79 @@
+server:
+  port: 8081
+  servlet:
+    context-path: /
+
+spring:
+  application:
+    name: admin-service
+  datasource:
+    url: jdbc:mysql://localhost:3306/framework_admin?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: root
+    password: root
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  sql:
+    init:
+      mode: always
+      continue-on-error: true
+      schema-locations:
+        - optional:file:./sql/mysql/framework_boot_starter_init.sql
+        - optional:file:../sql/mysql/framework_boot_starter_init.sql
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: Asia/Shanghai
+
+framework:
+  auth:
+    enabled: true
+    jwt:
+      secret: admin-service-secret-key-must-be-at-least-32-chars-long
+    white-list:
+      - /admin/auth/login
+      - /actuator/**
+      - /swagger-ui/**
+      - /v3/api-docs/**
+  log:
+    enabled: true
+    api-sample-rate: 0
+    db-storage:
+      enabled: true
+  mq:
+    enabled: true
+    provider: RABBIT
+    auto-create-table: true
+    failed-message-table-name: framework_mq_failed_message
+  local-message:
+    enabled: true
+    table-name: framework_local_message
+    auto-create-table: true
+  monitor:
+    enabled: true
+    application-name: admin-service
+  job:
+    enabled: false
+  file:
+    enabled: true
+    base-path: ${java.io.tmpdir}/framework-admin-files
+    public-url-prefix: /files
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+  api-docs:
+    path: /v3/api-docs
+
+management:
+  health:
+    redis:
+      enabled: false
+    rabbit:
+      enabled: false
+    kafka:
+      enabled: false
+
+logging:
+  level:
+    root: INFO
+    com.framework: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] [%X{traceId}] %-5level %logger{36} - %msg%n"

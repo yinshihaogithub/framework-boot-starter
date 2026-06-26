@@ -1,6 +1,10 @@
 .DS_Store
 target/
 **/target/
+node_modules/
+**/node_modules/
+dist/
+**/dist/
 .codegraph/
 
 # IDE/local files

@@ -26,6 +26,10 @@ class RepositoryEngineeringGuardTest {
     private static final Pattern PACKAGE_PATTERN = Pattern.compile("package\\s+([\\w.]+);");
     private static final Pattern CONFIGURATION_PROPERTIES_PREFIX_PATTERN = Pattern.compile(
             "@ConfigurationProperties\\s*\\(\\s*prefix\\s*=\\s*\"([^\"]+)\"");
+    private static final Pattern DEFAULT_STRING_DECODING_PATTERN = Pattern.compile(
+            "new\\s+String\\s*\\([^,\\n]*\\)(?!\\s*,)");
+    private static final Pattern DEFAULT_GET_BYTES_PATTERN = Pattern.compile(
+            "\\.getBytes\\s*\\(\\s*\\)");
 
     private final Path root = repositoryRoot();
 
@@ -71,18 +75,54 @@ class RepositoryEngineeringGuardTest {
     }
 
     @Test
-    void starterAggregatesEveryRuntimeFrameworkModule() throws Exception {
+    void starterAggregatesDefaultRuntimeFrameworkModulesWithoutJob() throws Exception {
         String starterPom = read(root.resolve("framework-starter/pom.xml"));
         List<String> starterDependencies = artifactIds(starterPom);
 
         for (String module : modules()) {
-            if ("demo".equals(module) || "framework-starter".equals(module)) {
+            if (!module.startsWith("framework-")
+                    || "framework-starter".equals(module)
+                    || "framework-job".equals(module)) {
                 continue;
             }
             assertThat(starterDependencies)
                     .as("framework-starter should aggregate " + module)
                     .contains(module);
         }
+        assertThat(starterDependencies)
+                .as("framework-starter must not pull in scheduled job infrastructure by default")
+                .doesNotContain("framework-job");
+    }
+
+    @Test
+    void jobModuleUsesXxlJobAndRemainsOptionalFromStarter() throws Exception {
+        String rootPom = read(root.resolve("pom.xml"));
+        String starterPom = read(root.resolve("framework-starter/pom.xml"));
+        String jobPom = read(root.resolve("framework-job/pom.xml"));
+        String jobAutoConfiguration = read(root.resolve(
+                "framework-job/src/main/java/com/framework/job/config/JobAutoConfiguration.java"));
+        List<String> rootModules = modules();
+        List<String> managedArtifacts = artifactsInDependencyManagement(rootPom);
+        List<String> starterDependencies = artifactIds(starterPom);
+
+        assertThat(rootModules)
+                .as("root reactor should include the XXL-JOB integration module")
+                .contains("framework-job");
+        assertThat(managedArtifacts)
+                .as("root dependencyManagement should manage the XXL-JOB integration module")
+                .contains("framework-job");
+        assertThat(starterDependencies)
+                .as("framework-starter should keep XXL-JOB optional instead of pulling external scheduler runtime")
+                .doesNotContain("framework-job");
+        assertThat(jobPom)
+                .as("framework-job must be backed by XXL-JOB")
+                .contains("xxl-job-core")
+                .doesNotContain("<artifactId>spring-context</artifactId>");
+        assertThat(jobAutoConfiguration)
+                .as("framework-job must configure XXL-JOB executor instead of Spring Scheduler")
+                .contains("XxlJobSpringExecutor")
+                .doesNotContain("ThreadPoolTaskScheduler")
+                .doesNotContain("@EnableScheduling");
     }
 
     @Test
@@ -201,6 +241,32 @@ class RepositoryEngineeringGuardTest {
     }
 
     @Test
+    void jobModuleShipsOptionalXxlJobAdminMysqlScript() throws Exception {
+        Path script = root.resolve("framework-job/src/main/resources/db/mysql/xxl_job_admin.sql");
+
+        assertThat(script)
+                .as("framework-job must ship the optional XXL-JOB admin MySQL script")
+                .exists();
+        assertThat(read(script))
+                .contains("CREATE TABLE IF NOT EXISTS xxl_job_info")
+                .contains("CREATE TABLE IF NOT EXISTS xxl_job_log")
+                .contains("CREATE TABLE IF NOT EXISTS xxl_job_group")
+                .contains("CREATE TABLE IF NOT EXISTS xxl_job_user")
+                .contains("ENGINE=InnoDB")
+                .contains("DEFAULT CHARSET=utf8mb4");
+    }
+
+    @Test
+    void aggregateMysqlScriptIncludesAllFrameworkTables() throws Exception {
+        String aggregateScript = read(root.resolve("sql/mysql/framework_boot_starter_init.sql"));
+
+        assertThat(aggregateScript)
+                .contains("CREATE TABLE IF NOT EXISTS sys_operation_log")
+                .contains("CREATE TABLE IF NOT EXISTS framework_local_message")
+                .contains("CREATE TABLE IF NOT EXISTS framework_mq_failed_message");
+    }
+
+    @Test
     void sourceConfigurationDoesNotUseH2AsDefaultDatabase() throws Exception {
         try (Stream<Path> files = Files.walk(root)) {
             List<Path> sourceFiles = files
@@ -220,6 +286,28 @@ class RepositoryEngineeringGuardTest {
                         .doesNotContain("com.h2database")
                         .doesNotContain("org.h2.Driver")
                         .doesNotContain("db-type: H2");
+            }
+        }
+    }
+
+    @Test
+    void productionSourceSpecifiesCharsetWhenEncodingOrDecodingBytes() throws Exception {
+        try (Stream<Path> files = Files.walk(root)) {
+            List<Path> sourceFiles = files
+                    .filter(Files::isRegularFile)
+                    .filter(path -> !path.toString().contains("/target/"))
+                    .filter(path -> path.toString().contains("/src/main/java/"))
+                    .filter(path -> path.toString().endsWith(".java"))
+                    .toList();
+
+            for (Path file : sourceFiles) {
+                String content = read(file);
+                assertThat(DEFAULT_STRING_DECODING_PATTERN.matcher(content).find())
+                        .as(file + " must decode bytes with an explicit charset")
+                        .isFalse();
+                assertThat(DEFAULT_GET_BYTES_PATTERN.matcher(content).find())
+                        .as(file + " must encode strings with an explicit charset")
+                        .isFalse();
             }
         }
     }

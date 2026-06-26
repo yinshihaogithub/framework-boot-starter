@@ -9,13 +9,14 @@ import com.framework.auth.service.PasswordExpireService;
 import com.framework.auth.service.SessionManager;
 import com.framework.auth.service.SmsCodeService;
 import com.framework.auth.service.SmsSender;
+import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
 import org.springframework.core.env.Environment;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -28,7 +29,7 @@ import java.util.Set;
 /**
  * 鉴权模块自动配置
  */
-@Configuration
+@AutoConfiguration(after = RedisAutoConfiguration.class)
 @EnableConfigurationProperties(AuthProperties.class)
 @ConditionalOnProperty(prefix = "framework.auth", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class AuthAutoConfiguration {

@@ -7,9 +7,12 @@ import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
 import org.aspectj.lang.reflect.MethodSignature;
+import org.springframework.aop.support.AopUtils;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 import org.springframework.util.ReflectionUtils;
 
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.Arrays;
 
@@ -28,8 +31,9 @@ public class RetryAspect {
     @Around("@annotation(com.framework.retry.annotation.Retry)")
     public Object around(ProceedingJoinPoint joinPoint) throws Throwable {
         MethodSignature signature = (MethodSignature) joinPoint.getSignature();
-        Method method = signature.getMethod();
+        Method method = AopUtils.getMostSpecificMethod(signature.getMethod(), joinPoint.getTarget().getClass());
         Retry annotation = method.getAnnotation(Retry.class);
+        validate(annotation, method);
 
         int maxAttempts = annotation.maxAttempts();
         long initialInterval = annotation.initialInterval();
@@ -48,15 +52,16 @@ public class RetryAspect {
             } catch (Throwable e) {
                 lastException = e;
 
-                // 首次执行或重试已达上限
-                if (attempt >= maxAttempts) {
-                    log.error("[重试耗尽] method={}, 共重试 {} 次, 全部失败", method.getName(), maxAttempts, e);
-                    break;
-                }
-
                 // 检查是否应该重试此异常
                 if (!shouldRetry(e, annotation)) {
                     log.warn("[重试跳过] method={}, 异常 {} 不在重试范围", method.getName(), e.getClass().getSimpleName());
+                    throw e;
+                }
+
+                // 首次执行或重试已达上限
+                if (attempt >= maxAttempts) {
+                    log.error("[重试耗尽] method={}, 共重试 {} 次, 全部失败: {}",
+                            method.getName(), maxAttempts, e.getMessage());
                     break;
                 }
 
@@ -66,7 +71,9 @@ public class RetryAspect {
                         method.getName(), waitMs, attempt + 1, e.getMessage());
 
                 try {
-                    Thread.sleep(waitMs);
+                    if (waitMs > 0) {
+                        Thread.sleep(waitMs);
+                    }
                 } catch (InterruptedException ie) {
                     Thread.currentThread().interrupt();
                     throw ie;
@@ -75,11 +82,27 @@ public class RetryAspect {
         }
 
         // 重试耗尽，尝试回调
-        if (!annotation.fallback().isEmpty()) {
+        if (StringUtils.hasText(annotation.fallback())) {
             return invokeFallback(joinPoint, method, annotation.fallback(), lastException);
         }
 
         throw lastException;
+    }
+
+    private void validate(Retry annotation, Method method) {
+        if (annotation.maxAttempts() < 0) {
+            throw new IllegalArgumentException("@Retry maxAttempts must be greater than or equal to 0: " + method);
+        }
+        if (annotation.initialInterval() < 0) {
+            throw new IllegalArgumentException("@Retry initialInterval must be greater than or equal to 0: " + method);
+        }
+        if (annotation.maxInterval() <= 0) {
+            throw new IllegalArgumentException("@Retry maxInterval must be greater than 0: " + method);
+        }
+        if (annotation.strategy() == Retry.RetryStrategy.EXPONENTIAL
+                && (!Double.isFinite(annotation.multiplier()) || annotation.multiplier() <= 0)) {
+            throw new IllegalArgumentException("@Retry multiplier must be finite and greater than 0 for EXPONENTIAL: " + method);
+        }
     }
 
     /**
@@ -114,7 +137,8 @@ public class RetryAspect {
         long waitMs;
         if (strategy == Retry.RetryStrategy.EXPONENTIAL) {
             // 指数退避: initial * (multiplier ^ attempt)
-            waitMs = (long) (initialInterval * Math.pow(multiplier, attempt));
+            double calculated = initialInterval * Math.pow(multiplier, attempt);
+            waitMs = Double.isFinite(calculated) ? (long) calculated : maxInterval;
         } else {
             // 固定间隔
             waitMs = initialInterval;
@@ -138,6 +162,9 @@ public class RetryAspect {
             log.info("[重试回调] method={}, fallback={}", method.getName(), fallbackName);
             ReflectionUtils.makeAccessible(fallbackMethod);
             return fallbackMethod.invoke(joinPoint.getTarget(), joinPoint.getArgs());
+        } catch (InvocationTargetException e) {
+            Throwable target = e.getTargetException();
+            throw new BusinessException("回调方法执行失败: " + (target.getMessage() != null ? target.getMessage() : target.getClass().getSimpleName()));
         } catch (Exception e) {
             throw new BusinessException("回调方法执行失败: " + e.getMessage());
         }

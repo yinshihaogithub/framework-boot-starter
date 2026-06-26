@@ -1,7 +1,6 @@
 package com.framework.mq.producer;
 
 import com.framework.core.constant.FrameworkConstants;
-import com.framework.core.trace.TraceContext;
 import com.framework.mq.config.MqProperties;
 import com.framework.mq.core.MessageWrapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -10,6 +9,8 @@ import org.springframework.amqp.core.MessageDeliveryMode;
 import org.springframework.amqp.core.MessagePostProcessor;
 import org.springframework.amqp.core.MessageProperties;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+
+import java.util.Objects;
 
 /**
  * 消息生产者
@@ -22,7 +23,7 @@ public class MqProducer implements MqMessageSender {
     private final ObjectMapper objectMapper;
 
     public MqProducer(RabbitTemplate rabbitTemplate) {
-        this.rabbitTemplate = rabbitTemplate;
+        this.rabbitTemplate = Objects.requireNonNull(rabbitTemplate, "rabbitTemplate must not be null");
         this.objectMapper = new ObjectMapper();
     }
 
@@ -50,8 +51,10 @@ public class MqProducer implements MqMessageSender {
      */
     @Override
     public <T> void send(String exchange, String routingKey, MessageWrapper<T> wrapper) {
+        MqSendSupport.requireNotNull(exchange, "exchange");
+        MqSendSupport.requireText(routingKey, "routingKey");
+        MqSendSupport.fillTrace(wrapper);
         try {
-            fillTrace(wrapper);
             String json = objectMapper.writeValueAsString(wrapper);
             rabbitTemplate.convertAndSend(exchange, routingKey, json, message -> {
                 prepareMessage(message.getMessageProperties(), wrapper);
@@ -79,8 +82,11 @@ public class MqProducer implements MqMessageSender {
      */
     @Override
     public <T> void sendWithDelay(String exchange, String routingKey, MessageWrapper<T> wrapper, long delayMs) {
+        MqSendSupport.requireNotNull(exchange, "exchange");
+        MqSendSupport.requireText(routingKey, "routingKey");
+        MqSendSupport.requireNonNegative(delayMs, "delayMs");
+        MqSendSupport.fillTrace(wrapper);
         try {
-            fillTrace(wrapper);
             String json = objectMapper.writeValueAsString(wrapper);
             rabbitTemplate.convertAndSend(exchange, routingKey, json, message -> {
                 prepareMessage(message.getMessageProperties(), wrapper);
@@ -101,9 +107,12 @@ public class MqProducer implements MqMessageSender {
      * @param ttlMs 消息存活时间（毫秒），超时后转发到死信队列
      */
     public <T> void sendWithTtl(String exchange, String routingKey, T payload, long ttlMs) {
+        MqSendSupport.requireNotNull(exchange, "exchange");
+        MqSendSupport.requireText(routingKey, "routingKey");
+        MqSendSupport.requireNonNegative(ttlMs, "ttlMs");
+        MessageWrapper<T> wrapper = MessageWrapper.of(payload);
+        MqSendSupport.fillTrace(wrapper);
         try {
-            MessageWrapper<T> wrapper = MessageWrapper.of(payload);
-            fillTrace(wrapper);
             String json = objectMapper.writeValueAsString(wrapper);
             MessagePostProcessor processor = message -> {
                 prepareMessage(message.getMessageProperties(), wrapper);
@@ -116,12 +125,6 @@ public class MqProducer implements MqMessageSender {
         } catch (Exception e) {
             log.error("[MQ TTL发送失败] exchange={}", exchange, e);
             throw new RuntimeException("TTL消息发送失败", e);
-        }
-    }
-
-    private <T> void fillTrace(MessageWrapper<T> wrapper) {
-        if (wrapper.getTraceId() == null || wrapper.getTraceId().isBlank()) {
-            wrapper.setTraceId(TraceContext.ensureTraceId());
         }
     }
 

@@ -30,9 +30,9 @@ public class SqlInjectionInterceptor implements Interceptor {
 
     /** 危险关键字正则（忽略大小写） */
     private static final Pattern DANGER_PATTERN = Pattern.compile(
-            "(?i)(--|/\\*|\\*/|;\\s*\\w|union\\s+select|insert\\s+into|delete\\s+from|drop\\s+table|" +
-            "update\\s+\\w+\\s+set|exec\\s*\\(|execute\\s*\\(|xp_cmdshell|sleep\\s*\\(|benchmark\\s*\\(|" +
-            "load_file|into\\s+outfile|information_schema)"
+            "(?i)(--|/\\*|\\*/|;\\s*\\w|\\bunion\\s+select\\b|\\bdrop\\s+table\\b|" +
+            "\\bexec\\s*\\(|\\bexecute\\s*\\(|\\bxp_cmdshell\\b|\\bsleep\\s*\\(|\\bbenchmark\\s*\\(|" +
+            "\\bload_file\\b|\\binto\\s+outfile\\b|\\binformation_schema\\b)"
     );
 
     @Override

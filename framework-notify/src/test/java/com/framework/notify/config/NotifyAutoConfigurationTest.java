@@ -22,4 +22,13 @@ class NotifyAutoConfigurationTest {
                 .hasSingleBean(LogNotifyChannel.class)
                 .hasSingleBean(WebhookNotifyChannel.class));
     }
+
+    @Test
+    void autoConfigurationRejectsInvalidWebhookUrlAtStartup() {
+        contextRunner
+                .withPropertyValues("framework.notify.webhook.url=file:///tmp/hook")
+                .run(context -> assertThat(context).hasFailed()
+                        .getFailure()
+                        .hasMessageContaining("framework.notify.webhook.url"));
+    }
 }

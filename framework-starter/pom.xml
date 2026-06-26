@@ -34,7 +34,6 @@
         <dependency><groupId>com.framework</groupId><artifactId>framework-redis</artifactId></dependency>
         <dependency><groupId>com.framework</groupId><artifactId>framework-feign</artifactId></dependency>
         <dependency><groupId>com.framework</groupId><artifactId>framework-monitor</artifactId></dependency>
-        <dependency><groupId>com.framework</groupId><artifactId>framework-job</artifactId></dependency>
         <dependency><groupId>com.framework</groupId><artifactId>framework-file</artifactId></dependency>
     </dependencies>
 </project>

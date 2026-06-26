@@ -1,8 +1,10 @@
 package com.framework.excel.service;
 
 import com.alibaba.excel.EasyExcel;
+import com.alibaba.excel.annotation.ExcelProperty;
 import com.alibaba.excel.context.AnalysisContext;
 import com.alibaba.excel.event.AnalysisEventListener;
+import com.alibaba.excel.exception.ExcelAnalysisStopException;
 import com.framework.excel.config.ExcelProperties;
 import com.framework.excel.model.ExcelImportResult;
 import com.framework.excel.model.ExcelRowError;
@@ -10,6 +12,10 @@ import com.framework.excel.model.ExcelRowError;
 import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.Field;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Excel import service.
@@ -19,7 +25,7 @@ public class ExcelImportService {
     private final ExcelProperties properties;
 
     public ExcelImportService(ExcelProperties properties) {
-        this.properties = properties;
+        this.properties = ExcelSupport.requireProperties(properties);
     }
 
     public <T> ExcelImportResult<T> importExcel(InputStream inputStream, Class<T> rowClass) {
@@ -38,7 +44,17 @@ public class ExcelImportService {
                 result.getErrors().add(new ExcelRowError(0, "inputStream must be an Excel file"));
                 return result;
             }
+            List<String> expectedHeaders = expectedHeaders(rowClass);
             EasyExcel.read(bufferedInputStream, rowClass, new AnalysisEventListener<T>() {
+                        @Override
+                        public void invokeHeadMap(Map<Integer, String> headMap, AnalysisContext context) {
+                            if (!headersMatch(expectedHeaders, headMap)) {
+                                result.getErrors().add(new ExcelRowError(0,
+                                        "header mismatch: expected " + expectedHeaders + ", actual " + headMap.values()));
+                                throw new ExcelAnalysisStopException("header mismatch");
+                            }
+                        }
+
                         @Override
                         public void invoke(T data, AnalysisContext context) {
                             if (result.getRows().size() >= properties.getMaxRows()) {
@@ -62,6 +78,9 @@ public class ExcelImportService {
                     .sheet()
                     .doRead();
         } catch (Exception e) {
+            if (e instanceof ExcelAnalysisStopException && result.hasErrors()) {
+                return result;
+            }
             result.getErrors().add(new ExcelRowError(0, e.getMessage()));
         }
         return result;
@@ -86,5 +105,37 @@ public class ExcelImportService {
                 && (header[2] & 0xFF) == 0x11
                 && (header[3] & 0xFF) == 0xE0;
         return xlsx || xls;
+    }
+
+    private List<String> expectedHeaders(Class<?> rowClass) {
+        List<String> headers = new ArrayList<>();
+        for (Field field : rowClass.getDeclaredFields()) {
+            ExcelProperty property = field.getAnnotation(ExcelProperty.class);
+            if (property == null || property.value().length == 0) {
+                continue;
+            }
+            headers.add(normalizeHeader(property.value()[property.value().length - 1]));
+        }
+        return headers;
+    }
+
+    private boolean headersMatch(List<String> expectedHeaders, Map<Integer, String> actualHeaders) {
+        if (expectedHeaders.isEmpty()) {
+            return true;
+        }
+        if (actualHeaders.size() < expectedHeaders.size()) {
+            return false;
+        }
+        for (int i = 0; i < expectedHeaders.size(); i++) {
+            String actual = actualHeaders.get(i);
+            if (!expectedHeaders.get(i).equals(normalizeHeader(actual))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private String normalizeHeader(String header) {
+        return header == null ? "" : header.trim();
     }
 }

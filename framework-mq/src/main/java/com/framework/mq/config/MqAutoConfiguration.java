@@ -1,6 +1,5 @@
 package com.framework.mq.config;
 
-import com.framework.mq.admin.MqAdminController;
 import com.framework.mq.deadletter.DeadLetterHandler;
 import com.framework.mq.deadletter.JdbcMqFailedMessageRepository;
 import com.framework.mq.deadletter.MqDeadLetterListener;
@@ -13,7 +12,6 @@ import com.framework.mq.producer.MqMessageSenderRegistry;
 import com.framework.mq.producer.MqProducer;
 import com.framework.mq.producer.RocketMqProducer;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.amqp.rabbit.config.SimpleRabbitListenerContainerFactory;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.amqp.rabbit.core.RabbitAdmin;
@@ -42,7 +40,6 @@ import java.util.List;
  * - 消费者容器工厂（手动ACK + 并发控制）
  * - 死信处理器
  * - 重试调度器
- * - 管理控制器
  */
 @Slf4j
 @Configuration
@@ -157,7 +154,7 @@ public class MqAutoConfiguration {
     }
 
     @Bean
-    @ConditionalOnBean({MqFailedMessageRepository.class, MqMessageSenderRegistry.class})
+    @ConditionalOnBean(MqFailedMessageRepository.class)
     @ConditionalOnMissingBean
     public DeadLetterHandler deadLetterHandler(MqFailedMessageRepository repository, MqProperties properties) {
         return new DeadLetterHandler(repository, properties);
@@ -178,14 +175,5 @@ public class MqAutoConfiguration {
     @ConditionalOnProperty(prefix = "framework.mq.dead-letter", name = "enabled", havingValue = "true", matchIfMissing = true)
     public MqDeadLetterListener mqDeadLetterListener(DeadLetterHandler deadLetterHandler) {
         return new MqDeadLetterListener(deadLetterHandler);
-    }
-
-    @Bean
-    @ConditionalOnBean({DeadLetterHandler.class, MqRetryScheduler.class})
-    @ConditionalOnMissingBean
-    public MqAdminController mqAdminController(DeadLetterHandler deadLetterHandler,
-                                               MqRetryScheduler mqRetryScheduler,
-                                               ObjectProvider<RabbitAdmin> rabbitAdminProvider) {
-        return new MqAdminController(deadLetterHandler, mqRetryScheduler, rabbitAdminProvider);
     }
 }

@@ -14,7 +14,7 @@ public class ExcelExportService {
     private final ExcelProperties properties;
 
     public ExcelExportService(ExcelProperties properties) {
-        this.properties = properties;
+        this.properties = ExcelSupport.requireExportProperties(properties);
     }
 
     public <T> byte[] export(Class<T> headClass, Collection<T> rows) {
@@ -28,15 +28,13 @@ public class ExcelExportService {
         if (rows == null) {
             throw new IllegalArgumentException("rows must not be null");
         }
-        if (sheetName == null || sheetName.isBlank()) {
-            throw new IllegalArgumentException("sheetName must not be blank");
-        }
+        String safeSheetName = ExcelSupport.requireSheetName(sheetName, "sheetName");
         if (rows.size() > properties.getMaxRows()) {
             throw new IllegalArgumentException("excel rows exceed maxRows: " + properties.getMaxRows());
         }
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
         EasyExcel.write(outputStream, headClass)
-                .sheet(sheetName)
+                .sheet(safeSheetName)
                 .doWrite(rows);
         return outputStream.toByteArray();
     }

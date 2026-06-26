@@ -47,6 +47,7 @@ public class MessageWrapper<T> implements Serializable {
     }
 
     public static <T> MessageWrapper<T> of(String businessKey, T payload) {
+        requirePayload(payload);
         MessageWrapper<T> wrapper = new MessageWrapper<>();
         wrapper.setBusinessKey(businessKey);
         wrapper.setPayload(payload);
@@ -55,10 +56,20 @@ public class MessageWrapper<T> implements Serializable {
     }
 
     public static <T> MessageWrapper<T> of(String businessKey, String type, T payload) {
+        requirePayload(payload);
+        if (type == null || type.isBlank()) {
+            throw new IllegalArgumentException("message type must not be blank");
+        }
         MessageWrapper<T> wrapper = new MessageWrapper<>();
         wrapper.setBusinessKey(businessKey);
         wrapper.setType(type);
         wrapper.setPayload(payload);
         return wrapper;
+    }
+
+    private static void requirePayload(Object payload) {
+        if (payload == null) {
+            throw new IllegalArgumentException("message payload must not be null");
+        }
     }
 }

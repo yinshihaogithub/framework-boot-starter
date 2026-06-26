@@ -11,6 +11,14 @@ public class UserContextHolder {
         CONTEXT.set(user);
     }
 
+    public static void restore(LoginUser user) {
+        if (user == null) {
+            clear();
+            return;
+        }
+        set(user);
+    }
+
     public static LoginUser get() {
         return CONTEXT.get();
     }

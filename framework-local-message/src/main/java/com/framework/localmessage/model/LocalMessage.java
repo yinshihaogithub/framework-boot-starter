@@ -13,8 +13,14 @@ import java.time.LocalDateTime;
 public class LocalMessage {
 
     private Long id;
+    private String messageId;
+    private String traceId;
+    private String parentMessageId;
     private String topic;
     private String businessKey;
+    private String tenantId;
+    private String operator;
+    private String source;
     private String payload;
     private LocalMessageStatus status = LocalMessageStatus.PENDING;
     private int retryCount;

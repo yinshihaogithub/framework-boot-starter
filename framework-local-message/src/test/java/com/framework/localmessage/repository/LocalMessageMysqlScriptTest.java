@@ -17,6 +17,13 @@ class LocalMessageMysqlScriptTest {
         String sql = new String(resource.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
         assertThat(sql)
                 .contains("CREATE TABLE IF NOT EXISTS framework_local_message")
+                .contains("message_id VARCHAR(64)")
+                .contains("trace_id VARCHAR(64)")
+                .contains("parent_message_id VARCHAR(64)")
+                .contains("tenant_id VARCHAR(64)")
+                .contains("payload LONGTEXT")
+                .contains("INDEX idx_trace_id (trace_id)")
+                .contains("INDEX idx_tenant_status (tenant_id, status)")
                 .contains("ENGINE=InnoDB")
                 .contains("DEFAULT CHARSET=utf8mb4");
     }

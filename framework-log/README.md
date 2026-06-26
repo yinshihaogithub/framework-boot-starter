@@ -31,6 +31,8 @@ framework:
 
 `framework.log.*` 已注册为 Spring Boot 配置属性，开启 configuration processor 后 IDE 会提示这些配置项。
 
+配置启动期会快速校验：`api-sample-rate` 必须在 `0..100` 之间，`retention-days` 必须大于 0。
+
 ## 注解参数
 
 ```java
@@ -121,6 +123,15 @@ public Result resetPassword(@PathVariable Long id, @RequestBody PasswordDTO dto)
   ...
 }
 ```
+
+## 工程约束
+
+- 操作日志异步记录必须保留当前 `traceId`，避免跨线程断链。
+- 采样率和日志保留天数必须启动期快速校验，避免采样/清理策略退化为不可解释状态。
+- DB 存储是可选增强；缺少 `OperationLogMapper` 时跳过持久化，建表、写入和清理失败只能记录日志，不能影响业务主流程。
+- 参数和返回值入日志前必须脱敏，支持 JSON 对象、JSON 数组和嵌套对象数组。
+- API query string 入日志前必须按 key 脱敏，`password`、`token`、`secret` 等完整隐藏，手机号/身份证/邮箱等部分脱敏。
+- 日志记录失败不能影响业务主流程。
 
 ## 异步线程池配置
 

@@ -5,6 +5,7 @@ import com.framework.core.result.ResultCode;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -16,12 +17,13 @@ import java.util.concurrent.TimeUnit;
 public class PasswordExpireService {
 
     private static final String PWD_UPDATE_TIME_PREFIX = "framework:password:update:";
+    private static final long DAYS_BUFFER = 7;
 
     private final StringRedisTemplate redis;
     private final long expireDays; // 密码过期天数
 
     public PasswordExpireService(StringRedisTemplate redis, long expireDays) {
-        this.redis = redis;
+        this.redis = Objects.requireNonNull(redis, "redis must not be null");
         this.expireDays = expireDays;
     }
 
@@ -35,19 +37,19 @@ public class PasswordExpireService {
         if (expireDays <= 0) {
             return; // 未启用密码过期策略
         }
-        String key = PWD_UPDATE_TIME_PREFIX + userId;
-        String updateTimeStr = redis.opsForValue().get(key);
+        String key = buildPasswordUpdateKey(userId);
+        Long updateTime = readPasswordUpdateTime(key, userId);
 
-        if (updateTimeStr == null) {
+        if (updateTime == null) {
             // 没有记录修改时间，可能是新用户或老用户，初始化为当前时间
             recordPasswordChange(userId);
             return;
         }
 
-        long updateTime = Long.parseLong(updateTimeStr);
-        long expireMillis = expireDays * 24 * 60 * 60 * 1000L;
-        if (System.currentTimeMillis() - updateTime > expireMillis) {
-            long daysExpired = (System.currentTimeMillis() - updateTime) / (24 * 60 * 60 * 1000);
+        long now = System.currentTimeMillis();
+        long expireMillis = TimeUnit.DAYS.toMillis(expireDays);
+        if (now - updateTime > expireMillis) {
+            long daysExpired = TimeUnit.MILLISECONDS.toDays(now - updateTime);
             throw new BusinessException(ResultCode.BUSINESS_ERROR,
                     "密码已过期 " + daysExpired + " 天，请修改密码");
         }
@@ -59,10 +61,17 @@ public class PasswordExpireService {
      * @param userId 用户ID
      */
     public void recordPasswordChange(Long userId) {
-        String key = PWD_UPDATE_TIME_PREFIX + userId;
+        if (expireDays <= 0) {
+            return;
+        }
+        String key = buildPasswordUpdateKey(userId);
+        recordPasswordChange(key, System.currentTimeMillis());
+    }
+
+    private void recordPasswordChange(String key, long updateTime) {
         // TTL 设为过期天数 + 7 天缓冲
-        long ttl = (expireDays + 7) * 24 * 60 * 60;
-        redis.opsForValue().set(key, String.valueOf(System.currentTimeMillis()), ttl, TimeUnit.SECONDS);
+        long ttl = TimeUnit.DAYS.toSeconds(expireDays + DAYS_BUFFER);
+        redis.opsForValue().set(key, String.valueOf(updateTime), ttl, TimeUnit.SECONDS);
     }
 
     /**
@@ -75,14 +84,35 @@ public class PasswordExpireService {
         if (expireDays <= 0) {
             return -1;
         }
-        String key = PWD_UPDATE_TIME_PREFIX + userId;
-        String updateTimeStr = redis.opsForValue().get(key);
-        if (updateTimeStr == null) {
+        String key = buildPasswordUpdateKey(userId);
+        Long updateTime = readPasswordUpdateTime(key, userId);
+        if (updateTime == null) {
             return expireDays;
         }
-        long updateTime = Long.parseLong(updateTimeStr);
-        long expireMillis = expireDays * 24 * 60 * 60 * 1000L;
+        long expireMillis = TimeUnit.DAYS.toMillis(expireDays);
         long remaining = expireMillis - (System.currentTimeMillis() - updateTime);
-        return remaining > 0 ? remaining / (24 * 60 * 60 * 1000) : 0;
+        return remaining > 0 ? TimeUnit.MILLISECONDS.toDays(remaining) : 0;
+    }
+
+    private Long readPasswordUpdateTime(String key, Long userId) {
+        String updateTimeStr = redis.opsForValue().get(key);
+        if (updateTimeStr == null) {
+            return null;
+        }
+        try {
+            return Long.parseLong(updateTimeStr);
+        } catch (NumberFormatException ex) {
+            long now = System.currentTimeMillis();
+            log.warn("[密码过期] Redis 中密码修改时间格式非法，已重置 userId={}", userId);
+            recordPasswordChange(key, now);
+            return now;
+        }
+    }
+
+    private String buildPasswordUpdateKey(Long userId) {
+        if (userId == null || userId <= 0) {
+            throw new IllegalArgumentException("userId must be positive");
+        }
+        return PWD_UPDATE_TIME_PREFIX + userId;
     }
 }

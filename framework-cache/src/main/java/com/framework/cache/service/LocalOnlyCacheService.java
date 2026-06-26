@@ -31,11 +31,22 @@ public class LocalOnlyCacheService implements CacheService {
 
     @Override
     public <T> T get(String key, Class<T> type, Supplier<T> loader) {
-        return get(key, type, loader, 0, TimeUnit.SECONDS);
+        CacheSupport.requireLoader(loader);
+        T cached = localCache.get(key, type);
+        if (cached != null) {
+            return cached;
+        }
+        T value = loader.get();
+        if (value != null) {
+            localCache.set(key, value);
+        }
+        return value;
     }
 
     @Override
     public <T> T get(String key, Class<T> type, Supplier<T> loader, long ttl, TimeUnit unit) {
+        CacheSupport.requireLoader(loader);
+        CacheSupport.requireTtl(ttl, unit);
         T cached = localCache.get(key, type);
         if (cached != null) {
             return cached;
@@ -64,7 +75,7 @@ public class LocalOnlyCacheService implements CacheService {
 
     @Override
     public void expire(String key, long ttl, TimeUnit unit) {
-        // Local cache TTL is configured globally when Caffeine is created.
+        localCache.expire(key, ttl, unit);
     }
 
     @Override

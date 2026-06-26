@@ -33,6 +33,16 @@ class DistributedLockAspectTest {
     }
 
     @Test
+    void trimsResolvedKeyBeforeUsingRedis() {
+        RecordingRedisson redisson = new RecordingRedisson(true, true);
+        LockedService service = proxy(new LockedService(), redisson.client());
+
+        assertThat(service.byKey(" custom:key ")).isEqualTo("ok");
+
+        assertThat(redisson.keys).containsExactly("framework:lock:custom:key");
+    }
+
+    @Test
     void usesWatchdogTryLockWhenLeaseTimeIsMinusOne() {
         RecordingRedisson redisson = new RecordingRedisson(true, true);
         LockedService service = proxy(new LockedService(), redisson.client());
@@ -68,6 +78,32 @@ class DistributedLockAspectTest {
         assertThat(service.invocations).isZero();
     }
 
+    @Test
+    void rejectsInvalidTimingConfigurationBeforeUsingRedis() {
+        RecordingRedisson redisson = new RecordingRedisson(true, true);
+        LockedService service = proxy(new LockedService(), redisson.client());
+
+        assertThatThrownBy(service::negativeWaitTime)
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("waitTime");
+        assertThatThrownBy(service::invalidLeaseTime)
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("leaseTime");
+        assertThat(redisson.keys).isEmpty();
+    }
+
+    @Test
+    void rejectsNullResolvedKeyBeforeUsingRedis() {
+        RecordingRedisson redisson = new RecordingRedisson(true, true);
+        LockedService service = proxy(new LockedService(), redisson.client());
+
+        assertThatThrownBy(() -> service.nullKey(null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("key");
+        assertThat(redisson.keys).isEmpty();
+        assertThat(service.invocations).isZero();
+    }
+
     private static LockedService proxy(LockedService target, RedissonClient redissonClient) {
         AspectJProxyFactory factory = new AspectJProxyFactory(target);
         factory.addAspect(new DistributedLockAspect(redissonClient));
@@ -85,6 +121,12 @@ class DistributedLockAspectTest {
             return "ok";
         }
 
+        @DistributedLock(key = "#{#key}")
+        public String byKey(String key) {
+            invocations++;
+            return "ok";
+        }
+
         @DistributedLock(key = "order:#{#orderId}")
         public String watchdog(Long orderId) {
             invocations++;
@@ -93,6 +135,24 @@ class DistributedLockAspectTest {
 
         @DistributedLock(key = "batch:#{#batchNo}", waitTime = 1, fallback = "fallback")
         public String withFallback(String batchNo) {
+            invocations++;
+            return "ok";
+        }
+
+        @DistributedLock(key = "invalid:wait", waitTime = -1)
+        public String negativeWaitTime() {
+            invocations++;
+            return "ok";
+        }
+
+        @DistributedLock(key = "invalid:lease", leaseTime = 0)
+        public String invalidLeaseTime() {
+            invocations++;
+            return "ok";
+        }
+
+        @DistributedLock(key = "#{#orderId}")
+        public String nullKey(Long orderId) {
             invocations++;
             return "ok";
         }

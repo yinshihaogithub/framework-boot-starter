@@ -31,7 +31,7 @@ class LocalFileStorageServiceTest {
                 new ByteArrayInputStream("hello".getBytes(StandardCharsets.UTF_8))
         );
 
-        assertThat(storedFile.getOriginalFilename()).isEqualTo("invoice ../2026.txt");
+        assertThat(storedFile.getOriginalFilename()).isEqualTo("2026.txt");
         assertThat(storedFile.getKey()).doesNotContain("/", " ");
         assertThat(storedFile.getUrl()).isEqualTo("/public/" + storedFile.getKey());
         assertThat(storedFile.getContentType()).isEqualTo("text/plain");
@@ -81,6 +81,60 @@ class LocalFileStorageServiceTest {
         assertThatThrownBy(() -> storageService.store("invoice.txt", null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("inputStream must not be null");
+    }
+
+    @Test
+    void fallsBackToSafeFilenameWhenOriginalNameHasNoFileName() throws Exception {
+        LocalFileStorageService storageService = new LocalFileStorageService(properties());
+
+        StoredFile storedFile = storageService.store(
+                "/",
+                new ByteArrayInputStream("hello".getBytes(StandardCharsets.UTF_8))
+        );
+
+        assertThat(storedFile.getOriginalFilename()).isEqualTo("file");
+        assertThat(storedFile.getKey()).endsWith("-file");
+        assertThat(Files.exists(tempDir.resolve(storedFile.getKey()))).isTrue();
+    }
+
+    @Test
+    void rejectsUnsafeStorageConfiguration() {
+        FileProperties blankBasePath = properties();
+        blankBasePath.setBasePath(" ");
+        FileProperties negativeMaxSize = properties();
+        negativeMaxSize.setMaxSize(-1);
+        FileProperties zeroMaxSize = properties();
+        zeroMaxSize.setMaxSize(0);
+        FileProperties blankAllowedExtension = properties();
+        blankAllowedExtension.setAllowedExtensions(List.of("jpg", " "));
+
+        assertThatThrownBy(() -> new LocalFileStorageService(blankBasePath))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("base-path");
+        assertThatThrownBy(() -> new LocalFileStorageService(negativeMaxSize))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("max-size");
+        assertThatThrownBy(() -> new LocalFileStorageService(zeroMaxSize))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("max-size");
+        assertThatThrownBy(() -> new LocalFileStorageService(blankAllowedExtension))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("allowed-extensions");
+    }
+
+    @Test
+    void rejectsUnsafeKeysInsteadOfSanitizingThemForLookup() {
+        LocalFileStorageService storageService = new LocalFileStorageService(properties());
+
+        assertThatThrownBy(() -> storageService.load("../invoice.txt"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("file key is not allowed");
+        assertThatThrownBy(() -> storageService.delete("invoice 2026.txt"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("file key is not allowed");
+        assertThatThrownBy(() -> storageService.load(" "))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("file key must not be blank");
     }
 
     @Test

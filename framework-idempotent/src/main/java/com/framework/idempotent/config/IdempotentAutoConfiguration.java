@@ -1,6 +1,7 @@
 package com.framework.idempotent.config;
 
 import com.framework.idempotent.aspect.IdempotentAspect;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -17,6 +18,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 public class IdempotentAutoConfiguration {
 
     @Bean
+    @ConditionalOnBean(StringRedisTemplate.class)
     @ConditionalOnMissingBean
     public IdempotentAspect idempotentAspect(StringRedisTemplate redisTemplate) {
         return new IdempotentAspect(redisTemplate);

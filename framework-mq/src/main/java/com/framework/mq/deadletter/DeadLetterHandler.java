@@ -9,9 +9,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.core.MessageProperties;
 
-import java.util.Date;
 import java.util.ArrayList;
+import java.nio.charset.StandardCharsets;
+import java.util.Date;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
@@ -59,7 +61,8 @@ public class DeadLetterHandler {
     public void handleDeadLetter(Message message, com.rabbitmq.client.Channel channel) throws Exception {
         long deliveryTag = message.getMessageProperties().getDeliveryTag();
         MessageProperties props = message.getMessageProperties();
-        String body = new String(message.getBody());
+        String body = new String(message.getBody(), StandardCharsets.UTF_8);
+        Map<String, String> previousContextMap = TraceContext.copyContextMap();
 
         try {
             // 解析死信信息
@@ -104,6 +107,8 @@ public class DeadLetterHandler {
             log.error("[死信处理失败]", e);
             // 处理失败也 ACK，避免死信循环
             channel.basicAck(deliveryTag, false);
+        } finally {
+            TraceContext.restore(previousContextMap);
         }
     }
 

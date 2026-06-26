@@ -12,18 +12,20 @@
 </dependency>
 ```
 
-> 需要配置 Redis（基于 SETNX 实现）。自动装配生效。
+> 需要配置 `StringRedisTemplate`（基于 SETNX 实现）。如果应用未提供 RedisTemplate，自动配置会跳过 `IdempotentAspect`，不会影响应用启动。
 
 ## 注解参数
 
 ```java
 @Idempotent(
     key = "order:#{#request.orderNo}",   // 幂等 key，支持 SpEL（为空时按策略自动生成）
-    expire = 10,                           // 幂等窗口（秒），默认 10
+    expire = 10,                           // 幂等窗口（秒），必须 > 0
     strategy = IdempotentStrategy.REQUEST_HASH,  // 幂等策略，默认 REQUEST_HASH
     message = "请勿重复提交"                // 拦截提示
 )
 ```
+
+SpEL 上下文支持参数名、`#p0` / `#a0` 索引参数和 `#args` 数组；SpEL 解析失败或 `BUSINESS_KEY` 解析结果为空会快速抛出配置异常，解析结果写入 Redis 前会去除首尾空格，避免把未解析表达式、空 key、`null` 或带隐形空格的 key 写入 Redis。
 
 ## 三种策略
 
@@ -72,11 +74,27 @@ public Result submit(@RequestBody FormDTO dto) {
 }
 ```
 
+`TOKEN` 策略必须携带 `X-Idempotent-Token` 请求头，缺失时直接抛出幂等异常，不会退化为请求 hash；token 写入 Redis key 前会去除首尾空格，避免同一 token 因隐形空白绕过幂等窗口。
+
+### 索引参数
+
+```java
+// 无参数名元数据时可使用索引参数
+@Idempotent(
+    key = "pay:#{#p0}",
+    strategy = IdempotentStrategy.BUSINESS_KEY
+)
+public Result pay(String orderNo) {
+    return Result.success();
+}
+```
+
 ## 实现原理
 
 ```
 请求进入 → IdempotentAspect
   → 构建幂等 key（SpEL / Token / Hash）
+  → 校验 expire / key / token 配置
   → Redis SETNX 抢占（TTL = expire）
     → 成功 → 执行业务
       → 成功 → 返回结果

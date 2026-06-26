@@ -42,6 +42,7 @@
         <module>framework-job</module>
         <module>framework-file</module>
         <module>framework-starter</module>
+        <module>admin-service</module>
         <module>demo</module>
     </modules>
 
@@ -62,6 +63,7 @@
         <spring-boot.version>3.2.5</spring-boot.version>
         <easyexcel.version>4.0.3</easyexcel.version>
         <feign.version>13.2.1</feign.version>
+        <xxl-job.version>2.4.1</xxl-job.version>
     </properties>
 
     <dependencyManagement>
@@ -182,6 +184,11 @@
                 <artifactId>framework-starter</artifactId>
                 <version>${project.version}</version>
             </dependency>
+            <dependency>
+                <groupId>com.framework</groupId>
+                <artifactId>admin-service</artifactId>
+                <version>${project.version}</version>
+            </dependency>
 
             <!-- 第三方依赖 -->
             <dependency>
@@ -235,6 +242,11 @@
                 <groupId>io.github.openfeign</groupId>
                 <artifactId>feign-core</artifactId>
                 <version>${feign.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.xuxueli</groupId>
+                <artifactId>xxl-job-core</artifactId>
+                <version>${xxl-job.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>

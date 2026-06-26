@@ -1,0 +1,38 @@
+:root {
+  color: #18181b;
+  background: #fafafa;
+  font-family: Inter, "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background: #fafafa;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+.el-card {
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.el-button {
+  border-radius: 8px;
+}
+
+.el-table {
+  --el-table-header-bg-color: #fafafa;
+  --el-table-header-text-color: #52525b;
+}

@@ -10,6 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.core.Message;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -70,7 +71,7 @@ public abstract class AbstractMqConsumer<T> {
             }
 
             // 反序列化
-            String body = new String(message.getBody());
+            String body = new String(message.getBody(), StandardCharsets.UTF_8);
             JavaType javaType = objectMapper.getTypeFactory().constructParametricType(
                     MessageWrapper.class, payloadType);
             MessageWrapper<T> wrapper = objectMapper.readValue(body, javaType);
@@ -126,7 +127,7 @@ public abstract class AbstractMqConsumer<T> {
      * 幂等检查：Redis SETNX
      */
     private boolean isAlreadyConsumed(String key) {
-        if (key == null || key.isEmpty()) {
+        if (redisTemplate == null || key == null || key.isEmpty()) {
             return false;
         }
         String redisKey = IDEMPOTENT_PREFIX + key;
@@ -138,7 +139,7 @@ public abstract class AbstractMqConsumer<T> {
      * 标记已消费
      */
     private void markConsumed(String key) {
-        if (key == null || key.isEmpty()) {
+        if (redisTemplate == null || key == null || key.isEmpty()) {
             return;
         }
         String redisKey = IDEMPOTENT_PREFIX + key;

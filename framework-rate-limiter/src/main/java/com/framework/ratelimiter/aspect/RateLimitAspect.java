@@ -76,10 +76,15 @@ public class RateLimitAspect {
         if (annotation.window() <= 0) {
             throw new IllegalArgumentException("@RateLimit window must be greater than 0: " + method);
         }
+        if (annotation.unit() != TimeUnit.SECONDS
+                && annotation.unit() != TimeUnit.MINUTES
+                && annotation.unit() != TimeUnit.HOURS) {
+            throw new IllegalArgumentException("@RateLimit unit only supports SECONDS, MINUTES or HOURS: " + method);
+        }
     }
 
     private String buildKey(RateLimit annotation, Method method, MethodSignature signature, Object[] args) {
-        String key = resolveKey(annotation.key(), signature, args);
+        String key = resolveKey(annotation.key(), method, signature, args);
         String keyPart = StringUtils.hasText(key)
                 ? key
                 : method.getDeclaringClass().getSimpleName() + ":" + method.getName();
@@ -92,7 +97,7 @@ public class RateLimitAspect {
         };
     }
 
-    private String resolveKey(String configuredKey, MethodSignature signature, Object[] args) {
+    private String resolveKey(String configuredKey, Method method, MethodSignature signature, Object[] args) {
         if (!StringUtils.hasText(configuredKey)) {
             return "";
         }
@@ -108,10 +113,19 @@ public class RateLimitAspect {
                 context.setVariable(parameterNames[i], args[i]);
             }
         }
-        Object value = configuredKey.contains("#{")
-                ? expressionParser.parseExpression(configuredKey, TEMPLATE_PARSER_CONTEXT).getValue(context)
-                : expressionParser.parseExpression("'" + configuredKey.replace("'", "''") + "'").getValue(context);
-        return value != null ? String.valueOf(value) : "";
+        Object value;
+        try {
+            value = configuredKey.contains("#{")
+                    ? expressionParser.parseExpression(configuredKey, TEMPLATE_PARSER_CONTEXT).getValue(context)
+                    : expressionParser.parseExpression("'" + configuredKey.replace("'", "''") + "'").getValue(context);
+        } catch (Exception e) {
+            throw new IllegalArgumentException("@RateLimit key SpEL parse failed: " + configuredKey, e);
+        }
+        String resolved = value != null ? String.valueOf(value) : null;
+        if (!StringUtils.hasText(resolved)) {
+            throw new IllegalArgumentException("@RateLimit key must not resolve to blank: " + method);
+        }
+        return resolved.trim();
     }
 
     private RateIntervalUnit toRateIntervalUnit(TimeUnit unit) {
@@ -119,7 +133,7 @@ public class RateLimitAspect {
             case SECONDS -> RateIntervalUnit.SECONDS;
             case MINUTES -> RateIntervalUnit.MINUTES;
             case HOURS -> RateIntervalUnit.HOURS;
-            default -> RateIntervalUnit.SECONDS;
+            default -> throw new IllegalArgumentException("@RateLimit unit only supports SECONDS, MINUTES or HOURS");
         };
     }
 

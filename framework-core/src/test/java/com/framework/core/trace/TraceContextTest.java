@@ -33,6 +33,23 @@ class TraceContextTest {
     }
 
     @Test
+    void getOrCreateTraceIdRegeneratesUnsafeIncomingTraceId() {
+        String traceId = TraceContext.getOrCreateTraceId("bad\r\nX-Evil: 1");
+
+        assertThat(traceId).matches("[0-9a-f]{32}");
+        assertThat(MDC.get(FrameworkConstants.TRACE_ID_MDC_KEY)).isEqualTo(traceId);
+    }
+
+    @Test
+    void putTraceIdIgnoresUnsafeTraceId() {
+        MDC.put(FrameworkConstants.TRACE_ID_MDC_KEY, "safe-trace");
+
+        TraceContext.putTraceId("bad\ntrace");
+
+        assertThat(MDC.get(FrameworkConstants.TRACE_ID_MDC_KEY)).isEqualTo("safe-trace");
+    }
+
+    @Test
     void wrapPropagatesCapturedMdcAndRestoresPreviousContext() {
         MDC.put(FrameworkConstants.TRACE_ID_MDC_KEY, "parent-trace");
         Runnable wrapped = TraceContext.wrap(() -> {

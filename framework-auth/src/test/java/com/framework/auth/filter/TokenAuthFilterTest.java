@@ -25,8 +25,9 @@ class TokenAuthFilterTest {
     }
 
     @Test
-    void clearsExistingUserContextWhenRequestIsUnauthorized() throws Exception {
-        UserContextHolder.set(new LoginUser().setUserId(99L).setUsername("stale"));
+    void restoresExistingUserContextWhenRequestIsUnauthorized() throws Exception {
+        LoginUser previous = new LoginUser().setUserId(99L).setUsername("previous");
+        UserContextHolder.set(previous);
         TokenAuthFilter filter = new TokenAuthFilter(new JwtUtils(SECRET, 3600, 86400),
                 new StubSessionManager(null), Set.of());
 
@@ -34,7 +35,7 @@ class TokenAuthFilterTest {
                 new MockHttpServletResponse(),
                 new MockFilterChain());
 
-        assertThat(UserContextHolder.get()).isNull();
+        assertThat(UserContextHolder.get()).isSameAs(previous);
     }
 
     @Test
@@ -57,6 +58,30 @@ class TokenAuthFilterTest {
 
         assertThat(chain.userDuringRequest).isSameAs(loginUser);
         assertThat(UserContextHolder.get()).isNull();
+    }
+
+    @Test
+    void restoresPreviousUserContextAfterAuthenticatedRequest() throws Exception {
+        LoginUser previous = new LoginUser().setUserId(99L).setUsername("previous");
+        UserContextHolder.set(previous);
+        LoginUser loginUser = new LoginUser()
+                .setUserId(1L)
+                .setUsername("alice")
+                .setTenantId("tenant-a")
+                .setDeviceId("web")
+                .setAccessToken("token")
+                .setRoles(new String[]{"ADMIN"})
+                .setPermissions(new String[]{"user:view"});
+        TokenAuthFilter filter = new TokenAuthFilter(new JwtUtils(SECRET, 3600, 86400),
+                new StubSessionManager(loginUser), Set.of());
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/secure");
+        request.addHeader(FrameworkConstants.AUTH_HEADER, FrameworkConstants.TOKEN_PREFIX + "token");
+        CapturingFilterChain chain = new CapturingFilterChain();
+
+        filter.doFilter(request, new MockHttpServletResponse(), chain);
+
+        assertThat(chain.userDuringRequest).isSameAs(loginUser);
+        assertThat(UserContextHolder.get()).isSameAs(previous);
     }
 
     private static final class CapturingFilterChain extends MockFilterChain {

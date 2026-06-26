@@ -11,7 +11,7 @@ import org.springframework.stereotype.Service;
 
 import jakarta.annotation.PostConstruct;
 import java.util.Date;
-import java.util.concurrent.CompletableFuture;
+import java.util.Objects;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
@@ -30,7 +30,7 @@ public class OperationLogStorageService {
     private final LogProperties properties;
 
     public OperationLogStorageService(LogProperties properties) {
-        this.properties = properties;
+        this.properties = Objects.requireNonNull(properties, "properties must not be null");
     }
 
     /**

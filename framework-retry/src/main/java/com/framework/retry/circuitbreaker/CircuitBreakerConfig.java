@@ -10,7 +10,7 @@ import lombok.experimental.Accessors;
 @Accessors(chain = true)
 public class CircuitBreakerConfig {
 
-    /** 失败率阈值（0-1），超过触发熔断 */
+    /** 失败率阈值百分比（0-100），超过触发熔断 */
     private double failureRateThreshold = 0.5;
 
     /** 慢调用阈值（毫秒），超过计为慢调用 */

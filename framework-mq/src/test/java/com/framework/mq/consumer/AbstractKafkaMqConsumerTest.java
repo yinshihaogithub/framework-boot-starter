@@ -44,6 +44,28 @@ class AbstractKafkaMqConsumerTest {
         assertThat(consumer.lastWrapper().getBusinessKey()).isEqualTo("ORDER-1");
     }
 
+    @Test
+    void ignoresNullKafkaTraceHeaderValueAndRestoresPreviousContext() throws Exception {
+        RecordingKafkaConsumer consumer = new RecordingKafkaConsumer();
+        MessageWrapper<String> wrapper = MessageWrapper.of("ORDER-2", "OrderCreated", "payload");
+        wrapper.setTraceId("wrapper-trace");
+        ConsumerRecord<String, String> record = new ConsumerRecord<>(
+                "order-topic",
+                0,
+                43,
+                "ORDER-2",
+                objectMapper.writeValueAsString(wrapper)
+        );
+        record.headers().add(FrameworkConstants.TRACE_ID_HEADER, null);
+        TraceContext.putTraceId("caller-trace");
+
+        boolean consumed = consumer.handleRecord(record);
+
+        assertThat(consumed).isTrue();
+        assertThat(consumer.observedTrace()).hasValue("wrapper-trace");
+        assertThat(TraceContext.getTraceId()).isEqualTo("caller-trace");
+    }
+
     private static class RecordingKafkaConsumer extends AbstractKafkaMqConsumer<String> {
 
         private final AtomicReference<String> observedTrace = new AtomicReference<>();

@@ -10,6 +10,7 @@ import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
+import java.util.Map;
 
 /**
  * 链路追踪过滤器：注入 traceId 到 MDC 和响应头
@@ -23,6 +24,7 @@ public class TraceIdFilter implements Filter {
             throws IOException, ServletException {
         HttpServletRequest req = (HttpServletRequest) request;
         HttpServletResponse resp = (HttpServletResponse) response;
+        Map<String, String> previousContext = TraceContext.copyContextMap();
 
         String traceId = TraceContext.getOrCreateTraceId(req.getHeader(FrameworkConstants.TRACE_ID_HEADER));
         resp.setHeader(FrameworkConstants.TRACE_ID_HEADER, traceId);
@@ -30,7 +32,7 @@ public class TraceIdFilter implements Filter {
         try {
             chain.doFilter(request, response);
         } finally {
-            TraceContext.clear();
+            TraceContext.restore(previousContext);
         }
     }
 }

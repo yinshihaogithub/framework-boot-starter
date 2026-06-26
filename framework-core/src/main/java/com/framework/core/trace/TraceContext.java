@@ -6,11 +6,15 @@ import org.slf4j.MDC;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 /**
  * TraceId helpers backed by SLF4J MDC.
  */
 public final class TraceContext {
+
+    private static final int MAX_TRACE_ID_LENGTH = 128;
+    private static final Pattern TRACE_ID_PATTERN = Pattern.compile("[A-Za-z0-9._:-]+");
 
     private TraceContext() {
     }
@@ -24,17 +28,21 @@ public final class TraceContext {
     }
 
     public static String getOrCreateTraceId(String incomingTraceId) {
-        String traceId = hasText(incomingTraceId) ? incomingTraceId.trim() : getTraceId();
+        String traceId = normalizeTraceId(incomingTraceId);
+        if (!hasText(traceId)) {
+            traceId = normalizeTraceId(getTraceId());
+        }
         if (!hasText(traceId)) {
             traceId = generateTraceId();
         }
-        putTraceId(traceId);
+        MDC.put(FrameworkConstants.TRACE_ID_MDC_KEY, traceId);
         return traceId;
     }
 
     public static void putTraceId(String traceId) {
-        if (hasText(traceId)) {
-            MDC.put(FrameworkConstants.TRACE_ID_MDC_KEY, traceId.trim());
+        String normalizedTraceId = normalizeTraceId(traceId);
+        if (hasText(normalizedTraceId)) {
+            MDC.put(FrameworkConstants.TRACE_ID_MDC_KEY, normalizedTraceId);
         }
     }
 
@@ -77,5 +85,16 @@ public final class TraceContext {
 
     private static boolean hasText(String value) {
         return value != null && !value.isBlank();
+    }
+
+    public static String normalizeTraceId(String value) {
+        if (!hasText(value)) {
+            return null;
+        }
+        String traceId = value.trim();
+        if (traceId.length() > MAX_TRACE_ID_LENGTH || !TRACE_ID_PATTERN.matcher(traceId).matches()) {
+            return null;
+        }
+        return traceId;
     }
 }

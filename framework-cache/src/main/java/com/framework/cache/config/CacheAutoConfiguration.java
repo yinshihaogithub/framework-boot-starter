@@ -24,8 +24,8 @@ public class CacheAutoConfiguration {
     @Bean
     @ConditionalOnBean(StringRedisTemplate.class)
     @ConditionalOnMissingBean
-    public RedisCacheService redisCacheService(StringRedisTemplate redisTemplate) {
-        return new RedisCacheService(redisTemplate);
+    public RedisCacheService redisCacheService(StringRedisTemplate redisTemplate, CacheProperties properties) {
+        return new RedisCacheService(redisTemplate, properties.getRemote().getDefaultTtl());
     }
 
     @Bean

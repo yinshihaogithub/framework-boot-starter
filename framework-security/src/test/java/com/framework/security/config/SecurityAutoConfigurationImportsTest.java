@@ -1,6 +1,7 @@
 package com.framework.security.config;
 
 import com.framework.security.aspect.PermissionAspect;
+import com.framework.security.datascope.DataScopeInterceptor;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
@@ -21,7 +22,8 @@ class SecurityAutoConfigurationImportsTest {
     void autoConfigurationRegistersPermissionAspect() {
         contextRunner.run(context -> assertThat(context)
                 .hasSingleBean(SecurityAutoConfiguration.class)
-                .hasSingleBean(PermissionAspect.class));
+                .hasSingleBean(PermissionAspect.class)
+                .hasSingleBean(DataScopeInterceptor.class));
     }
 
     private static RedisConnectionFactory redisConnectionFactory() {

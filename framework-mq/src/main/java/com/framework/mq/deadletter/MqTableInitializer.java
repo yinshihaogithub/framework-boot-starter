@@ -4,6 +4,8 @@ import com.framework.mq.config.MqProperties;
 import jakarta.annotation.PostConstruct;
 import org.springframework.jdbc.core.JdbcTemplate;
 
+import java.util.Objects;
+
 /**
  * Creates MQ management tables for MySQL when enabled.
  */
@@ -13,8 +15,8 @@ public class MqTableInitializer {
     private final MqProperties properties;
 
     public MqTableInitializer(JdbcTemplate jdbcTemplate, MqProperties properties) {
-        this.jdbcTemplate = jdbcTemplate;
-        this.properties = properties;
+        this.jdbcTemplate = Objects.requireNonNull(jdbcTemplate, "jdbcTemplate must not be null");
+        this.properties = Objects.requireNonNull(properties, "properties must not be null");
     }
 
     @PostConstruct

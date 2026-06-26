@@ -42,6 +42,7 @@ public class TokenAuthFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                                     FilterChain chain) throws ServletException, IOException {
+        LoginUser previousUser = UserContextHolder.get();
         UserContextHolder.clear();
         try {
             String uri = request.getRequestURI();
@@ -80,7 +81,7 @@ public class TokenAuthFilter extends OncePerRequestFilter {
 
             chain.doFilter(request, response);
         } finally {
-            UserContextHolder.clear();
+            UserContextHolder.restore(previousUser);
         }
     }
 

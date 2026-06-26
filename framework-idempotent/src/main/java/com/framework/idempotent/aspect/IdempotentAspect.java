@@ -11,19 +11,22 @@ import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
 import org.aspectj.lang.reflect.MethodSignature;
+import org.springframework.aop.support.AopUtils;
 import org.springframework.core.DefaultParameterNameDiscoverer;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.expression.EvaluationContext;
-import org.springframework.expression.Expression;
 import org.springframework.expression.ExpressionParser;
+import org.springframework.expression.ParserContext;
+import org.springframework.expression.common.TemplateParserContext;
 import org.springframework.expression.spel.standard.SpelExpressionParser;
 import org.springframework.expression.spel.support.StandardEvaluationContext;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.lang.reflect.Method;
 import java.security.MessageDigest;
+import java.nio.charset.StandardCharsets;
 import java.util.HexFormat;
 import java.util.concurrent.TimeUnit;
 
@@ -36,6 +39,7 @@ import java.util.concurrent.TimeUnit;
 public class IdempotentAspect {
 
     private static final ExpressionParser PARSER = new SpelExpressionParser();
+    private static final ParserContext TEMPLATE_PARSER_CONTEXT = new TemplateParserContext();
     private static final DefaultParameterNameDiscoverer NAME_DISCOVERER = new DefaultParameterNameDiscoverer();
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
@@ -48,10 +52,11 @@ public class IdempotentAspect {
     @Around("@annotation(com.framework.idempotent.annotation.Idempotent)")
     public Object around(ProceedingJoinPoint joinPoint) throws Throwable {
         MethodSignature signature = (MethodSignature) joinPoint.getSignature();
-        Method method = signature.getMethod();
+        Method method = AopUtils.getMostSpecificMethod(signature.getMethod(), joinPoint.getTarget().getClass());
         Idempotent annotation = method.getAnnotation(Idempotent.class);
+        validate(annotation, method);
 
-        String idempotentKey = buildKey(annotation, method, joinPoint.getArgs());
+        String idempotentKey = buildKey(annotation, signature, method, joinPoint.getArgs());
         String redisKey = FrameworkConstants.IDEMPOTENT_PREFIX + idempotentKey;
 
         // SETNX 抢占
@@ -73,13 +78,22 @@ public class IdempotentAspect {
         }
     }
 
-    private String buildKey(Idempotent annotation, Method method, Object[] args) {
+    private void validate(Idempotent annotation, Method method) {
+        if (annotation.expire() <= 0) {
+            throw new IllegalArgumentException("@Idempotent expire must be greater than 0: " + method);
+        }
+        if (annotation.strategy() == Idempotent.IdempotentStrategy.BUSINESS_KEY
+                && !StringUtils.hasText(annotation.key())) {
+            throw new IllegalArgumentException("@Idempotent BUSINESS_KEY strategy requires a key: " + method);
+        }
+    }
+
+    private String buildKey(Idempotent annotation, MethodSignature signature, Method method, Object[] args) {
         String keyExpr = annotation.key();
 
         // BUSINESS_KEY 策略：解析 SpEL
-        if (annotation.strategy() == Idempotent.IdempotentStrategy.BUSINESS_KEY
-                && keyExpr != null && !keyExpr.isEmpty() && keyExpr.contains("#")) {
-            return resolveSpel(keyExpr, method, args);
+        if (annotation.strategy() == Idempotent.IdempotentStrategy.BUSINESS_KEY) {
+            return resolveKey(keyExpr, signature, method, args);
         }
 
         // TOKEN 策略：从 Header 取 token
@@ -87,10 +101,11 @@ public class IdempotentAspect {
             HttpServletRequest request = getCurrentRequest();
             if (request != null) {
                 String token = request.getHeader("X-Idempotent-Token");
-                if (token != null && !token.isEmpty()) {
-                    return "token:" + token;
+                if (StringUtils.hasText(token)) {
+                    return "token:" + normalizeResolvedKey(token, method);
                 }
             }
+            throw new BusinessException(ResultCode.IDEMPOTENT_FAIL, "缺少幂等Token");
         }
 
         // REQUEST_HASH 策略（默认）：URI + 请求体 hash
@@ -104,20 +119,49 @@ public class IdempotentAspect {
         return "hash:" + uri + ":" + userId + ":" + argsHash;
     }
 
-    private String resolveSpel(String expr, Method method, Object[] args) {
+    private String resolveKey(String expr, MethodSignature signature, Method method, Object[] args) {
+        if (!expr.contains("#")) {
+            return normalizeResolvedKey(expr, method);
+        }
+        StandardEvaluationContext context = new StandardEvaluationContext();
+        context.setVariable("args", args);
+        for (int i = 0; i < args.length; i++) {
+            context.setVariable("p" + i, args[i]);
+            context.setVariable("a" + i, args[i]);
+        }
+        registerParameterNames(context, signature, method, args);
         try {
-            String[] paramNames = NAME_DISCOVERER.getParameterNames(method);
-            if (paramNames == null) return expr;
-            EvaluationContext context = new StandardEvaluationContext();
-            for (int i = 0; i < paramNames.length; i++) {
-                context.setVariable(paramNames[i], args[i]);
-            }
-            String spel = expr.replaceAll("#\\{(.+?)}", "$1");
-            Expression expression = PARSER.parseExpression(spel);
-            Object value = expression.getValue(context);
-            return value != null ? value.toString() : "null";
+            Object value = expr.contains("#{")
+                    ? PARSER.parseExpression(expr, TEMPLATE_PARSER_CONTEXT).getValue(context)
+                    : PARSER.parseExpression(expr).getValue(context);
+            String resolved = value != null ? value.toString() : null;
+            return normalizeResolvedKey(resolved, method);
         } catch (Exception e) {
-            return expr;
+            if (e instanceof IllegalArgumentException) {
+                throw e;
+            }
+            throw new IllegalArgumentException("@Idempotent key SpEL parse failed: " + expr, e);
+        }
+    }
+
+    private String normalizeResolvedKey(String key, Method method) {
+        if (!StringUtils.hasText(key)) {
+            throw new IllegalArgumentException("@Idempotent key must not resolve to blank: " + method);
+        }
+        return key.trim();
+    }
+
+    private void registerParameterNames(StandardEvaluationContext context, MethodSignature signature,
+                                        Method method, Object[] args) {
+        String[] paramNames = signature.getParameterNames();
+        if (paramNames == null || paramNames.length == 0) {
+            paramNames = NAME_DISCOVERER.getParameterNames(method);
+        }
+        if (paramNames == null) {
+            return;
+        }
+        for (int i = 0; i < paramNames.length && i < args.length; i++) {
+            context.setVariable(paramNames[i], args[i]);
         }
     }
 
@@ -125,7 +169,7 @@ public class IdempotentAspect {
         try {
             String json = OBJECT_MAPPER.writeValueAsString(args);
             MessageDigest md = MessageDigest.getInstance("MD5");
-            byte[] digest = md.digest(json.getBytes());
+            byte[] digest = md.digest(json.getBytes(StandardCharsets.UTF_8));
             return HexFormat.of().formatHex(digest);
         } catch (Exception e) {
             return String.valueOf(args.hashCode());
@@ -133,8 +177,10 @@ public class IdempotentAspect {
     }
 
     private HttpServletRequest getCurrentRequest() {
-        ServletRequestAttributes attrs = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
-        return attrs != null ? attrs.getRequest() : null;
+        if (RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes attrs) {
+            return attrs.getRequest();
+        }
+        return null;
     }
 
     private String getCurrentUserId() {

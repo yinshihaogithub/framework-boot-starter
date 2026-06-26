@@ -12,20 +12,24 @@
 </dependency>
 ```
 
-> 需要配置 Redisson。自动装配生效（`DistributedLockAspect` 由 `@Component` 注册）。
+> 需要配置 `RedissonClient`。如果应用未提供 `RedissonClient`，自动配置会跳过 `DistributedLockAspect`，不会影响应用启动。
 
 ## 注解参数
 
 ```java
 @DistributedLock(
     key = "order:#{#orderId}",   // 锁 key，支持 SpEL（必填）
-    waitTime = 3,                 // 等待获取锁的最大时间（秒），默认 3
-    leaseTime = -1,               // 持有锁时间（秒），-1 启用看门狗自动续期，默认 -1
+    waitTime = 3,                 // 等待获取锁的最大时间（秒），默认 3，必须 >= 0
+    leaseTime = -1,               // 持有锁时间（秒），-1 启用看门狗自动续期，否则必须 > 0
     unit = TimeUnit.SECONDS,      // 时间单位，默认 SECONDS
     message = "操作繁忙，请稍候",   // 获取锁失败提示
     fallback = "handleLockFail"   // 获取锁失败回调方法名（可选）
 )
 ```
+
+`key` 不能为空。SpEL 上下文支持参数名、`#p0` / `#a0` 索引参数和 `#args` 数组；SpEL 解析失败或解析结果为空会快速抛出配置异常，避免把未解析表达式、空 key 或 `null` 写入 Redis key，写入 Redisson 前会归一化首尾空格。
+
+`waitTime` 必须大于等于 0，`leaseTime` 只能为 `-1` 或大于 0，`unit` 不能为空；非法配置会在获取 Redisson 锁之前快速失败。
 
 ## 使用示例
 
@@ -94,6 +98,10 @@ public void bindDevice(Long userId, String deviceId) { ... }
 // 静态字符串
 @DistributedLock(key = "global:cleanup")
 public void cleanup() { ... }
+
+// 无参数名元数据时可使用索引参数
+@DistributedLock(key = "order:#{#p0}")
+public void processOrder(Long orderId) { ... }
 ```
 
 ## 看门狗机制

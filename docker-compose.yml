@@ -1,0 +1,82 @@
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: framework-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-framework_admin}
+      MYSQL_USER: ${MYSQL_USER:-framework}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-framework}
+      TZ: Asia/Shanghai
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./sql/mysql/framework_boot_starter_init.sql:/docker-entrypoint-initdb.d/01-framework.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-p${MYSQL_ROOT_PASSWORD:-root}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7.4
+    container_name: framework-redis
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  admin-service:
+    build:
+      context: .
+      dockerfile: admin-service/Dockerfile
+    container_name: framework-admin-service
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-framework_admin}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:-framework}
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:-framework}
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      FRAMEWORK_AUTH_JWT_SECRET: admin-service-secret-key-must-be-at-least-32-chars-long
+    ports:
+      - "${ADMIN_SERVICE_PORT:-8081}:8081"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  admin-web:
+    build:
+      context: .
+      dockerfile: frontend/admin-web/Dockerfile
+    container_name: framework-admin-web
+    ports:
+      - "${ADMIN_WEB_PORT:-5173}:80"
+    depends_on:
+      - admin-service
+
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: framework-rabbitmq
+    profiles: ["mq"]
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+
+  kafka:
+    image: apache/kafka:3.8.0
+    container_name: framework-kafka
+    profiles: ["mq"]
+    ports:
+      - "9092:9092"
+
+volumes:
+  mysql-data:
+  redis-data:

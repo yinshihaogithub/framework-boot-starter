@@ -16,7 +16,7 @@
 
 | 类 | 说明 |
 |---|---|
-| `Result<T>` | 统一响应体，含 `code`/`message`/`data`/`timestamp` |
+| `Result<T>` | 统一响应体，含 `code`/`message`/`data`/`timestamp`/`traceId` |
 | `PageResult<T>` | 分页响应体，含 `records`/`total`/`pageNum`/`pageSize`/`pages` |
 | `ResultCode` | 业务码枚举 |
 | `BusinessException` | 业务异常基类（带业务码） |
@@ -72,9 +72,13 @@ throw new ParamException("手机号格式错误");
   "code": 200,
   "message": "success",
   "data": {},
-  "timestamp": 1719235200000
+  "timestamp": 1719235200000,
+  "traceId": "6c8f6c8f6c8f4a3b9b2f6c8f6c8f6c8f"
 }
 ```
+
+`traceId` 从当前 MDC 读取；没有链路上下文时保持为空，不会在后台任务或单元测试里额外生成。
+外部传入的 `traceId` 只接受 1-128 位字母、数字、`.`、`_`、`:`、`-`；包含空白、换行、控制字符或超长时会被丢弃并重新生成，避免污染日志、响应头和下游链路。
 
 ## 业务码规范
 

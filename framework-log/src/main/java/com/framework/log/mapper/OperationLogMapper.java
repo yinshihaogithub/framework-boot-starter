@@ -71,6 +71,7 @@ public interface OperationLogMapper {
                 <if test="logType != null and logType != ''">AND log_type = #{logType}</if>
                 <if test="operatorId != null">AND operator_id = #{operatorId}</if>
                 <if test="success != null">AND success = #{success}</if>
+                <if test="traceId != null and traceId != ''">AND trace_id = #{traceId}</if>
             </where>
             ORDER BY create_time DESC
             LIMIT #{offset}, #{pageSize}
@@ -81,6 +82,7 @@ public interface OperationLogMapper {
             @Param("logType") String logType,
             @Param("operatorId") Long operatorId,
             @Param("success") Boolean success,
+            @Param("traceId") String traceId,
             @Param("offset") int offset,
             @Param("pageSize") int pageSize);
 
@@ -94,13 +96,17 @@ public interface OperationLogMapper {
                 <if test="module != null and module != ''">AND module = #{module}</if>
                 <if test="logType != null and logType != ''">AND log_type = #{logType}</if>
                 <if test="operatorId != null">AND operator_id = #{operatorId}</if>
+                <if test="success != null">AND success = #{success}</if>
+                <if test="traceId != null and traceId != ''">AND trace_id = #{traceId}</if>
             </where>
             </script>
             """)
     long count(
             @Param("module") String module,
             @Param("logType") String logType,
-            @Param("operatorId") Long operatorId);
+            @Param("operatorId") Long operatorId,
+            @Param("success") Boolean success,
+            @Param("traceId") String traceId);
 
     /**
      * 清理指定天数前的日志

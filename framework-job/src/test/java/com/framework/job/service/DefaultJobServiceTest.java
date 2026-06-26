@@ -7,15 +7,16 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class DefaultJobServiceTest {
 
     @Test
     void runsRegisteredHandlerByName() {
         AtomicInteger runs = new AtomicInteger();
-        DefaultJobService jobService = new DefaultJobService(List.of(handler("clean", runs::incrementAndGet)));
+        DefaultJobService jobService = new DefaultJobService(List.of(handler(" clean ", runs::incrementAndGet)));
 
-        boolean result = jobService.run("clean");
+        boolean result = jobService.run(" clean ");
 
         assertThat(result).isTrue();
         assertThat(runs).hasValue(1);
@@ -30,6 +31,35 @@ class DefaultJobServiceTest {
 
         assertThat(jobService.run("missing")).isFalse();
         assertThat(runWithJobLoggingDisabled(() -> jobService.run("fail"))).isFalse();
+    }
+
+    @Test
+    void allowsNullHandlerListAsEmptyRegistry() {
+        DefaultJobService jobService = new DefaultJobService(null);
+
+        assertThat(jobService.names()).isEmpty();
+        assertThat(jobService.run("clean")).isFalse();
+    }
+
+    @Test
+    void rejectsBlankOrDuplicateHandlerNames() {
+        assertThatThrownBy(() -> new DefaultJobService(List.of(handler(" ", () -> {
+        }))))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("JobHandler name must not be blank");
+
+        assertThatThrownBy(() -> new DefaultJobService(List.of(
+                handler("clean", () -> {
+                }),
+                handler("clean", () -> {
+                }))))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Duplicate JobHandler name");
+
+        assertThatThrownBy(() -> new DefaultJobService(List.of(handler("clean job", () -> {
+        }))))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("JobHandler name must match");
     }
 
     private static JobHandler handler(String name, ThrowingRunnable runnable) {

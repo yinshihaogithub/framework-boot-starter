@@ -12,7 +12,10 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Duration;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Webhook notification channel based on JDK HttpClient.
@@ -25,10 +28,11 @@ public class WebhookNotifyChannel implements NotifyChannel {
     private final HttpClient httpClient;
 
     public WebhookNotifyChannel(NotifyProperties properties, ObjectMapper objectMapper) {
-        this.properties = properties;
-        this.objectMapper = objectMapper;
+        this.properties = Objects.requireNonNull(properties, "notify properties must not be null");
+        this.properties.validate();
+        this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper must not be null");
         this.httpClient = HttpClient.newBuilder()
-                .connectTimeout(properties.getWebhook().getTimeout())
+                .connectTimeout(timeout())
                 .build();
     }
 
@@ -45,16 +49,25 @@ public class WebhookNotifyChannel implements NotifyChannel {
         if (!StringUtils.hasText(url)) {
             return NotifyResult.failure(type(), "webhook url is empty");
         }
+        URI uri;
+        try {
+            uri = URI.create(url.trim());
+        } catch (IllegalArgumentException e) {
+            return NotifyResult.failure(type(), "webhook url is invalid");
+        }
+        if (!isHttpUri(uri)) {
+            return NotifyResult.failure(type(), "webhook url must use http or https");
+        }
 
         try {
             String body = objectMapper.writeValueAsString(Map.of(
                     "title", message.getTitle(),
                     "content", message.getContent(),
-                    "receivers", message.getReceivers(),
-                    "templateParams", message.getTemplateParams()
+                    "receivers", receivers(message),
+                    "templateParams", templateParams(message)
             ));
-            HttpRequest request = HttpRequest.newBuilder(URI.create(url))
-                    .timeout(properties.getWebhook().getTimeout())
+            HttpRequest request = HttpRequest.newBuilder(uri)
+                    .timeout(timeout())
                     .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(body))
                     .build();
@@ -64,8 +77,38 @@ public class WebhookNotifyChannel implements NotifyChannel {
             }
             return NotifyResult.failure(type(), "webhook status=" + response.statusCode());
         } catch (Exception e) {
-            log.warn("[Webhook通知失败] title={}, error={}", message.getTitle(), e.getMessage());
-            return NotifyResult.failure(type(), e.getMessage());
+            String failureMessage = failureMessage(e);
+            log.warn("[Webhook通知失败] title={}, error={}", message.getTitle(), failureMessage);
+            return NotifyResult.failure(type(), failureMessage);
         }
+    }
+
+    private List<String> receivers(NotifyMessage message) {
+        return message.getReceivers() == null ? List.of() : message.getReceivers();
+    }
+
+    private Map<String, Object> templateParams(NotifyMessage message) {
+        return message.getTemplateParams() == null ? Map.of() : message.getTemplateParams();
+    }
+
+    private boolean isHttpUri(URI uri) {
+        String scheme = uri.getScheme();
+        return uri.getHost() != null
+                && ("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme));
+    }
+
+    private Duration timeout() {
+        if (properties.getWebhook() == null) {
+            throw new IllegalArgumentException("framework.notify.webhook must not be null");
+        }
+        Duration timeout = properties.getWebhook().getTimeout();
+        if (timeout == null || timeout.isZero() || timeout.isNegative()) {
+            throw new IllegalArgumentException("framework.notify.webhook.timeout must be greater than 0");
+        }
+        return timeout;
+    }
+
+    private String failureMessage(Exception e) {
+        return e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
     }
 }
