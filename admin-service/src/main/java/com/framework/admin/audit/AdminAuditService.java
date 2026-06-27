@@ -4,8 +4,9 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.framework.auth.context.UserContextHolder;
 import com.framework.core.trace.TraceContext;
+import com.framework.log.entity.OperationLogEntity;
+import com.framework.log.mapper.OperationLogMapper;
 import jakarta.servlet.http.HttpServletRequest;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 import java.util.Date;
@@ -20,11 +21,11 @@ public class AdminAuditService {
 
     private static final int MAX_TEXT_LENGTH = 4000;
 
-    private final JdbcTemplate jdbcTemplate;
+    private final OperationLogMapper operationLogMapper;
     private final ObjectMapper objectMapper;
 
-    public AdminAuditService(JdbcTemplate jdbcTemplate, ObjectMapper objectMapper) {
-        this.jdbcTemplate = jdbcTemplate;
+    public AdminAuditService(OperationLogMapper operationLogMapper, ObjectMapper objectMapper) {
+        this.operationLogMapper = operationLogMapper;
         this.objectMapper = objectMapper;
     }
 
@@ -41,29 +42,25 @@ public class AdminAuditService {
     private void record(HttpServletRequest request, String module, String action, String operationType,
                         Object params, boolean success, String errorMessage) {
         try {
-            jdbcTemplate.update("""
-                    INSERT INTO sys_operation_log
-                    (log_type, module, action, operation_type, uri, http_method, method,
-                     params, result, success, error_message, elapsed_ms,
-                     operator_id, operator_name, client_ip, trace_id, create_time)
-                    VALUES
-                    ('OPERATION', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)
-                    """,
-                    module,
-                    action,
-                    operationType,
-                    request == null ? null : request.getRequestURI(),
-                    request == null ? null : request.getMethod(),
-                    "admin-service",
-                    toJson(params),
-                    success ? "{\"message\":\"success\"}" : null,
-                    success,
-                    truncate(errorMessage),
-                    UserContextHolder.getUserId(),
-                    UserContextHolder.getUsername(),
-                    clientIp(request),
-                    TraceContext.ensureTraceId(),
-                    new Date());
+            OperationLogEntity entity = new OperationLogEntity();
+            entity.setLogType("OPERATION");
+            entity.setModule(module);
+            entity.setAction(action);
+            entity.setOperationType(operationType);
+            entity.setUri(request == null ? null : request.getRequestURI());
+            entity.setHttpMethod(request == null ? null : request.getMethod());
+            entity.setMethod("admin-service");
+            entity.setParams(toJson(params));
+            entity.setResult(success ? "{\"message\":\"success\"}" : null);
+            entity.setSuccess(success);
+            entity.setErrorMessage(truncate(errorMessage));
+            entity.setElapsedMs(0L);
+            entity.setOperatorId(UserContextHolder.getUserId());
+            entity.setOperatorName(UserContextHolder.getUsername());
+            entity.setClientIp(clientIp(request));
+            entity.setTraceId(TraceContext.ensureTraceId());
+            entity.setCreateTime(new Date());
+            operationLogMapper.insert(entity);
         } catch (Exception ignored) {
             // Audit must never block the admin management flow.
         }
