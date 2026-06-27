@@ -24,6 +24,8 @@ class RepositoryEngineeringGuardTest {
     private static final Pattern MODULE_PATTERN = Pattern.compile("<module>([^<]+)</module>");
     private static final Pattern ARTIFACT_PATTERN = Pattern.compile("<artifactId>([^<]+)</artifactId>");
     private static final Pattern PACKAGE_PATTERN = Pattern.compile("package\\s+([\\w.]+);");
+    private static final Pattern MQ_PROVIDER_ENUM_PATTERN = Pattern.compile("enum\\s+Provider\\s*\\{([^}]+)}",
+            Pattern.DOTALL);
     private static final Pattern CONFIGURATION_PROPERTIES_PREFIX_PATTERN = Pattern.compile(
             "@ConfigurationProperties\\s*\\(\\s*prefix\\s*=\\s*\"([^\"]+)\"");
     private static final Pattern DEFAULT_STRING_DECODING_PATTERN = Pattern.compile(
@@ -267,6 +269,81 @@ class RepositoryEngineeringGuardTest {
     }
 
     @Test
+    void aggregateMysqlScriptIncludesAdminServiceTables() throws Exception {
+        String aggregateScript = read(root.resolve("sql/mysql/framework_boot_starter_init.sql"));
+
+        assertThat(aggregateScript)
+                .contains("CREATE TABLE IF NOT EXISTS sys_tenant")
+                .contains("CREATE TABLE IF NOT EXISTS sys_dept")
+                .contains("CREATE TABLE IF NOT EXISTS sys_user")
+                .contains("CREATE TABLE IF NOT EXISTS sys_role")
+                .contains("CREATE TABLE IF NOT EXISTS sys_menu")
+                .contains("CREATE TABLE IF NOT EXISTS sys_dict_type")
+                .contains("CREATE TABLE IF NOT EXISTS sys_dict_item")
+                .contains("CREATE TABLE IF NOT EXISTS sys_config")
+                .contains("CREATE TABLE IF NOT EXISTS sys_login_log")
+                .contains("CREATE TABLE IF NOT EXISTS framework_notify_template")
+                .contains("CREATE TABLE IF NOT EXISTS framework_notify_record")
+                .contains("CREATE TABLE IF NOT EXISTS framework_excel_task")
+                .contains("CREATE TABLE IF NOT EXISTS framework_excel_error");
+    }
+
+    @Test
+    void adminServiceMainCodeUsesMapperStyleInsteadOfJdbcTemplate() throws Exception {
+        Path adminMain = root.resolve("admin-service/src/main/java");
+        try (Stream<Path> files = Files.walk(adminMain)) {
+            List<Path> javaFiles = files
+                    .filter(Files::isRegularFile)
+                    .filter(path -> path.toString().endsWith(".java"))
+                    .toList();
+
+            assertThat(javaFiles).isNotEmpty();
+            for (Path javaFile : javaFiles) {
+                String content = read(javaFile);
+                assertThat(content)
+                        .as(javaFile + " must keep admin-service on annotation Mapper repositories")
+                        .doesNotContain("JdbcTemplate")
+                        .doesNotContain("NamedParameterJdbcTemplate")
+                        .doesNotContain("GeneratedKeyHolder");
+            }
+        }
+    }
+
+    @Test
+    void mqProvidersAreLimitedToRabbitKafkaAndRocket() throws Exception {
+        String source = read(root.resolve("framework-mq/src/main/java/com/framework/mq/config/MqProperties.java"));
+        Matcher matcher = MQ_PROVIDER_ENUM_PATTERN.matcher(source);
+
+        assertThat(matcher.find()).as("MqProperties.Provider enum must exist").isTrue();
+        List<String> providers = Stream.of(matcher.group(1).split(","))
+                .map(String::trim)
+                .map(value -> value.replaceAll("//.*", "").trim())
+                .filter(value -> !value.isBlank())
+                .toList();
+
+        assertThat(providers).containsExactly("RABBIT", "KAFKA", "ROCKET");
+    }
+
+    @Test
+    void codegenModuleIsRemovedFromTheScaffold() throws Exception {
+        assertThat(modules())
+                .as("codegen is intentionally not part of this scaffold")
+                .noneMatch(module -> module.toLowerCase().contains("codegen"));
+
+        try (Stream<Path> files = Files.walk(root)) {
+            List<Path> codegenPaths = files
+                    .filter(path -> !isIgnoredRepositoryPath(path))
+                    .filter(path -> path.getFileName() != null)
+                    .filter(path -> path.getFileName().toString().toLowerCase().contains("codegen"))
+                    .toList();
+
+            assertThat(codegenPaths)
+                    .as("codegen directories/files should stay removed")
+                    .isEmpty();
+        }
+    }
+
+    @Test
     void sourceConfigurationDoesNotUseH2AsDefaultDatabase() throws Exception {
         try (Stream<Path> files = Files.walk(root)) {
             List<Path> sourceFiles = files
@@ -355,6 +432,14 @@ class RepositoryEngineeringGuardTest {
     private Path moduleRoot(Path path) {
         Path relative = root.relativize(path);
         return root.resolve(relative.getName(0));
+    }
+
+    private boolean isIgnoredRepositoryPath(Path path) {
+        String value = path.toString();
+        return value.contains("/.git/")
+                || value.contains("/target/")
+                || value.contains("/node_modules/")
+                || value.contains("/dist/");
     }
 
     private Path repositoryRoot() {
