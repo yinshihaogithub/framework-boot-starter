@@ -7,7 +7,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 /**
  * 管理后台服务启动类。
  */
-@MapperScan("com.framework.log.mapper")
+@MapperScan({"com.framework.log.mapper", "com.framework.admin"})
 @SpringBootApplication
 public class AdminServiceApplication {
 
