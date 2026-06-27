@@ -441,11 +441,13 @@
                   </el-select>
                   <el-input v-model="mqQuery.traceId" clearable placeholder="Trace ID" class="filter" />
                   <el-button :icon="Search" circle type="primary" @click="loadMq" />
+                  <el-button :icon="RefreshRight" circle :disabled="selectedMqMessageIds.length === 0" @click="batchRetryMq" />
                   <el-button :icon="Delete" circle @click="cleanMq" />
                 </div>
               </div>
             </template>
-            <el-table :data="mqMessages.records" height="420" stripe>
+            <el-table :data="mqMessages.records" height="420" stripe @selection-change="handleMqSelectionChange">
+              <el-table-column type="selection" width="44" />
               <el-table-column prop="id" label="ID" width="86" />
               <el-table-column prop="status" label="状态" width="118">
                 <template #default="{ row }"><el-tag :type="mqStatusType(row.status)" size="small">{{ row.status }}</el-tag></template>
@@ -1222,6 +1224,7 @@ const dashboard = ref<DashboardSummary>()
 const mqStats = ref<MqStats>()
 const mqQueues = ref<MqQueueInfo[]>([])
 const mqMessages = reactive<PageResult<MqFailedMessage>>({ records: [], total: 0, pageNum: 1, pageSize: 20, pages: 0 })
+const selectedMqMessageIds = ref<number[]>([])
 const localMessages = reactive<PageResult<LocalMessage>>({ records: [], total: 0, pageNum: 1, pageSize: 20, pages: 0 })
 const notifyStats = ref<Record<string, number>>({})
 const notifyTemplates = reactive<PageResult<NotifyTemplate>>({ records: [], total: 0, pageNum: 1, pageSize: 20, pages: 0 })
@@ -1786,6 +1789,29 @@ async function deleteMenu(row: MenuItem) {
 async function retryMq(id: number) {
   const message = await api.retryMqMessage(id)
   ElMessage.success(message)
+  await loadMq()
+}
+
+function handleMqSelectionChange(rows: MqFailedMessage[]) {
+  selectedMqMessageIds.value = rows.map((row) => row.id)
+}
+
+async function batchRetryMq() {
+  if (selectedMqMessageIds.value.length === 0) {
+    ElMessage.warning('请选择要重发的消息')
+    return
+  }
+  const result = await api.batchRetryMqMessages(
+    selectedMqMessageIds.value,
+    currentUser.value?.username || 'admin',
+    '批量重发'
+  )
+  if (result.failed > 0) {
+    ElMessage.warning(`已提交 ${result.total} 条，成功 ${result.success} 条，失败 ${result.failed} 条`)
+  } else {
+    ElMessage.success(`已提交 ${result.total} 条，成功 ${result.success} 条`)
+  }
+  selectedMqMessageIds.value = []
   await loadMq()
 }
 

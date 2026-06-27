@@ -81,6 +81,13 @@ export interface MqFailedMessage {
   compensateRemark?: string
 }
 
+export interface ManualRetryResult {
+  total: number
+  success: number
+  failed: number
+  failedMessages: string[]
+}
+
 export interface LocalMessage {
   id: number
   messageId: string
@@ -379,6 +386,8 @@ export const api = {
     getData<PageResult<MqFailedMessage>>('/admin/mq/failed-messages', params),
   retryMqMessage: (id: number, operator = 'admin', remark = '') =>
     postData<string>(`/admin/mq/failed-messages/${id}/retry`, null, { operator, remark }),
+  batchRetryMqMessages: (ids: number[], operator = 'admin', remark = '') =>
+    postData<ManualRetryResult>('/admin/mq/failed-messages/batch-retry', { ids, operator, remark }),
   manualSuccessMqMessage: (id: number, data: Record<string, unknown>) =>
     postData<string>(`/admin/mq/failed-messages/${id}/manual-success`, data),
   manualFailureMqMessage: (id: number, data: Record<string, unknown>) =>
