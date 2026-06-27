@@ -28,14 +28,7 @@ class MqAdminControllerTest {
 
     @Test
     void returnsEmptyPageWhenMqRuntimeIsNotEnabled() {
-        MqAdminController controller = new MqAdminController(
-                provider(null),
-                provider(null),
-                provider(null),
-                provider(null),
-                provider(null),
-                new StaticApplicationContext(),
-                auditService());
+        MqAdminController controller = controller(null, null, null);
 
         Result<PageResult<MqAdminDTO.MqFailedMessageVO>> result = controller.listFailedMessages(
                 null, null, null, null, null, -1, 0);
@@ -53,14 +46,7 @@ class MqAdminControllerTest {
                         failedMessage(1L, "trace-a", MqFailedMessage.STATUS_PENDING),
                         failedMessage(2L, "trace-b", MqFailedMessage.STATUS_EXHAUSTED))),
                 new MqProperties());
-        MqAdminController controller = new MqAdminController(
-                provider(handler),
-                provider(null),
-                provider(new MqProperties()),
-                provider(null),
-                provider(null),
-                new StaticApplicationContext(),
-                auditService());
+        MqAdminController controller = controller(handler, new MqProperties(), null);
 
         Result<PageResult<MqAdminDTO.MqFailedMessageVO>> result = controller.listFailedMessages(
                 null, MqFailedMessage.STATUS_PENDING, "trace-a", null, null, 1, 50);
@@ -74,14 +60,7 @@ class MqAdminControllerTest {
     void returnsRuntimeInfoWithProviderAvailability() {
         MqProperties properties = new MqProperties();
         properties.setProvider(MqProperties.Provider.RABBIT);
-        MqAdminController controller = new MqAdminController(
-                provider(null),
-                provider(null),
-                provider(properties),
-                provider(sender(MqProperties.Provider.RABBIT)),
-                provider(null),
-                new StaticApplicationContext(),
-                auditService());
+        MqAdminController controller = controller(null, properties, sender(MqProperties.Provider.RABBIT));
 
         Result<MqAdminDTO.MqStats> result = controller.stats();
 
@@ -98,6 +77,20 @@ class MqAdminControllerTest {
                         org.assertj.core.groups.Tuple.tuple("RABBIT", true, true),
                         org.assertj.core.groups.Tuple.tuple("KAFKA", false, false),
                         org.assertj.core.groups.Tuple.tuple("ROCKET", false, false));
+    }
+
+    private static MqAdminController controller(DeadLetterHandler handler,
+                                                MqProperties properties,
+                                                MqMessageSender sender) {
+        MqAdminService service = new MqAdminService(
+                provider(handler),
+                provider(null),
+                provider(properties),
+                provider(sender),
+                provider(null),
+                new StaticApplicationContext(),
+                auditService());
+        return new MqAdminController(service);
     }
 
     private static MqFailedMessage failedMessage(Long id, String traceId, String status) {
