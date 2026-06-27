@@ -1,6 +1,7 @@
 package com.framework.admin.localmessage;
 
 import com.framework.admin.audit.AdminAuditService;
+import com.framework.core.result.PageResult;
 import com.framework.core.result.Result;
 import com.framework.localmessage.model.LocalMessage;
 import com.framework.localmessage.model.LocalMessageStatus;
@@ -73,8 +74,37 @@ class LocalMessageAdminControllerTest {
         assertThat(result.getMessage()).isEqualTo("消息不存在");
     }
 
+    @Test
+    void listFiltersAndUsesSafePaging() {
+        InMemoryLocalMessageRepository repository = new InMemoryLocalMessageRepository();
+        repository.save(localMessage(1L)
+                .setTopic("order.created")
+                .setTraceId("trace-a")
+                .setBusinessKey("biz-a")
+                .setCreateTime(LocalDateTime.now().minusMinutes(1)));
+        repository.save(localMessage(2L)
+                .setTopic("inventory.changed")
+                .setTraceId("trace-b")
+                .setBusinessKey("biz-b")
+                .setCreateTime(LocalDateTime.now()));
+        LocalMessageAdminController controller = controller(repository);
+
+        Result<PageResult<LocalMessageVO>> result = controller.list(
+                "order.created", null, "trace", "biz-a", -1, 500);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getData().getPageNum()).isEqualTo(1);
+        assertThat(result.getData().getPageSize()).isEqualTo(200);
+        assertThat(result.getData().getTotal()).isEqualTo(1);
+        assertThat(result.getData().getRecords()).extracting(LocalMessageVO::getId).containsExactly(1L);
+    }
+
     private static LocalMessageAdminController controller(LocalMessageRepository repository) {
-        return new LocalMessageAdminController(provider(null), provider(repository), auditService());
+        LocalMessageAdminService service = new LocalMessageAdminService(
+                provider(localMessageService(repository)),
+                provider(repository),
+                auditService());
+        return new LocalMessageAdminController(service);
     }
 
     private static LocalMessage localMessage(Long id) {
@@ -128,6 +158,38 @@ class LocalMessageAdminControllerTest {
             @Override
             public void failure(HttpServletRequest request, String module, String action, String operationType,
                                 Object params, Exception exception) {
+            }
+        };
+    }
+
+    private static LocalMessageService localMessageService(LocalMessageRepository repository) {
+        return new LocalMessageService() {
+            @Override
+            public LocalMessage publish(String topic, String businessKey, String payload) {
+                return null;
+            }
+
+            @Override
+            public int retryDueMessages() {
+                return repository.findDueMessages(LocalDateTime.now(), Integer.MAX_VALUE).size();
+            }
+
+            @Override
+            public void markSuccess(Long id) {
+            }
+
+            @Override
+            public void markFailure(Long id, Exception exception) {
+            }
+
+            @Override
+            public Optional<LocalMessage> findById(Long id) {
+                return repository.findById(id);
+            }
+
+            @Override
+            public List<LocalMessage> findAll() {
+                return repository.findAll();
             }
         };
     }
