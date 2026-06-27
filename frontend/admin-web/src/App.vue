@@ -785,6 +785,27 @@
 
         <section v-if="activeView === 'monitor'" class="view">
           <el-card shadow="never">
+            <template #header>
+              <div class="section-head">
+                <span>服务健康</span>
+                <el-tag size="small" :type="health?.status === 'UP' ? 'success' : 'danger'">
+                  {{ health?.status || '-' }}
+                </el-tag>
+              </div>
+            </template>
+            <div class="health-grid">
+              <div v-for="(component, name) in health?.components ?? {}" :key="name" class="health-item">
+                <div class="health-title">
+                  <span>{{ name }}</span>
+                  <el-tag size="small" :type="component.status === 'UP' ? 'success' : 'danger'">
+                    {{ component.status }}
+                  </el-tag>
+                </div>
+                <div class="health-detail">{{ formatHealthDetails(component.details) }}</div>
+              </div>
+            </div>
+          </el-card>
+          <el-card shadow="never">
             <template #header><div class="section-head"><span>运行时</span><el-button :icon="Refresh" circle @click="loadMonitor" /></div></template>
             <div class="runtime-grid">
               <div v-for="(value, key) in jvm" :key="key" class="runtime-item">
@@ -1066,6 +1087,7 @@ import {
   type DictType,
   type ExcelErrorRecord,
   type ExcelTask,
+  type HealthStatus,
   type LoginLog,
   type LocalMessage,
   type MenuItem,
@@ -1190,6 +1212,7 @@ const excelErrors = ref<ExcelErrorRecord[]>([])
 const logs = reactive<PageResult<OperationLog>>({ records: [], total: 0, pageNum: 1, pageSize: 20, pages: 0 })
 const loginLogs = reactive<PageResult<LoginLog>>({ records: [], total: 0, pageNum: 1, pageSize: 20, pages: 0 })
 const traceDetail = ref<TraceDetail>()
+const health = ref<HealthStatus>()
 const users = reactive<PageResult<AdminUser>>({ records: [], total: 0, pageNum: 1, pageSize: 20, pages: 0 })
 const tenants = ref<Tenant[]>([])
 const depts = ref<Dept[]>([])
@@ -1467,7 +1490,12 @@ async function loadTrace() {
 }
 
 async function loadMonitor() {
-  jvm.value = await api.monitorJvm()
+  const [healthData, jvmData] = await Promise.all([
+    api.monitorHealth(),
+    api.monitorJvm()
+  ])
+  health.value = healthData
+  jvm.value = jvmData
 }
 
 function openCreateTenant() {
@@ -2205,6 +2233,16 @@ function formatRuntime(value: unknown) {
   }
   return String(value)
 }
+
+function formatHealthDetails(details?: Record<string, unknown>) {
+  if (!details || Object.keys(details).length === 0) {
+    return '-'
+  }
+  return Object.entries(details)
+    .slice(0, 3)
+    .map(([key, value]) => `${key}: ${formatRuntime(value)}`)
+    .join(' · ')
+}
 </script>
 
 <style scoped>
@@ -2626,6 +2664,37 @@ function formatRuntime(value: unknown) {
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 12px;
+}
+
+.health-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 10px;
+}
+
+.health-item {
+  min-height: 82px;
+  padding: 12px;
+  border: 1px solid #ececec;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.health-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: #18181b;
+  font-weight: 650;
+}
+
+.health-detail {
+  margin-top: 10px;
+  color: #71717a;
+  font-size: 12px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
 }
 
 .trace-timeline {

@@ -237,6 +237,16 @@ export interface TraceDetail {
   localMessages: LocalMessage[]
 }
 
+export interface HealthStatus {
+  status: string
+  components: Record<string, HealthComponent>
+}
+
+export interface HealthComponent {
+  status: string
+  details?: Record<string, unknown>
+}
+
 export interface NotifyTemplate {
   id: number
   templateCode: string
@@ -386,6 +396,7 @@ export const api = {
   loginLogs: (params: Record<string, unknown>) => getData<PageResult<LoginLog>>('/admin/logs/login', params),
   traceLogs: (traceId: string) => getData<PageResult<OperationLog>>(`/admin/logs/traces/${traceId}`),
   traceDetail: (traceId: string) => getData<TraceDetail>(`/admin/traces/${traceId}`),
+  monitorHealth: () => getData<HealthStatus>('/admin/monitor/health'),
   monitorJvm: () => getData<Record<string, unknown>>('/admin/monitor/jvm'),
   notifyStats: () => getData<Record<string, number>>('/admin/notify/stats'),
   notifyTemplates: (params: Record<string, unknown>) =>
