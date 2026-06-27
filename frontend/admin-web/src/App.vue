@@ -310,6 +310,24 @@
           <el-card shadow="never">
             <template #header>
               <div class="section-head">
+                <span>队列状态</span>
+                <el-tag size="small" type="info">{{ mqQueues.length }}</el-tag>
+              </div>
+            </template>
+            <el-table :data="mqQueues" height="260" stripe>
+              <el-table-column prop="queueName" label="队列" min-width="220" show-overflow-tooltip />
+              <el-table-column prop="messageCount" label="消息数" width="110" />
+              <el-table-column prop="consumerCount" label="消费者" width="110" />
+              <el-table-column prop="state" label="状态" width="130">
+                <template #default="{ row }">
+                  <el-tag :type="row.state === 'RUNNING' ? 'success' : 'info'" size="small">{{ row.state }}</el-tag>
+                </template>
+              </el-table-column>
+            </el-table>
+          </el-card>
+          <el-card shadow="never">
+            <template #header>
+              <div class="section-head">
                 <span>字典项</span>
                 <div class="actions">
                   <el-tag size="small">{{ dictItems.length }}</el-tag>
@@ -1093,6 +1111,7 @@ import {
   type MenuItem,
   type MqFailedMessage,
   type MqProviderStatus,
+  type MqQueueInfo,
   type MqStats,
   type NotifyRecord,
   type NotifyTemplate,
@@ -1201,6 +1220,7 @@ const activeView = ref<ViewName>('dashboard')
 const traceKeyword = ref('')
 const dashboard = ref<DashboardSummary>()
 const mqStats = ref<MqStats>()
+const mqQueues = ref<MqQueueInfo[]>([])
 const mqMessages = reactive<PageResult<MqFailedMessage>>({ records: [], total: 0, pageNum: 1, pageSize: 20, pages: 0 })
 const localMessages = reactive<PageResult<LocalMessage>>({ records: [], total: 0, pageNum: 1, pageSize: 20, pages: 0 })
 const notifyStats = ref<Record<string, number>>({})
@@ -1428,8 +1448,13 @@ async function loadConfigs() {
 }
 
 async function loadMq() {
-  mqStats.value = await api.mqStats()
-  const page = await api.mqFailedMessages(mqQuery)
+  const [stats, queues, page] = await Promise.all([
+    api.mqStats(),
+    api.mqQueues(),
+    api.mqFailedMessages(mqQuery)
+  ])
+  mqStats.value = stats
+  mqQueues.value = queues
   Object.assign(mqMessages, page)
 }
 

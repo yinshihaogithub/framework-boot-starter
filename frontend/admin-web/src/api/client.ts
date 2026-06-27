@@ -385,6 +385,7 @@ export const api = {
     postData<string>(`/admin/mq/failed-messages/${id}/manual-failure`, data),
   deleteMqMessage: (id: number) => deleteData<string>(`/admin/mq/failed-messages/${id}`),
   cleanMqProcessed: () => deleteData<string>('/admin/mq/failed-messages/clean'),
+  mqQueues: () => getData<MqQueueInfo[]>('/admin/mq/queues'),
   localMessages: (params: Record<string, unknown>) =>
     getData<PageResult<LocalMessage>>('/admin/local-messages', params),
   retryDueLocalMessages: () => postData<number>('/admin/local-messages/retry-due'),
