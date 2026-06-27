@@ -15,10 +15,11 @@ class DashboardControllerTest {
 
     @Test
     void moduleStatusesMatchAdminRuntimeModules() {
-        DashboardController controller = new DashboardController(
+        DashboardService service = new DashboardService(
                 provider(null),
                 provider(null),
                 provider(null));
+        DashboardController controller = new DashboardController(service);
 
         Result<DashboardController.DashboardSummary> result = controller.summary();
 
