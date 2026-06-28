@@ -8,7 +8,9 @@ import com.framework.mq.deadletter.DeadLetterHandler;
 import com.framework.mq.deadletter.MqAdminDTO;
 import com.framework.mq.deadletter.MqFailedMessage;
 import com.framework.mq.deadletter.MqFailedMessageRepository;
+import com.framework.mq.deadletter.MqRetryScheduler;
 import com.framework.mq.producer.MqMessageSender;
+import com.framework.mq.producer.MqMessageSenderRegistry;
 import com.framework.mq.core.MessageWrapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
@@ -67,6 +69,7 @@ class MqAdminControllerTest {
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getData().getRuntime().getProvider()).isEqualTo("RABBIT");
         assertThat(result.getData().getRuntime().isDeadLetterEnabled()).isTrue();
+        assertThat(result.getData().getRuntime().isRetryAvailable()).isFalse();
         assertThat(result.getData().getRuntime().getFailedMessageTableName())
                 .isEqualTo("framework_mq_failed_message");
         assertThat(result.getData().getRuntime().getProviders())
@@ -79,12 +82,45 @@ class MqAdminControllerTest {
                         org.assertj.core.groups.Tuple.tuple("ROCKET", false, false));
     }
 
+    @Test
+    void returnsRetryAvailabilityWhenSchedulerExists() {
+        MqProperties properties = new MqProperties();
+        MqMessageSender sender = sender(MqProperties.Provider.RABBIT);
+        DeadLetterHandler handler = new DeadLetterHandler(
+                new InMemoryMqFailedMessageRepository(List.of()), properties);
+        MqRetryScheduler scheduler = new MqRetryScheduler(
+                handler, new MqMessageSenderRegistry(properties, List.of(sender)), properties.getMaxRetry());
+        MqAdminController controller = controller(handler, properties, sender, scheduler);
+
+        Result<MqAdminDTO.MqStats> result = controller.stats();
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getData().getRuntime().isRetryAvailable()).isTrue();
+    }
+
+    @Test
+    void retryFailsClearlyWhenSenderIsUnavailable() {
+        MqAdminController controller = controller(null, new MqProperties(), null);
+
+        Result<String> result = controller.retryOne(1L, "admin", null, null);
+
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getMessage()).isEqualTo("未接入可用 MQ 发送器，无法重发消息");
+    }
+
     private static MqAdminController controller(DeadLetterHandler handler,
                                                 MqProperties properties,
                                                 MqMessageSender sender) {
+        return controller(handler, properties, sender, null);
+    }
+
+    private static MqAdminController controller(DeadLetterHandler handler,
+                                                MqProperties properties,
+                                                MqMessageSender sender,
+                                                MqRetryScheduler scheduler) {
         MqAdminService service = new MqAdminService(
                 provider(handler),
-                provider(null),
+                provider(scheduler),
                 provider(properties),
                 provider(sender),
                 provider(null),

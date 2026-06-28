@@ -37,6 +37,7 @@ export interface MqRuntimeInfo {
   enabled: boolean
   provider: string
   deadLetterEnabled: boolean
+  retryAvailable: boolean
   deadLetterQueue?: string
   maxRetry: number
   retryFixedDelay: number

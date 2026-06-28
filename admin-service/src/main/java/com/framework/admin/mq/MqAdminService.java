@@ -119,7 +119,7 @@ public class MqAdminService {
     public ActionResult<String> retryOne(Long id, String operator, String remark, HttpServletRequest servletRequest) {
         MqRetryScheduler scheduler = retrySchedulerProvider.getIfAvailable();
         if (scheduler == null) {
-            return ActionResult.fail("MQ重试调度未启用");
+            return ActionResult.fail(retryUnavailableMessage());
         }
         boolean ok = scheduler.manualRetry(id, operator, remark);
         auditService.success(servletRequest, "MQ管理", "手动重发MQ消息", "UPDATE",
@@ -134,7 +134,7 @@ public class MqAdminService {
         }
         MqRetryScheduler scheduler = retrySchedulerProvider.getIfAvailable();
         if (scheduler == null) {
-            return ActionResult.fail("MQ重试调度未启用");
+            return ActionResult.fail(retryUnavailableMessage());
         }
         MqAdminDTO.ManualRetryResult result = scheduler.batchManualRetry(
                 request.getIds(),
@@ -235,6 +235,7 @@ public class MqAdminService {
             return info.setEnabled(false)
                     .setProvider("NONE")
                     .setDeadLetterEnabled(false)
+                    .setRetryAvailable(false)
                     .setMaxRetry(0)
                     .setRetryFixedDelay(0)
                     .setProviders(providerStatuses(null));
@@ -242,6 +243,7 @@ public class MqAdminService {
         return info.setEnabled(properties.isEnabled())
                 .setProvider(properties.getProvider().name())
                 .setDeadLetterEnabled(properties.getDeadLetter().isEnabled())
+                .setRetryAvailable(retrySchedulerProvider.getIfAvailable() != null)
                 .setDeadLetterQueue(properties.getDeadLetter().getQueue())
                 .setMaxRetry(properties.getMaxRetry())
                 .setRetryFixedDelay(properties.getRetry().getFixedDelay())
@@ -334,6 +336,10 @@ public class MqAdminService {
             return remark.trim();
         }
         return defaultRemark;
+    }
+
+    private String retryUnavailableMessage() {
+        return "未接入可用 MQ 发送器，无法重发消息";
     }
 
     public record ActionResult<T>(boolean success, String message, T data) {

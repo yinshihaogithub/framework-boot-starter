@@ -405,6 +405,10 @@
                 <strong>{{ mqStats?.runtime?.deadLetterQueue || '-' }}</strong>
               </div>
               <div class="runtime-item">
+                <span>重发能力</span>
+                <strong>{{ mqStats?.runtime?.retryAvailable ? '可用' : '未接入' }}</strong>
+              </div>
+              <div class="runtime-item">
                 <span>最大重试</span>
                 <strong>{{ mqStats?.runtime?.maxRetry ?? 0 }}</strong>
               </div>
@@ -441,7 +445,7 @@
                   </el-select>
                   <el-input v-model="mqQuery.traceId" clearable placeholder="Trace ID" class="filter" />
                   <el-button :icon="Search" circle type="primary" @click="loadMq" />
-                  <el-button :icon="RefreshRight" circle :disabled="selectedMqMessageIds.length === 0" @click="batchRetryMq" />
+                  <el-button :icon="RefreshRight" circle :disabled="!mqStats?.runtime?.retryAvailable || selectedMqMessageIds.length === 0" @click="batchRetryMq" />
                   <el-button :icon="Delete" circle @click="cleanMq" />
                 </div>
               </div>
@@ -459,7 +463,7 @@
               <el-table-column prop="errorMessage" label="错误" min-width="220" show-overflow-tooltip />
               <el-table-column label="操作" width="220" fixed="right">
                 <template #default="{ row }">
-                  <el-button :icon="RefreshRight" circle size="small" @click="retryMq(row.id)" />
+                  <el-button :icon="RefreshRight" circle size="small" :disabled="!mqStats?.runtime?.retryAvailable" @click="retryMq(row.id)" />
                   <el-button :icon="Check" circle size="small" @click="manualSuccessMq(row)" />
                   <el-button :icon="Close" circle size="small" @click="manualFailureMq(row)" />
                   <el-button :icon="Delete" circle size="small" @click="deleteMq(row)" />
