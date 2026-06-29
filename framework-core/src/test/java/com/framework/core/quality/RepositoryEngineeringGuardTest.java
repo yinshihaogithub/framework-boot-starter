@@ -535,9 +535,19 @@ class RepositoryEngineeringGuardTest {
     }
 
     @Test
-    void engineeringDocsExist() {
+    void engineeringDocsExistAndUseManualLocalTransactionLanguage() throws Exception {
         assertThat(root.resolve("docs/ENGINEERING_STANDARD.md")).exists();
         assertThat(root.resolve("docs/MODULE_MATRIX.md")).exists();
+
+        Path consistencyDesign = root.resolve("docs/ORDER_FINAL_CONSISTENCY_DESIGN.md");
+        assertThat(consistencyDesign)
+                .as("distributed workflow design must document local-transaction consistency")
+                .exists();
+        assertThat(read(consistencyDesign))
+                .as("engineering docs must match the scaffold's manual local transaction stance")
+                .contains("TransactionTemplate")
+                .doesNotContain("@Transactional")
+                .doesNotContain("org.springframework.transaction.annotation.Transactional");
     }
 
     private List<String> modules() throws IOException {

@@ -586,9 +586,280 @@ public void onOrderClosed(OrderClosed event) {
 | 支付超时关单消息失败 | 订单 CLOSED，库存 RESERVED | OrderClosed Outbox 重试释放库存 | 否 |
 | 消息长期失败 | 状态卡住 | 进入 DEAD，后台人工补偿 | 否 |
 
-## 14. 对账和补偿
+## 14. 异常流程图
 
-### 14.1 自动对账
+异常流程的核心原则：
+
+- 业务确定失败，立即结束当前链路，并把明确原因返回用户。
+- 技术不确定失败，不伪装成业务失败，进入处理中、重试或补偿。
+- 已经发生的本地事务不能跨服务回滚，只能通过反向事件或补偿动作修正。
+- 所有异常路径必须有最终归宿：成功、业务关闭、自动重试、DEAD、人工补偿。
+
+### 14.1 商品服务异常
+
+商品校验在订单创建前执行。商品服务明确返回业务失败时，可以快速失败；商品服务超时或不可用时，订单服务通常不创建订单，直接提示稍后重试。
+
+```mermaid
+flowchart TD
+  A["用户提交订单"] --> B["订单服务调用商品校验"]
+  B --> C{"商品服务结果"}
+  C -->|SKU_OFF_SALE| D["快速失败: 商品已下架"]
+  C -->|SKU_NOT_FOUND| E["快速失败: 商品不存在"]
+  C -->|PRICE_CHANGED| F["快速失败: 价格变化, 提示刷新"]
+  C -->|TIMEOUT/5xx/熔断| G["快速保护: 系统繁忙, 不创建订单"]
+  C -->|OK| H["继续创建 RESERVING 订单"]
+  D --> I["返回用户明确失败原因"]
+  E --> I
+  F --> I
+  G --> J["返回用户稍后重试"]
+```
+
+处理要求：
+
+- 商品校验接口超时建议 `300ms` 左右。
+- 商品服务技术异常时，不创建订单可以减少后续补偿复杂度。
+- 如果业务要求必须保留用户下单痕迹，可以创建 `CLOSED` 订单，但不要进入库存预占。
+
+### 14.2 库存服务业务失败
+
+库存服务已经明确判断为库存不足、库存侧 SKU 下架、限购不满足时，订单可以快速关闭，并把原因返回用户。
+
+```mermaid
+sequenceDiagram
+  participant User as 用户
+  participant Order as 订单服务
+  participant Inventory as 库存服务
+
+  User->>Order: 提交订单
+  Order->>Order: 创建 RESERVING 订单
+  Order->>Inventory: tryReserve(orderId)
+  Inventory->>Inventory: 条件更新库存
+  Inventory-->>Order: STOCK_NOT_ENOUGH/SKU_OFF_SALE
+  Order->>Order: RESERVING -> CLOSED
+  Order-->>User: 返回库存不足/商品已下架
+```
+
+处理要求：
+
+- 只有库存服务明确返回业务失败，订单服务才能关闭订单并提示用户。
+- 库存不足不需要重试，因为重试不会改变本次请求的业务事实。
+- 订单关闭时记录 `close_reason`，用于客服和排障。
+
+### 14.3 库存服务技术异常
+
+库存服务超时、数据库死锁、连接池满、线程池满、熔断打开，都属于不确定结果。订单服务不能告诉用户库存不足。
+
+```mermaid
+flowchart TD
+  A["订单 RESERVING"] --> B["调用库存 tryReserve"]
+  B --> C{"调用结果"}
+  C -->|TIMEOUT| D["返回用户: 订单处理中"]
+  C -->|连接池满/线程池满/熔断| D
+  C -->|数据库死锁/锁等待超时| D
+  D --> E["OrderCreated Outbox 保留"]
+  E --> F["后台投递/定时任务继续 tryReserve"]
+  F --> G{"补偿结果"}
+  G -->|预占成功| H["订单 RESERVING -> WAIT_PAY"]
+  G -->|明确库存不足| I["订单 RESERVING -> CLOSED"]
+  G -->|多次不确定| J["进入 DEAD/人工补偿"]
+```
+
+处理要求：
+
+- 前端拿到 `ORDER_PROCESSING` 后轮询订单状态，或通过 WebSocket/SSE 接收状态变化。
+- 后台重试要带同一个 `orderId`，库存接口必须幂等。
+- 长时间 `RESERVING` 要告警，不能让用户订单无限处理中。
+
+### 14.4 库存已预占但订单更新失败
+
+这是典型中间态：库存服务已经预占成功，但订单服务在更新 `WAIT_PAY` 时失败或宕机。
+
+```mermaid
+sequenceDiagram
+  participant Order as 订单服务
+  participant Inventory as 库存服务
+  participant MQ as MQ/Outbox
+  participant Job as 对账任务
+
+  Order->>Inventory: tryReserve(orderId)
+  Inventory->>Inventory: 库存 RESERVED
+  Inventory->>MQ: InventoryReserved Outbox
+  Inventory-->>Order: RESERVED
+  Note over Order: 更新 WAIT_PAY 失败或服务宕机
+  MQ->>Order: 投递 InventoryReserved
+  Order->>Order: RESERVING -> WAIT_PAY
+  Job->>Order: 扫描 RESERVING 超时订单
+  Job->>Inventory: 查询 reservation
+  Inventory-->>Job: RESERVED
+  Job->>Order: 修正为 WAIT_PAY
+```
+
+处理要求：
+
+- 库存服务预占成功后必须写 `InventoryReserved` Outbox。
+- 订单服务消费 `InventoryReserved` 时，只允许 `RESERVING -> WAIT_PAY`。
+- 对账任务作为消息丢失或长延迟的第二道兜底。
+
+### 14.5 支付成功但订单消费失败
+
+支付成功不能因为订单服务短暂故障而丢失。支付服务本地事务必须写 `PaymentPaid` Outbox。
+
+```mermaid
+sequenceDiagram
+  participant Channel as 支付渠道
+  participant Pay as 支付服务
+  participant MQ as MQ/Outbox
+  participant Order as 订单服务
+  participant Admin as 补偿后台
+
+  Channel->>Pay: 支付回调成功
+  Pay->>Pay: payment PAID + PaymentPaid Outbox
+  Pay->>MQ: 投递 PaymentPaid
+  MQ-->>Order: 订单服务消费失败
+  MQ->>MQ: 重试/进入失败表
+  MQ->>Order: 重投 PaymentPaid
+  Order->>Order: WAIT_PAY -> PAID
+  MQ-->>Admin: 多次失败进入 DEAD
+  Admin->>MQ: 人工重试或人工确认
+```
+
+处理要求：
+
+- 支付回调按支付单号幂等，重复回调不能重复写支付成功事件。
+- 订单服务消费 `PaymentPaid` 按 `message_id + consumer_group` 幂等。
+- 如果订单已 `CLOSED` 但支付成功，需要进入退款或人工异常单流程，不能静默忽略。
+
+### 14.6 支付成功但库存确认失败
+
+支付成功后，库存从 `RESERVED` 变成 `CONFIRMED`。如果库存服务消费失败，订单可以先保持 `PAID`，库存确认通过消息重试补齐。
+
+```mermaid
+flowchart TD
+  A["PaymentPaid"] --> B["库存服务消费"]
+  B --> C{"reservation 状态"}
+  C -->|RESERVED| D["RESERVED -> CONFIRMED"]
+  C -->|CONFIRMED| E["幂等忽略"]
+  C -->|RELEASED/不存在| F["异常: 已释放或缺失预占"]
+  D --> G["locked_stock 减少"]
+  G --> H["InventoryConfirmed Outbox"]
+  F --> I["记录失败, 进入重试/补偿"]
+  I --> J["人工核对订单、支付、库存"]
+```
+
+处理要求：
+
+- `PaymentPaid` 消费不能重复减少 `locked_stock`。
+- 找不到 reservation 时，要按异常处理，不要自动扣减可售库存。
+- 库存确认失败超过阈值必须告警，因为这会影响库存准确性。
+
+### 14.7 关单释放库存失败
+
+订单关闭后，库存释放通过 `OrderClosed` 事件完成。如果释放失败，订单可以保持 `CLOSED`，库存服务必须继续重试释放。
+
+```mermaid
+sequenceDiagram
+  participant Order as 订单服务
+  participant MQ as MQ/Outbox
+  participant Inventory as 库存服务
+  participant Job as 库存对账
+
+  Order->>Order: WAIT_PAY -> CLOSED
+  Order->>MQ: OrderClosed Outbox
+  MQ-->>Inventory: 库存服务消费失败
+  MQ->>MQ: 重试 OrderClosed
+  MQ->>Inventory: 重投 OrderClosed
+  Inventory->>Inventory: RESERVED -> RELEASED
+  Inventory->>Inventory: available_stock 加回, locked_stock 减少
+  Job->>Inventory: 扫描 RESERVED 滞留
+  Job->>Order: 查询订单状态
+  Order-->>Job: CLOSED
+  Job->>Inventory: 释放库存
+```
+
+处理要求：
+
+- 释放库存也必须幂等，`RELEASED` 状态重复释放不能再次加库存。
+- `RESERVED` 超过支付超时时间必须扫描，避免库存长期锁住。
+- 订单关闭和库存释放之间允许短暂不一致，但必须可观测。
+
+### 14.8 Outbox 投递失败
+
+Outbox 投递器只负责把本地消息可靠投递到 MQ。投递失败不能影响已经提交的业务事务。
+
+```mermaid
+flowchart TD
+  A["Outbox PENDING"] --> B["投递器抢锁"]
+  B --> C["状态 SENDING"]
+  C --> D{"发送 MQ"}
+  D -->|成功且 broker ack| E["状态 SENT"]
+  D -->|失败| F["retry_count + 1"]
+  F --> G{"是否超过最大重试"}
+  G -->|否| H["状态 FAILED, 设置 next_retry_time"]
+  G -->|是| I["状态 DEAD, 等待人工处理"]
+  H --> B
+```
+
+处理要求：
+
+- 抢锁更新必须带状态条件，避免多实例重复投递。
+- 发送成功但标记 `SENT` 前宕机，会导致重复投递，消费者必须幂等。
+- `DEAD > 0` 必须告警。
+
+### 14.9 MQ 重复、乱序和延迟
+
+MQ 重复投递是常态，不是异常事故。消费者必须用 Inbox 和状态机兜住。
+
+```mermaid
+flowchart TD
+  A["收到消息"] --> B["写 Inbox: message_id + consumer_group"]
+  B -->|唯一键冲突| C["重复消息, 直接 ACK/忽略"]
+  B -->|插入成功| D["读取当前业务状态"]
+  D --> E{"状态是否允许流转"}
+  E -->|允许| F["执行业务变更"]
+  E -->|不允许| G["乱序/重复, 幂等忽略"]
+  F --> H["Inbox SUCCESS"]
+  G --> H
+```
+
+处理要求：
+
+- Inbox 只能防消息重复，业务表唯一键和状态机也必须防重复。
+- 乱序消息不能强行推进状态，例如 `CLOSED` 订单不能被迟到的 `InventoryReserved` 改成 `WAIT_PAY`。
+- 消费失败时不要标记 Inbox 成功。
+
+### 14.10 消息进入 DEAD 后的人工流程
+
+消息多次重试失败后进入 `DEAD`，代表系统无法自动判断或自动处理，需要人工介入。
+
+```mermaid
+flowchart TD
+  A["消息 DEAD"] --> B["告警"]
+  B --> C["补偿后台按 traceId/orderId 查询链路"]
+  C --> D["核对订单状态"]
+  C --> E["核对库存 reservation"]
+  C --> F["核对支付状态"]
+  D --> G{"人工决策"}
+  E --> G
+  F --> G
+  G -->|可重试| H["人工重试消息"]
+  G -->|业务已完成| I["人工标记成功"]
+  G -->|需要终止| J["人工终止消息"]
+  G -->|需要反向补偿| K["释放库存/退款/关单"]
+  H --> L["记录操作日志"]
+  I --> L
+  J --> L
+  K --> L
+```
+
+处理要求：
+
+- 人工操作必须记录操作人、原因、前后状态和 traceId。
+- 人工标记成功只能用于业务已经通过其他方式完成的场景。
+- 人工终止必须要求备注，避免把真实未完成任务静默丢弃。
+
+## 15. 对账和补偿
+
+### 15.1 自动对账
 
 订单服务定时扫描：
 
@@ -615,7 +886,7 @@ public void onOrderClosed(OrderClosed event) {
 | 支付渠道已支付但本地未 PAID | 补写 PAID 和 PaymentPaid Outbox |
 | 本地 PAID 但订单未 PAID | 重投 PaymentPaid |
 
-### 14.2 人工补偿后台
+### 15.2 人工补偿后台
 
 后台必须支持：
 
@@ -643,9 +914,9 @@ public void onOrderClosed(OrderClosed event) {
 | trace_id | 链路 ID |
 | create_time | 操作时间 |
 
-## 15. 完整例子
+## 16. 完整例子
 
-### 15.1 库存充足
+### 16.1 库存充足
 
 ```text
 用户购买 SKU_001 两件。
@@ -672,7 +943,7 @@ public void onOrderClosed(OrderClosed event) {
 通知已发或可重试
 ```
 
-### 15.2 库存不足
+### 16.2 库存不足
 
 ```text
 用户购买 SKU_001 两件，但 available_stock = 1。
@@ -694,7 +965,7 @@ public void onOrderClosed(OrderClosed event) {
 用户第一时间知道库存不足
 ```
 
-### 15.3 商品下架
+### 16.3 商品下架
 
 ```text
 1. 订单服务短超时查询商品服务。
@@ -710,7 +981,7 @@ public void onOrderClosed(OrderClosed event) {
 用户第一时间知道商品下架
 ```
 
-### 15.4 库存服务超时
+### 16.4 库存服务超时
 
 ```text
 1. 商品服务返回可售。
@@ -732,7 +1003,7 @@ public void onOrderClosed(OrderClosed event) {
 系统继续自动收敛
 ```
 
-### 15.5 支付成功但订单服务短暂故障
+### 16.5 支付成功但订单服务短暂故障
 
 ```text
 1. 用户支付成功。
@@ -751,7 +1022,7 @@ public void onOrderClosed(OrderClosed event) {
 订单最终 PAID
 ```
 
-### 15.6 支付超时释放库存
+### 16.6 支付超时释放库存
 
 ```text
 1. 订单 WAIT_PAY 超过 15 分钟。
@@ -769,9 +1040,9 @@ public void onOrderClosed(OrderClosed event) {
 库存释放
 ```
 
-## 16. 接口契约
+## 17. 接口契约
 
-### 16.1 商品校验
+### 17.1 商品校验
 
 ```text
 POST /products/check-sale
@@ -811,7 +1082,7 @@ POST /products/check-sale
 }
 ```
 
-### 16.2 库存预占
+### 17.2 库存预占
 
 ```text
 POST /inventory/reservations
@@ -862,7 +1133,7 @@ POST /inventory/reservations
 }
 ```
 
-## 17. 监控告警
+## 18. 监控告警
 
 必须监控：
 
@@ -879,7 +1150,7 @@ POST /inventory/reservations
 | 库存预占接口 P95/P99 | 超过 SLA 告警 |
 | 商品/库存服务熔断次数 | 连续触发告警 |
 
-## 18. 落地清单
+## 19. 落地清单
 
 - 订单、库存、支付服务都接入 Outbox。
 - 所有消费者都接入 Inbox 幂等。
@@ -898,7 +1169,7 @@ POST /inventory/reservations
 - 补偿后台支持查链路、重试、终止、人工成功。
 - 所有消息和日志带 `traceId`。
 
-## 19. 和当前框架模块的关系
+## 20. 和当前框架模块的关系
 
 | 能力 | 建议承载模块 |
 |---|---|
@@ -910,7 +1181,7 @@ POST /inventory/reservations
 | 熔断、重试、短超时 | `framework-retry` |
 | 补偿后台 | `admin-service` |
 
-## 20. 最终原则
+## 21. 最终原则
 
 ```text
 快速失败：只失败确定的业务错误。
