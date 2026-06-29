@@ -58,14 +58,23 @@ public class DistributedLockAspect {
         long leaseTime = annotation.leaseTime();
         TimeUnit unit = annotation.unit();
 
-        RLock lock = redissonClient.getLock(lockKey);
+        RLock lock = getLock(lockKey, annotation);
         boolean locked = false;
 
         try {
-            // leaseTime = -1 时启用看门狗自动续期
-            locked = leaseTime == -1
-                    ? lock.tryLock(waitTime, unit)
-                    : lock.tryLock(waitTime, leaseTime, unit);
+            try {
+                // leaseTime = -1 时启用看门狗自动续期
+                locked = leaseTime == -1
+                        ? lock.tryLock(waitTime, unit)
+                        : lock.tryLock(waitTime, leaseTime, unit);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                log.error("[分布式锁] 获取锁被中断 key={}", lockKey, e);
+                return handleFallback(joinPoint, method, annotation);
+            } catch (Exception e) {
+                log.warn("[分布式锁] 获取锁异常 key={} error={}", lockKey, e.getMessage());
+                return handleFallback(joinPoint, method, annotation);
+            }
 
             if (!locked) {
                 log.warn("[分布式锁] 获取锁失败 key={}", lockKey);
@@ -74,16 +83,31 @@ public class DistributedLockAspect {
 
             log.debug("[分布式锁] 获取锁成功 key={}", lockKey);
             return joinPoint.proceed();
-
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            log.error("[分布式锁] 获取锁被中断 key={}", lockKey, e);
-            return handleFallback(joinPoint, method, annotation);
         } finally {
-            if (locked && lock.isHeldByCurrentThread()) {
+            if (locked) {
+                releaseLock(lock, lockKey);
+            }
+        }
+    }
+
+    private RLock getLock(String lockKey, DistributedLock annotation) {
+        try {
+            return redissonClient.getLock(lockKey);
+        } catch (Exception e) {
+            log.warn("[分布式锁] 创建锁对象异常 key={} error={}", lockKey, e.getMessage());
+            throw new com.framework.core.exception.BusinessException(
+                    com.framework.core.result.ResultCode.LOCK_FAIL, annotation.message());
+        }
+    }
+
+    private void releaseLock(RLock lock, String lockKey) {
+        try {
+            if (lock.isHeldByCurrentThread()) {
                 lock.unlock();
                 log.debug("[分布式锁] 释放锁 key={}", lockKey);
             }
+        } catch (Exception e) {
+            log.warn("[分布式锁] 释放锁异常 key={} error={}", lockKey, e.getMessage());
         }
     }
 

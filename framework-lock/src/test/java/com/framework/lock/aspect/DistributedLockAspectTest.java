@@ -79,6 +79,36 @@ class DistributedLockAspectTest {
     }
 
     @Test
+    void redissonAcquireFailuresFailClosedWithoutProceeding() {
+        LockedService service = proxy(new LockedService(), new ThrowingRedisson(true, false).client());
+
+        assertThatThrownBy(() -> service.process(7L, "web"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessage("busy")
+                .extracting("code")
+                .isEqualTo(ResultCode.LOCK_FAIL.getCode());
+        assertThat(service.invocations).isZero();
+    }
+
+    @Test
+    void unlockFailuresDoNotMaskBusinessResult() {
+        LockedService target = new LockedService();
+        LockedService service = proxy(target, new ThrowingRedisson(false, true).client());
+
+        assertThat(service.process(7L, "web")).isEqualTo("ok");
+        assertThat(target.invocations).isEqualTo(1);
+    }
+
+    @Test
+    void businessExceptionsAreNotConvertedToLockFailures() {
+        LockedService service = proxy(new LockedService(), new RecordingRedisson(true, true).client());
+
+        assertThatThrownBy(service::businessFailure)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("business failed");
+    }
+
+    @Test
     void rejectsInvalidTimingConfigurationBeforeUsingRedis() {
         RecordingRedisson redisson = new RecordingRedisson(true, true);
         LockedService service = proxy(new LockedService(), redisson.client());
@@ -157,6 +187,12 @@ class DistributedLockAspectTest {
             return "ok";
         }
 
+        @DistributedLock(key = "business:failure")
+        public String businessFailure() {
+            invocations++;
+            throw new IllegalStateException("business failed");
+        }
+
         public String fallback(String batchNo) {
             fallbackInvocations++;
             return "fallback:" + batchNo;
@@ -217,6 +253,56 @@ class DistributedLockAspectTest {
                         }
                         return defaultValue(method.getReturnType());
                     });
+        }
+    }
+
+    private static final class ThrowingRedisson {
+        private final boolean throwOnTryLock;
+        private final boolean throwOnUnlock;
+
+        private ThrowingRedisson(boolean throwOnTryLock, boolean throwOnUnlock) {
+            this.throwOnTryLock = throwOnTryLock;
+            this.throwOnUnlock = throwOnUnlock;
+        }
+
+        private RedissonClient client() {
+            return (RedissonClient) Proxy.newProxyInstance(
+                    RedissonClient.class.getClassLoader(),
+                    new Class<?>[]{RedissonClient.class},
+                    (proxy, method, args) -> {
+                        if ("getLock".equals(method.getName())) {
+                            return lock();
+                        }
+                        return defaultValue(method.getReturnType());
+                    });
+        }
+
+        private RLock lock() {
+            return (RLock) Proxy.newProxyInstance(
+                    RLock.class.getClassLoader(),
+                    new Class<?>[]{RLock.class},
+                    (proxy, method, args) -> {
+                        if ("tryLock".equals(method.getName())) {
+                            if (throwOnTryLock) {
+                                throw unavailable();
+                            }
+                            return true;
+                        }
+                        if ("isHeldByCurrentThread".equals(method.getName())) {
+                            return true;
+                        }
+                        if ("unlock".equals(method.getName())) {
+                            if (throwOnUnlock) {
+                                throw unavailable();
+                            }
+                            return null;
+                        }
+                        return defaultValue(method.getReturnType());
+                    });
+        }
+
+        private static IllegalStateException unavailable() {
+            return new IllegalStateException("redisson unavailable");
         }
     }
 

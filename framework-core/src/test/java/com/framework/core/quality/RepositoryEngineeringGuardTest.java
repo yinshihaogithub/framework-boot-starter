@@ -430,6 +430,27 @@ class RepositoryEngineeringGuardTest {
     }
 
     @Test
+    void distributedLockRedissonFailuresFailClosedAndUnlockFailuresDoNotMaskResults() throws Exception {
+        String aspect = read(root.resolve(
+                "framework-lock/src/main/java/com/framework/lock/aspect/DistributedLockAspect.java"));
+        String test = read(root.resolve(
+                "framework-lock/src/test/java/com/framework/lock/aspect/DistributedLockAspectTest.java"));
+
+        assertThat(aspect)
+                .as("distributed lock is a write guard: Redisson acquire failures must fail closed")
+                .contains("获取锁异常")
+                .contains("创建锁对象异常")
+                .contains("释放锁异常")
+                .contains("handleFallback(joinPoint, method, annotation)")
+                .contains("ResultCode.LOCK_FAIL");
+        assertThat(test)
+                .contains("redissonAcquireFailuresFailClosedWithoutProceeding")
+                .contains("unlockFailuresDoNotMaskBusinessResult")
+                .contains("businessExceptionsAreNotConvertedToLockFailures")
+                .contains("redisson unavailable");
+    }
+
+    @Test
     void sessionManagerRedisFailuresFailClosedOrDegradeByOperationType() throws Exception {
         String sessionManager = read(root.resolve(
                 "framework-auth/src/main/java/com/framework/auth/service/SessionManager.java"));
