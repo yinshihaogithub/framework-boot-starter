@@ -30,6 +30,7 @@ import java.util.concurrent.TimeUnit;
 public class SessionManager {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private static final int SESSION_FIELD_MAX_LENGTH = 128;
 
     private final StringRedisTemplate redis;
     private final JwtUtils jwtUtils;
@@ -46,33 +47,42 @@ public class SessionManager {
      */
     public LoginUser createSession(Long userId, String username, String tenantId, String deviceId,
                                    String[] roles, String[] permissions) {
-        // 多端互踢：踢掉同一用户的旧会话
-        kickOutOldSession(userId, deviceId);
+        if (userId == null) {
+            throw new AuthException(ResultCode.PARAM_ERROR, "userId不能为空");
+        }
+        String safeUsername = requireSessionText(username, "username");
+        String safeTenantId = requireSessionText(tenantId, "tenantId");
+        String safeDeviceId = requireSessionText(deviceId, "deviceId");
+        String[] safeRoles = normalizeArray(roles);
+        String[] safePermissions = normalizeArray(permissions);
 
-        String accessToken = jwtUtils.generateAccessToken(userId, username, tenantId, deviceId);
-        String refreshToken = jwtUtils.generateRefreshToken(userId, deviceId);
+        // 多端互踢：踢掉同一用户的旧会话
+        kickOutOldSession(userId, safeDeviceId);
+
+        String accessToken = jwtUtils.generateAccessToken(userId, safeUsername, safeTenantId, safeDeviceId);
+        String refreshToken = jwtUtils.generateRefreshToken(userId, safeDeviceId);
 
         // 会话存 Redis
-        String sessionKey = buildSessionKey(userId, deviceId);
+        String sessionKey = buildSessionKey(userId, safeDeviceId);
         Map<String, String> sessionData = new HashMap<>();
         sessionData.put("userId", String.valueOf(userId));
-        sessionData.put("username", username);
-        sessionData.put("tenantId", tenantId);
-        sessionData.put("deviceId", deviceId);
+        sessionData.put("username", safeUsername);
+        sessionData.put("tenantId", safeTenantId);
+        sessionData.put("deviceId", safeDeviceId);
         sessionData.put("refreshToken", refreshToken);
-        sessionData.put("roles", writeArray(roles));
-        sessionData.put("permissions", writeArray(permissions));
+        sessionData.put("roles", writeArray(safeRoles));
+        sessionData.put("permissions", writeArray(safePermissions));
         sessionData.put("loginTime", String.valueOf(System.currentTimeMillis()));
         persistSession(sessionKey, sessionData);
 
         LoginUser user = new LoginUser()
                 .setUserId(userId)
-                .setUsername(username)
-                .setTenantId(tenantId)
-                .setDeviceId(deviceId)
+                .setUsername(safeUsername)
+                .setTenantId(safeTenantId)
+                .setDeviceId(safeDeviceId)
                 .setAccessToken(accessToken)
-                .setRoles(roles)
-                .setPermissions(permissions);
+                .setRoles(safeRoles)
+                .setPermissions(safePermissions);
         return user;
     }
 
@@ -339,6 +349,30 @@ public class SessionManager {
 
     private String buildSessionKey(Long userId, String deviceId) {
         return FrameworkConstants.SESSION_PREFIX + userId + ":" + deviceId;
+    }
+
+    private String requireSessionText(String value, String fieldName) {
+        if (!hasText(value)) {
+            throw new AuthException(ResultCode.PARAM_ERROR, fieldName + "不能为空");
+        }
+        String normalized = value.trim();
+        if (normalized.length() > SESSION_FIELD_MAX_LENGTH) {
+            throw new AuthException(ResultCode.PARAM_ERROR, fieldName + "长度不能超过128个字符");
+        }
+        return normalized;
+    }
+
+    private String[] normalizeArray(String[] values) {
+        if (values == null || values.length == 0) {
+            return new String[0];
+        }
+        List<String> normalized = new ArrayList<>(values.length);
+        for (String value : values) {
+            if (hasText(value)) {
+                normalized.add(value.trim());
+            }
+        }
+        return normalized.toArray(String[]::new);
     }
 
     private OnlineSession readOnlineSession(String sessionKey) {

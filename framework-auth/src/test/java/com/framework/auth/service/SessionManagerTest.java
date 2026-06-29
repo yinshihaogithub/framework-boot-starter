@@ -4,6 +4,7 @@ import com.framework.auth.context.LoginUser;
 import com.framework.auth.jwt.JwtUtils;
 import com.framework.core.constant.FrameworkConstants;
 import com.framework.core.exception.AuthException;
+import com.framework.core.result.ResultCode;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.redis.core.Cursor;
 import org.springframework.data.redis.core.HashOperations;
@@ -32,6 +33,43 @@ class SessionManagerTest {
     private final InMemoryRedisTemplate redis = new InMemoryRedisTemplate();
     private final JwtUtils jwtUtils = new JwtUtils(SECRET, 3600, 86400);
     private final SessionManager sessionManager = new SessionManager(redis, jwtUtils, 3600);
+
+    @Test
+    void createSessionRejectsInvalidIdentityFieldsBeforeTouchingRedis() {
+        assertSessionParamError(() -> sessionManager.createSession(null, "alice", "tenant-a", "web",
+                new String[]{"ADMIN"}, new String[]{"user:view"}), "userId不能为空");
+        assertSessionParamError(() -> sessionManager.createSession(1L, " ", "tenant-a", "web",
+                new String[]{"ADMIN"}, new String[]{"user:view"}), "username不能为空");
+        assertSessionParamError(() -> sessionManager.createSession(1L, "alice", "", "web",
+                new String[]{"ADMIN"}, new String[]{"user:view"}), "tenantId不能为空");
+        assertSessionParamError(() -> sessionManager.createSession(1L, "alice", "tenant-a", " ",
+                new String[]{"ADMIN"}, new String[]{"user:view"}), "deviceId不能为空");
+        assertSessionParamError(() -> sessionManager.createSession(1L, "alice", "tenant-a", "d".repeat(129),
+                new String[]{"ADMIN"}, new String[]{"user:view"}), "deviceId长度不能超过128个字符");
+
+        assertThat(redis.hasKey(FrameworkConstants.SESSION_PREFIX + "1:web")).isFalse();
+    }
+
+    @Test
+    void createSessionNormalizesIdentityAndAuthorities() {
+        LoginUser user = sessionManager.createSession(1L, " alice ", " tenant-a ", " web ",
+                new String[]{" ADMIN ", null, "", "AUDITOR"},
+                new String[]{" user:view ", " ", null, "user:edit"});
+
+        assertThat(user.getUsername()).isEqualTo("alice");
+        assertThat(user.getTenantId()).isEqualTo("tenant-a");
+        assertThat(user.getDeviceId()).isEqualTo("web");
+        assertThat(user.getRoles()).containsExactly("ADMIN", "AUDITOR");
+        assertThat(user.getPermissions()).containsExactly("user:view", "user:edit");
+        assertThat(redis.hasKey(FrameworkConstants.SESSION_PREFIX + "1:web")).isTrue();
+
+        LoginUser restored = sessionManager.getLoginUser(user.getAccessToken());
+        assertThat(restored.getUsername()).isEqualTo("alice");
+        assertThat(restored.getTenantId()).isEqualTo("tenant-a");
+        assertThat(restored.getDeviceId()).isEqualTo("web");
+        assertThat(restored.getRoles()).containsExactly("ADMIN", "AUDITOR");
+        assertThat(restored.getPermissions()).containsExactly("user:view", "user:edit");
+    }
 
     @Test
     void validateAccessTokenRejectsRefreshToken() {
@@ -165,6 +203,14 @@ class SessionManagerTest {
 
         assertThat(manager.validateAccessToken(token)).isFalse();
         assertThat(manager.getLoginUser(token)).isNull();
+    }
+
+    private static void assertSessionParamError(Runnable action, String message) {
+        assertThatThrownBy(action::run)
+                .isInstanceOfSatisfying(AuthException.class, exception -> {
+                    assertThat(exception.getCode()).isEqualTo(ResultCode.PARAM_ERROR.getCode());
+                    assertThat(exception.getMessage()).isEqualTo(message);
+                });
     }
 
     private static final class InMemoryRedisTemplate extends StringRedisTemplate {
