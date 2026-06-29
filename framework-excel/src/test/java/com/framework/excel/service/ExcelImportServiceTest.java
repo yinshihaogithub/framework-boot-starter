@@ -85,6 +85,50 @@ class ExcelImportServiceTest {
         assertThat(result.successCount()).isEqualTo(1);
     }
 
+    @Test
+    void returnsErrorResultWhenRowClassHasNoExcelPropertyHeaders() {
+        ExcelImportService importService = new ExcelImportService(new ExcelProperties());
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        EasyExcel.write(outputStream, ImportRow.class)
+                .sheet("Sheet1")
+                .doWrite(List.of(importRow("alice")));
+
+        ExcelImportResult<NoHeaderRow> result = importService.importExcel(
+                new ByteArrayInputStream(outputStream.toByteArray()),
+                NoHeaderRow.class
+        );
+
+        assertThat(result.hasErrors()).isTrue();
+        assertThat(result.successCount()).isZero();
+        assertThat(result.getErrors().get(0).getMessage())
+                .contains("rowClass must declare at least one @ExcelProperty header");
+    }
+
+    @Test
+    void returnsErrorResultWhenRowClassHasBlankExcelPropertyHeader() {
+        ExcelImportService importService = new ExcelImportService(new ExcelProperties());
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        EasyExcel.write(outputStream, ImportRow.class)
+                .sheet("Sheet1")
+                .doWrite(List.of(importRow("alice")));
+
+        ExcelImportResult<BlankHeaderRow> result = importService.importExcel(
+                new ByteArrayInputStream(outputStream.toByteArray()),
+                BlankHeaderRow.class
+        );
+
+        assertThat(result.hasErrors()).isTrue();
+        assertThat(result.successCount()).isZero();
+        assertThat(result.getErrors().get(0).getMessage())
+                .contains("@ExcelProperty header must not be blank");
+    }
+
+    private static ImportRow importRow(String name) {
+        ImportRow row = new ImportRow();
+        row.setName(name);
+        return row;
+    }
+
     public static class ImportRow {
         @ExcelProperty("Name")
         private String name;
@@ -120,6 +164,37 @@ class ExcelImportServiceTest {
 
         public String getName() {
             return name;
+        }
+    }
+
+    public static class NoHeaderRow {
+        private String name;
+
+        public NoHeaderRow() {
+        }
+
+        public String getName() {
+            return name;
+        }
+
+        public void setName(String name) {
+            this.name = name;
+        }
+    }
+
+    public static class BlankHeaderRow {
+        @ExcelProperty(" ")
+        private String name;
+
+        public BlankHeaderRow() {
+        }
+
+        public String getName() {
+            return name;
+        }
+
+        public void setName(String name) {
+            this.name = name;
         }
     }
 }

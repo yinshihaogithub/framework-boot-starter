@@ -114,15 +114,21 @@ public class ExcelImportService {
             if (property == null || property.value().length == 0) {
                 continue;
             }
-            headers.add(normalizeHeader(property.value()[property.value().length - 1]));
+            String header = normalizeHeader(property.value()[property.value().length - 1]);
+            if (header.isEmpty()) {
+                throw new IllegalArgumentException("@ExcelProperty header must not be blank: "
+                        + rowClass.getName() + "." + field.getName());
+            }
+            headers.add(header);
+        }
+        if (headers.isEmpty()) {
+            throw new IllegalArgumentException("rowClass must declare at least one @ExcelProperty header: "
+                    + rowClass.getName());
         }
         return headers;
     }
 
     private boolean headersMatch(List<String> expectedHeaders, Map<Integer, String> actualHeaders) {
-        if (expectedHeaders.isEmpty()) {
-            return true;
-        }
         if (actualHeaders.size() < expectedHeaders.size()) {
             return false;
         }
