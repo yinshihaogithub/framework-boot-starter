@@ -123,6 +123,56 @@ class AdminSystemServiceTest {
     }
 
     @Test
+    void writeOperationsSucceedWhenAuditFails() {
+        AdminSystemService serviceWithAuditFailure = new AdminSystemService(repository, new ThrowingAuditService());
+        UserCreateRequest userCreate = new UserCreateRequest();
+        userCreate.setUsername("alice");
+        userCreate.setPassword("Pass@123");
+        repository.userById = new AdminUser()
+                .setId(9L)
+                .setUsername("alice");
+        AdminSystemService serviceWithLoginSecurity = new AdminSystemService(
+                repository, new ThrowingAuditService(), null, null, provider(new FakeLoginSecurityService()));
+
+        List<Result<?>> results = List.of(
+                serviceWithAuditFailure.createTenant(tenantRequest(), null),
+                serviceWithAuditFailure.updateTenant(9L, tenantRequest(), null),
+                serviceWithAuditFailure.deleteTenant(9L, null),
+                serviceWithAuditFailure.createDept(deptRequest(), null),
+                serviceWithAuditFailure.updateDept(9L, deptRequest(), null),
+                serviceWithAuditFailure.deleteDept(9L, null),
+                serviceWithAuditFailure.createUser(userCreate, null),
+                serviceWithAuditFailure.updateUser(9L, userUpdateRequest(), null),
+                serviceWithAuditFailure.updateUserStatus(9L, userStatusRequest(), null),
+                serviceWithAuditFailure.resetPassword(9L, resetPasswordRequest(), null),
+                serviceWithAuditFailure.deleteUser(9L, null),
+                serviceWithLoginSecurity.unlockUser(9L, null),
+                serviceWithAuditFailure.createRole(roleRequest(), null),
+                serviceWithAuditFailure.updateRole(9L, roleRequest(), null),
+                serviceWithAuditFailure.deleteRole(9L, null),
+                serviceWithAuditFailure.updateRoleMenus(9L, roleMenuRequest(), null),
+                serviceWithAuditFailure.createMenu(menuRequest(), null),
+                serviceWithAuditFailure.updateMenu(9L, menuRequest(), null),
+                serviceWithAuditFailure.deleteMenu(9L, null),
+                serviceWithAuditFailure.createDictType(dictTypeRequest(), null),
+                serviceWithAuditFailure.updateDictType(9L, dictTypeRequest(), null),
+                serviceWithAuditFailure.deleteDictType(9L, null),
+                serviceWithAuditFailure.createDictItem(dictItemRequest(), null),
+                serviceWithAuditFailure.updateDictItem(9L, dictItemRequest(), null),
+                serviceWithAuditFailure.deleteDictItem(9L, null),
+                serviceWithAuditFailure.createConfig(configRequest(), null),
+                serviceWithAuditFailure.updateConfig(9L, configRequest(), null),
+                serviceWithAuditFailure.deleteConfig(9L, null)
+        );
+
+        assertThat(results).allMatch(Result::isSuccess);
+        assertThat(repository.createdUser).isSameAs(userCreate);
+        assertThat(repository.deletedTenantId).isEqualTo(9L);
+        assertThat(repository.updatedRoleId).isEqualTo(9L);
+        assertThat(repository.updatedMenuId).isEqualTo(9L);
+    }
+
+    @Test
     void createUserRejectsWeakPassword() {
         UserCreateRequest request = new UserCreateRequest();
         request.setUsername("alice");
@@ -888,6 +938,17 @@ class AdminSystemServiceTest {
         @Override
         public void success(HttpServletRequest request, String module, String action, String operationType, Object params) {
             actions.add(action);
+        }
+    }
+
+    private static class ThrowingAuditService extends AdminAuditService {
+        private ThrowingAuditService() {
+            super(null, null);
+        }
+
+        @Override
+        public void success(HttpServletRequest request, String module, String action, String operationType, Object params) {
+            throw new IllegalStateException("audit unavailable");
         }
     }
 

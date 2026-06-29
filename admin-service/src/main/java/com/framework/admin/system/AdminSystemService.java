@@ -88,8 +88,8 @@ public class AdminSystemService {
         }
         try {
             Long tenantId = repository.createTenant(request);
-            auditService.success(servletRequest, "系统管理", "新增租户", "INSERT",
-                    auditService.params("tenantId", tenantId, "tenantCode", request.getTenantCode()));
+            auditSuccess(servletRequest, "新增租户", "INSERT",
+                    "tenantId", tenantId, "tenantCode", request.getTenantCode());
             return Result.success(tenantId);
         } catch (RuntimeException e) {
             return serviceError("新增租户", "租户保存失败", e);
@@ -103,8 +103,8 @@ public class AdminSystemService {
         }
         try {
             repository.updateTenant(id, request);
-            auditService.success(servletRequest, "系统管理", "更新租户", "UPDATE",
-                    auditService.params("tenantId", id, "tenantCode", request.getTenantCode(), "status", request.getStatus()));
+            auditSuccess(servletRequest, "更新租户", "UPDATE",
+                    "tenantId", id, "tenantCode", request.getTenantCode(), "status", request.getStatus());
             return Result.success("已更新");
         } catch (RuntimeException e) {
             return serviceError("更新租户", "租户更新失败", e);
@@ -120,8 +120,7 @@ public class AdminSystemService {
                 return Result.fail(ResultCode.PARAM_ERROR.getCode(), "租户下存在用户，不能删除");
             }
             repository.deleteTenant(id);
-            auditService.success(servletRequest, "系统管理", "删除租户", "DELETE",
-                    auditService.params("tenantId", id));
+            auditSuccess(servletRequest, "删除租户", "DELETE", "tenantId", id);
             return Result.success("已删除");
         } catch (RuntimeException e) {
             return serviceError("删除租户", "租户删除失败", e);
@@ -144,8 +143,8 @@ public class AdminSystemService {
         }
         try {
             Long deptId = repository.createDept(request);
-            auditService.success(servletRequest, "系统管理", "新增部门", "INSERT",
-                    auditService.params("deptId", deptId, "tenantId", request.getTenantId(), "deptName", request.getDeptName()));
+            auditSuccess(servletRequest, "新增部门", "INSERT",
+                    "deptId", deptId, "tenantId", request.getTenantId(), "deptName", request.getDeptName());
             return Result.success(deptId);
         } catch (RuntimeException e) {
             return serviceError("新增部门", "部门保存失败", e);
@@ -162,9 +161,9 @@ public class AdminSystemService {
         }
         try {
             repository.updateDept(id, request);
-            auditService.success(servletRequest, "系统管理", "更新部门", "UPDATE",
-                    auditService.params("deptId", id, "tenantId", request.getTenantId(), "deptName", request.getDeptName(),
-                            "status", request.getStatus()));
+            auditSuccess(servletRequest, "更新部门", "UPDATE",
+                    "deptId", id, "tenantId", request.getTenantId(), "deptName", request.getDeptName(),
+                    "status", request.getStatus());
             return Result.success("已更新");
         } catch (RuntimeException e) {
             return serviceError("更新部门", "部门更新失败", e);
@@ -177,8 +176,7 @@ public class AdminSystemService {
         }
         try {
             repository.deleteDept(id);
-            auditService.success(servletRequest, "系统管理", "删除部门", "DELETE",
-                    auditService.params("deptId", id));
+            auditSuccess(servletRequest, "删除部门", "DELETE", "deptId", id);
             return Result.success("已删除");
         } catch (RuntimeException e) {
             return serviceError("删除部门", "部门删除失败", e);
@@ -212,8 +210,8 @@ public class AdminSystemService {
         try {
             Long userId = repository.createUser(request, PasswordUtils.hash(request.getPassword()));
             refreshPermissionCache(userId);
-            auditService.success(servletRequest, "系统管理", "新增用户", "INSERT",
-                    auditService.params("userId", userId, "username", request.getUsername(), "roleIds", request.getRoleIds()));
+            auditSuccess(servletRequest, "新增用户", "INSERT",
+                    "userId", userId, "username", request.getUsername(), "roleIds", request.getRoleIds());
             return Result.success(userId);
         } catch (RuntimeException e) {
             return serviceError("新增用户", "用户保存失败", e);
@@ -234,9 +232,9 @@ public class AdminSystemService {
             repository.updateUser(id, request);
             refreshPermissionCache(id);
             forceLogoutUser(id);
-            auditService.success(servletRequest, "系统管理", "更新用户", "UPDATE",
-                    auditService.params("userId", id, "nickname", request.getNickname(), "status", request.getStatus(),
-                            "roleIds", request.getRoleIds()));
+            auditSuccess(servletRequest, "更新用户", "UPDATE",
+                    "userId", id, "nickname", request.getNickname(), "status", request.getStatus(),
+                    "roleIds", request.getRoleIds());
             return Result.success("已更新");
         } catch (RuntimeException e) {
             return serviceError("更新用户", "用户更新失败", e);
@@ -255,8 +253,7 @@ public class AdminSystemService {
             repository.updateUserStatus(id, status);
             refreshPermissionCache(id);
             forceLogoutUser(id);
-            auditService.success(servletRequest, "系统管理", "更新用户状态", "UPDATE",
-                    auditService.params("userId", id, "status", status));
+            auditSuccess(servletRequest, "更新用户状态", "UPDATE", "userId", id, "status", status);
             return Result.success("已更新");
         } catch (RuntimeException e) {
             return serviceError("更新用户状态", "用户状态更新失败", e);
@@ -274,8 +271,7 @@ public class AdminSystemService {
         try {
             repository.resetPassword(id, PasswordUtils.hash(request.getPassword()));
             forceLogoutUser(id);
-            auditService.success(servletRequest, "系统管理", "重置用户密码", "UPDATE",
-                    auditService.params("userId", id));
+            auditSuccess(servletRequest, "重置用户密码", "UPDATE", "userId", id);
             return Result.success("已重置");
         } catch (RuntimeException e) {
             return serviceError("重置用户密码", "用户密码重置失败", e);
@@ -290,8 +286,7 @@ public class AdminSystemService {
             repository.deleteUser(id);
             refreshPermissionCache(id);
             forceLogoutUser(id);
-            auditService.success(servletRequest, "系统管理", "删除用户", "DELETE",
-                    auditService.params("userId", id));
+            auditSuccess(servletRequest, "删除用户", "DELETE", "userId", id);
             return Result.success("已删除");
         } catch (RuntimeException e) {
             return serviceError("删除用户", "用户删除失败", e);
@@ -317,8 +312,8 @@ public class AdminSystemService {
         }
         try {
             loginSecurityService.unlock(user.getUsername());
-            auditService.success(servletRequest, "系统管理", "解锁用户", "UPDATE",
-                    auditService.params("userId", id, "username", user.getUsername()));
+            auditSuccess(servletRequest, "解锁用户", "UPDATE",
+                    "userId", id, "username", user.getUsername());
             return Result.success("已解锁");
         } catch (RuntimeException e) {
             return serviceError("解锁用户", "用户解锁失败", e);
@@ -341,8 +336,8 @@ public class AdminSystemService {
         }
         try {
             Long roleId = repository.createRole(request);
-            auditService.success(servletRequest, "系统管理", "新增角色", "INSERT",
-                    auditService.params("roleId", roleId, "roleCode", request.getRoleCode()));
+            auditSuccess(servletRequest, "新增角色", "INSERT",
+                    "roleId", roleId, "roleCode", request.getRoleCode());
             return Result.success(roleId);
         } catch (RuntimeException e) {
             return serviceError("新增角色", "角色保存失败", e);
@@ -362,8 +357,8 @@ public class AdminSystemService {
             repository.updateRole(id, request);
             refreshPermissionCache(affectedUserIds);
             forceLogoutUsers(affectedUserIds);
-            auditService.success(servletRequest, "系统管理", "更新角色", "UPDATE",
-                    auditService.params("roleId", id, "roleCode", request.getRoleCode(), "status", request.getStatus()));
+            auditSuccess(servletRequest, "更新角色", "UPDATE",
+                    "roleId", id, "roleCode", request.getRoleCode(), "status", request.getStatus());
             return Result.success("已更新");
         } catch (RuntimeException e) {
             return serviceError("更新角色", "角色更新失败", e);
@@ -379,8 +374,7 @@ public class AdminSystemService {
             repository.deleteRole(id);
             refreshPermissionCache(affectedUserIds);
             forceLogoutUsers(affectedUserIds);
-            auditService.success(servletRequest, "系统管理", "删除角色", "DELETE",
-                    auditService.params("roleId", id));
+            auditSuccess(servletRequest, "删除角色", "DELETE", "roleId", id);
             return Result.success("已删除");
         } catch (RuntimeException e) {
             return serviceError("删除角色", "角色删除失败", e);
@@ -402,8 +396,8 @@ public class AdminSystemService {
             repository.replaceRoleMenus(id, request == null ? List.of() : request.getMenuIds());
             refreshPermissionCache(affectedUserIds);
             forceLogoutUsers(affectedUserIds);
-            auditService.success(servletRequest, "系统管理", "角色菜单授权", "UPDATE",
-                    auditService.params("roleId", id, "menuIds", request == null ? List.of() : request.getMenuIds()));
+            auditSuccess(servletRequest, "角色菜单授权", "UPDATE",
+                    "roleId", id, "menuIds", request == null ? List.of() : request.getMenuIds());
             return Result.success("已授权");
         } catch (RuntimeException e) {
             return serviceError("角色菜单授权", "角色授权失败", e);
@@ -428,8 +422,8 @@ public class AdminSystemService {
             Long menuId = repository.createMenu(request);
             clearPermissionCache();
             forceLogoutAllUsers();
-            auditService.success(servletRequest, "系统管理", "新增菜单", "INSERT",
-                    auditService.params("menuId", menuId, "menuName", request.getMenuName(), "permission", request.getPermission()));
+            auditSuccess(servletRequest, "新增菜单", "INSERT",
+                    "menuId", menuId, "menuName", request.getMenuName(), "permission", request.getPermission());
             return Result.success(menuId);
         } catch (RuntimeException e) {
             return serviceError("新增菜单", "菜单保存失败", e);
@@ -448,8 +442,8 @@ public class AdminSystemService {
             repository.updateMenu(id, request);
             clearPermissionCache();
             forceLogoutAllUsers();
-            auditService.success(servletRequest, "系统管理", "更新菜单", "UPDATE",
-                    auditService.params("menuId", id, "menuName", request.getMenuName(), "permission", request.getPermission()));
+            auditSuccess(servletRequest, "更新菜单", "UPDATE",
+                    "menuId", id, "menuName", request.getMenuName(), "permission", request.getPermission());
             return Result.success("已更新");
         } catch (RuntimeException e) {
             return serviceError("更新菜单", "菜单更新失败", e);
@@ -461,8 +455,7 @@ public class AdminSystemService {
             repository.deleteMenu(id);
             clearPermissionCache();
             forceLogoutAllUsers();
-            auditService.success(servletRequest, "系统管理", "删除菜单", "DELETE",
-                    auditService.params("menuId", id));
+            auditSuccess(servletRequest, "删除菜单", "DELETE", "menuId", id);
             return Result.success("已删除");
         } catch (RuntimeException e) {
             return serviceError("删除菜单", "菜单删除失败", e);
@@ -485,8 +478,8 @@ public class AdminSystemService {
         }
         try {
             Long dictTypeId = repository.createDictType(request);
-            auditService.success(servletRequest, "系统管理", "新增字典类型", "INSERT",
-                    auditService.params("dictTypeId", dictTypeId, "dictCode", request.getDictCode()));
+            auditSuccess(servletRequest, "新增字典类型", "INSERT",
+                    "dictTypeId", dictTypeId, "dictCode", request.getDictCode());
             return Result.success(dictTypeId);
         } catch (RuntimeException e) {
             return serviceError("新增字典类型", "字典类型保存失败", e);
@@ -500,8 +493,8 @@ public class AdminSystemService {
         }
         try {
             repository.updateDictType(id, request);
-            auditService.success(servletRequest, "系统管理", "更新字典类型", "UPDATE",
-                    auditService.params("dictTypeId", id, "dictCode", request.getDictCode(), "status", request.getStatus()));
+            auditSuccess(servletRequest, "更新字典类型", "UPDATE",
+                    "dictTypeId", id, "dictCode", request.getDictCode(), "status", request.getStatus());
             return Result.success("已更新");
         } catch (RuntimeException e) {
             return serviceError("更新字典类型", "字典类型更新失败", e);
@@ -511,8 +504,7 @@ public class AdminSystemService {
     public Result<String> deleteDictType(Long id, HttpServletRequest servletRequest) {
         try {
             repository.deleteDictType(id);
-            auditService.success(servletRequest, "系统管理", "删除字典类型", "DELETE",
-                    auditService.params("dictTypeId", id));
+            auditSuccess(servletRequest, "删除字典类型", "DELETE", "dictTypeId", id);
             return Result.success("已删除");
         } catch (RuntimeException e) {
             return serviceError("删除字典类型", "字典类型删除失败", e);
@@ -535,9 +527,9 @@ public class AdminSystemService {
         }
         try {
             Long dictItemId = repository.createDictItem(request);
-            auditService.success(servletRequest, "系统管理", "新增字典项", "INSERT",
-                    auditService.params("dictItemId", dictItemId, "dictCode", request.getDictCode(),
-                            "itemValue", request.getItemValue()));
+            auditSuccess(servletRequest, "新增字典项", "INSERT",
+                    "dictItemId", dictItemId, "dictCode", request.getDictCode(),
+                    "itemValue", request.getItemValue());
             return Result.success(dictItemId);
         } catch (RuntimeException e) {
             return serviceError("新增字典项", "字典项保存失败", e);
@@ -551,9 +543,9 @@ public class AdminSystemService {
         }
         try {
             repository.updateDictItem(id, request);
-            auditService.success(servletRequest, "系统管理", "更新字典项", "UPDATE",
-                    auditService.params("dictItemId", id, "dictCode", request.getDictCode(),
-                            "itemValue", request.getItemValue()));
+            auditSuccess(servletRequest, "更新字典项", "UPDATE",
+                    "dictItemId", id, "dictCode", request.getDictCode(),
+                    "itemValue", request.getItemValue());
             return Result.success("已更新");
         } catch (RuntimeException e) {
             return serviceError("更新字典项", "字典项更新失败", e);
@@ -563,8 +555,7 @@ public class AdminSystemService {
     public Result<String> deleteDictItem(Long id, HttpServletRequest servletRequest) {
         try {
             repository.deleteDictItem(id);
-            auditService.success(servletRequest, "系统管理", "删除字典项", "DELETE",
-                    auditService.params("dictItemId", id));
+            auditSuccess(servletRequest, "删除字典项", "DELETE", "dictItemId", id);
             return Result.success("已删除");
         } catch (RuntimeException e) {
             return serviceError("删除字典项", "字典项删除失败", e);
@@ -587,9 +578,9 @@ public class AdminSystemService {
         }
         try {
             Long configId = repository.createConfig(request);
-            auditService.success(servletRequest, "系统管理", "新增系统参数", "INSERT",
-                    auditService.params("configId", configId, "configKey", request.getConfigKey(),
-                            "sensitive", request.getSensitive()));
+            auditSuccess(servletRequest, "新增系统参数", "INSERT",
+                    "configId", configId, "configKey", request.getConfigKey(),
+                    "sensitive", request.getSensitive());
             return Result.success(configId);
         } catch (RuntimeException e) {
             return serviceError("新增系统参数", "系统参数保存失败", e);
@@ -603,9 +594,9 @@ public class AdminSystemService {
         }
         try {
             repository.updateConfig(id, request);
-            auditService.success(servletRequest, "系统管理", "更新系统参数", "UPDATE",
-                    auditService.params("configId", id, "configKey", request.getConfigKey(),
-                            "sensitive", request.getSensitive()));
+            auditSuccess(servletRequest, "更新系统参数", "UPDATE",
+                    "configId", id, "configKey", request.getConfigKey(),
+                    "sensitive", request.getSensitive());
             return Result.success("已更新");
         } catch (RuntimeException e) {
             return serviceError("更新系统参数", "系统参数更新失败", e);
@@ -615,11 +606,21 @@ public class AdminSystemService {
     public Result<String> deleteConfig(Long id, HttpServletRequest servletRequest) {
         try {
             repository.deleteConfig(id);
-            auditService.success(servletRequest, "系统管理", "删除系统参数", "DELETE",
-                    auditService.params("configId", id));
+            auditSuccess(servletRequest, "删除系统参数", "DELETE", "configId", id);
             return Result.success("已删除");
         } catch (RuntimeException e) {
             return serviceError("删除系统参数", "系统参数删除失败", e);
+        }
+    }
+
+    private void auditSuccess(HttpServletRequest request, String action, String operationType, Object... params) {
+        if (auditService == null) {
+            return;
+        }
+        try {
+            auditService.success(request, "系统管理", action, operationType, auditService.params(params));
+        } catch (RuntimeException e) {
+            log.warn("[系统管理] 审计日志写入失败 action={}, error={}", action, e.getMessage());
         }
     }
 
