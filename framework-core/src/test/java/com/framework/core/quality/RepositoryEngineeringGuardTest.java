@@ -45,6 +45,11 @@ class RepositoryEngineeringGuardTest {
             "@(?:Post|Put|Delete)Mapping[^\\n]*(?:\\R\\s*@[A-Za-z][^\\n]*)*\\R\\s*public\\s+Result");
     private static final Pattern WRITE_MAPPING_WITH_VIEW_PERMISSION_PATTERN = Pattern.compile(
             "@(?:Post|Put|Delete)Mapping[^\\n]*(?:\\R\\s*@[A-Za-z][^\\n]*)*\\R\\s*@RequirePermission\\(\"[^\"]*:view\"\\)");
+    private static final Pattern ADMIN_AUDIT_CALL_PATTERN = Pattern.compile(
+            "auditService\\.(?:success|failure)\\s*\\(");
+    private static final Pattern JAVA_METHOD_DECLARATION_PATTERN = Pattern.compile(
+            "(?:public|private|protected)\\s+[^=;{}]+?\\s+(\\w+)\\s*\\([^;{}]*\\)\\s*\\{",
+            Pattern.DOTALL);
 
     private final Path root = repositoryRoot();
 
@@ -414,6 +419,36 @@ class RepositoryEngineeringGuardTest {
                 .as("multi-table admin writes must keep an explicit local transaction boundary")
                 .contains("TransactionTemplate")
                 .contains("inTransaction(");
+    }
+
+    @Test
+    void adminAuditWritesAreBestEffortHelpers() throws Exception {
+        Path adminMain = root.resolve("admin-service/src/main/java/com/framework/admin");
+        int auditCallCount = 0;
+        try (Stream<Path> files = Files.walk(adminMain)) {
+            List<Path> javaFiles = files
+                    .filter(Files::isRegularFile)
+                    .filter(path -> path.toString().endsWith(".java"))
+                    .filter(path -> !path.getFileName().toString().equals("AdminAuditService.java"))
+                    .toList();
+
+            assertThat(javaFiles).isNotEmpty();
+            for (Path file : javaFiles) {
+                String source = read(file);
+                Matcher auditMatcher = ADMIN_AUDIT_CALL_PATTERN.matcher(source);
+                while (auditMatcher.find()) {
+                    auditCallCount++;
+                    MethodBlock method = enclosingMethod(source, auditMatcher.start(), file);
+                    assertThat(method.name())
+                            .as(file + " audit writes must be isolated in best-effort audit helpers")
+                            .startsWith("audit");
+                    assertThat(method.body())
+                            .as(file + " audit helper must swallow audit infrastructure failures")
+                            .contains("catch (RuntimeException");
+                }
+            }
+        }
+        assertThat(auditCallCount).as("admin-service should have audited management writes").isPositive();
     }
 
     @Test
@@ -994,7 +1029,8 @@ class RepositoryEngineeringGuardTest {
                 .contains("PasswordUtils.verify(request.getOldPassword(), user.getPasswordHash())")
                 .contains("新密码不能与原密码相同")
                 .contains("updateConfigValue(\"admin.default.password.changed\", \"true\")")
-                .contains("sessionManager.forceLogoutAll(user.getId())")
+                .contains("forceLogoutAll(user.getId())")
+                .contains("sessionManager.forceLogoutAll(userId)")
                 .contains("密码已修改，请重新登录");
         assertThat(repository)
                 .contains("public void updateConfigValue(String configKey, String configValue)");
@@ -1366,6 +1402,40 @@ class RepositoryEngineeringGuardTest {
                     .isTrue();
         }
         assertThat(menuCount).as(scriptName + " must seed visible menus").isPositive();
+    }
+
+    private MethodBlock enclosingMethod(String source, int offset, Path file) {
+        Matcher matcher = JAVA_METHOD_DECLARATION_PATTERN.matcher(source);
+        MethodBlock enclosing = null;
+        while (matcher.find()) {
+            int openBrace = source.indexOf('{', matcher.end() - 1);
+            int closeBrace = findClosingBrace(source, openBrace);
+            if (matcher.start() <= offset && offset < closeBrace) {
+                enclosing = new MethodBlock(matcher.group(1), source.substring(openBrace + 1, closeBrace));
+            }
+        }
+        assertThat(enclosing).as("Cannot locate enclosing method in " + file).isNotNull();
+        return enclosing;
+    }
+
+    private int findClosingBrace(String source, int openBrace) {
+        assertThat(openBrace).as("open brace must exist").isGreaterThanOrEqualTo(0);
+        int depth = 0;
+        for (int i = openBrace; i < source.length(); i++) {
+            char current = source.charAt(i);
+            if (current == '{') {
+                depth++;
+            } else if (current == '}') {
+                depth--;
+                if (depth == 0) {
+                    return i;
+                }
+            }
+        }
+        throw new IllegalStateException("Cannot locate closing brace");
+    }
+
+    private record MethodBlock(String name, String body) {
     }
 
     private String fullyQualifiedClassName(Path javaFile) throws IOException {
