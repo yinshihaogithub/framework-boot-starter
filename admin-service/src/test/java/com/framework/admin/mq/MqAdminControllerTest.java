@@ -111,6 +111,26 @@ class MqAdminControllerTest {
     }
 
     @Test
+    void retryOneSucceedsWhenAuditServiceFails() {
+        MqProperties properties = new MqProperties();
+        MqMessageSender sender = sender(MqProperties.Provider.RABBIT);
+        InMemoryMqFailedMessageRepository repository = new InMemoryMqFailedMessageRepository(List.of(
+                failedMessage(1L, "trace-a", MqFailedMessage.STATUS_EXHAUSTED)));
+        DeadLetterHandler handler = new DeadLetterHandler(repository, properties);
+        MqRetryScheduler scheduler = new MqRetryScheduler(
+                handler, new MqMessageSenderRegistry(properties, List.of(sender)), properties.getMaxRetry());
+        MqAdminController controller = controller(handler, properties, sender, scheduler, new ThrowingAuditService());
+
+        Result<String> result = controller.retryOne(1L, "ops", "manual retry", null);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getData()).isEqualTo("重发成功");
+        MqFailedMessage saved = repository.findById(1L).orElseThrow();
+        assertThat(saved.getStatus()).isEqualTo(MqFailedMessage.STATUS_MANUAL);
+        assertThat(saved.getOperator()).isEqualTo("ops");
+    }
+
+    @Test
     void batchRetryRequiresMessageIds() {
         MqAdminController controller = controller(null, new MqProperties(), null);
 
@@ -203,6 +223,25 @@ class MqAdminControllerTest {
                 .containsEntry("traceId", "trace-a")
                 .containsEntry("beforeStatus", MqFailedMessage.STATUS_EXHAUSTED)
                 .containsEntry("afterStatus", MqFailedMessage.STATUS_MANUAL);
+    }
+
+    @Test
+    void manualSuccessSucceedsWhenAuditServiceFails() {
+        InMemoryMqFailedMessageRepository repository = new InMemoryMqFailedMessageRepository(List.of(
+                withNextRetryTime(failedMessage(1L, "trace-a", MqFailedMessage.STATUS_EXHAUSTED))));
+        DeadLetterHandler handler = new DeadLetterHandler(repository, new MqProperties());
+        MqAdminController.ManualCompensationRequest request = new MqAdminController.ManualCompensationRequest();
+        request.setOperator("ops");
+        MqAdminController controller = controller(handler, new MqProperties(), null, null, new ThrowingAuditService());
+
+        Result<String> result = controller.manualSuccess(1L, request, null);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getData()).isEqualTo("已人工补偿完成");
+        MqFailedMessage saved = repository.findById(1L).orElseThrow();
+        assertThat(saved.getStatus()).isEqualTo(MqFailedMessage.STATUS_MANUAL);
+        assertThat(saved.getNextRetryTime()).isNull();
+        assertThat(saved.getOperator()).isEqualTo("ops");
     }
 
     @Test
@@ -409,6 +448,17 @@ class MqAdminControllerTest {
                                 Object params, Exception exception) {
             }
         };
+    }
+
+    private static class ThrowingAuditService extends AdminAuditService {
+        private ThrowingAuditService() {
+            super(null, null);
+        }
+
+        @Override
+        public void success(HttpServletRequest request, String module, String action, String operationType, Object params) {
+            throw new IllegalStateException("audit unavailable");
+        }
     }
 
     private static class RecordingAuditService extends AdminAuditService {

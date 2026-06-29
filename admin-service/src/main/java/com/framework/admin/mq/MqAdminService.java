@@ -149,7 +149,7 @@ public class MqAdminService {
         try {
             String normalizedOperator = operator(operator);
             boolean ok = scheduler.manualRetry(id, normalizedOperator, remark);
-            auditService.success(servletRequest, "MQ管理", "手动重发MQ消息", "UPDATE",
+            auditSuccess(servletRequest, "手动重发MQ消息", "UPDATE",
                     auditService.params("id", id, "operator", normalizedOperator, "remark", remark, "success", ok));
             return ok ? ActionResult.success("重发成功") : ActionResult.fail(ResultCode.BUSINESS_ERROR, "重发失败");
         } catch (Exception e) {
@@ -172,7 +172,7 @@ public class MqAdminService {
                     request.getIds(),
                     isBlank(request.getOperator()) ? "admin" : request.getOperator(),
                     request.getRemark());
-            auditService.success(servletRequest, "MQ管理", "批量重发MQ消息", "UPDATE",
+            auditSuccess(servletRequest, "批量重发MQ消息", "UPDATE",
                     auditService.params("ids", request.getIds(), "operator", request.getOperator(),
                             "remark", request.getRemark(), "success", result.getSuccess(),
                             "failure", result.getFailed()));
@@ -199,7 +199,7 @@ public class MqAdminService {
             message.setOperator(operator(operator));
             message.setCompensateRemark(remark(remark, "人工补偿完成"));
             handler.updateRecord(message);
-            auditService.success(servletRequest, "MQ管理", "人工补偿完成MQ消息", "UPDATE",
+            auditSuccess(servletRequest, "人工补偿完成MQ消息", "UPDATE",
                     auditService.params("id", id, "messageId", message.getMessageId(), "traceId", message.getTraceId(),
                             "operator", message.getOperator(), "remark", message.getCompensateRemark(),
                             "beforeStatus", beforeStatus, "afterStatus", message.getStatus()));
@@ -226,7 +226,7 @@ public class MqAdminService {
             message.setOperator(operator(operator));
             message.setCompensateRemark(remark(remark, "人工终止"));
             handler.updateRecord(message);
-            auditService.success(servletRequest, "MQ管理", "人工终止MQ消息", "UPDATE",
+            auditSuccess(servletRequest, "人工终止MQ消息", "UPDATE",
                     auditService.params("id", id, "messageId", message.getMessageId(), "traceId", message.getTraceId(),
                             "operator", message.getOperator(), "remark", message.getCompensateRemark(),
                             "beforeStatus", beforeStatus, "afterStatus", message.getStatus()));
@@ -244,7 +244,7 @@ public class MqAdminService {
         }
         try {
             boolean deleted = handler.removeRecord(id);
-            auditService.success(servletRequest, "MQ管理", "删除MQ失败记录", "DELETE",
+            auditSuccess(servletRequest, "删除MQ失败记录", "DELETE",
                     auditService.params("id", id, "deleted", deleted));
             return deleted ? ActionResult.success("删除成功") : ActionResult.fail(ResultCode.NOT_FOUND, "记录不存在");
         } catch (Exception e) {
@@ -260,7 +260,7 @@ public class MqAdminService {
         }
         try {
             int cleaned = handler.cleanProcessedRecords();
-            auditService.success(servletRequest, "MQ管理", "清空MQ已处理记录", "DELETE",
+            auditSuccess(servletRequest, "清空MQ已处理记录", "DELETE",
                     auditService.params("cleaned", cleaned));
             return ActionResult.success("已清理 " + cleaned + " 条记录");
         } catch (Exception e) {
@@ -417,6 +417,17 @@ public class MqAdminService {
 
     private String retryUnavailableMessage() {
         return "未接入可用 MQ 发送器，无法重发消息";
+    }
+
+    private void auditSuccess(HttpServletRequest servletRequest, String action, String operationType, Object params) {
+        if (auditService == null) {
+            return;
+        }
+        try {
+            auditService.success(servletRequest, "MQ管理", action, operationType, params);
+        } catch (RuntimeException e) {
+            log.warn("[MQ管理] 审计日志写入失败 action={}, error={}", action, e.getMessage());
+        }
     }
 
     private <T> T available(ObjectProvider<T> provider) {
