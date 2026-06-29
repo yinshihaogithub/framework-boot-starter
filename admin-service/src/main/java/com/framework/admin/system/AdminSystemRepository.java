@@ -386,7 +386,7 @@ public class AdminSystemRepository {
                         .setConfigValue(request.getConfigValue())
                         .setSensitive(defaultBoolean(request.getSensitive()))
                         .setRemark(request.getRemark()),
-                shouldPreserveSensitiveValue(request));
+                isMaskedSensitiveValue(request));
     }
 
     public void updateConfigValue(String configKey, String configValue) {
@@ -548,7 +548,7 @@ public class AdminSystemRepository {
         return value != null && value;
     }
 
-    private static boolean shouldPreserveSensitiveValue(ConfigRequest request) {
+    private static boolean isMaskedSensitiveValue(ConfigRequest request) {
         if (!Boolean.TRUE.equals(request.getSensitive())) {
             return false;
         }

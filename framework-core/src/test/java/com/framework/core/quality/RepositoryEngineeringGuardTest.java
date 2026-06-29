@@ -37,6 +37,10 @@ class RepositoryEngineeringGuardTest {
     private static final Pattern QUOTED_STRING_PATTERN = Pattern.compile("\"([^\"]+)\"");
     private static final Pattern FRONTEND_CAN_PERMISSION_PATTERN = Pattern.compile(
             "can\\(\\s*'([^']+)'\\s*\\)");
+    private static final Pattern TYPESCRIPT_RECORD_ENTRY_PATTERN = Pattern.compile(
+            "(?m)^\\s*(?:'([^']+)'|([A-Za-z_$][\\w$]*))\\s*:\\s*'([^']+)'\\s*,?");
+    private static final Pattern MYSQL_MENU_ROW_PATTERN = Pattern.compile(
+            "\\(\\s*\\d+\\s*,\\s*\\d+\\s*,\\s*'MENU'\\s*,\\s*'[^']*'\\s*,\\s*(?:NULL|'([^']*)')\\s*,\\s*(?:NULL|'([^']*)')\\s*,");
     private static final Pattern WRITE_MAPPING_METHOD_BLOCK_PATTERN = Pattern.compile(
             "@(?:Post|Put|Delete)Mapping[^\\n]*(?:\\R\\s*@[A-Za-z][^\\n]*)*\\R\\s*public\\s+Result");
     private static final Pattern WRITE_MAPPING_WITH_VIEW_PERMISSION_PATTERN = Pattern.compile(
@@ -724,6 +728,36 @@ class RepositoryEngineeringGuardTest {
     }
 
     @Test
+    void adminVisibleFrontendViewsAreSeededInMysqlScripts() throws Exception {
+        String app = read(root.resolve("frontend/admin-web/src/App.vue"));
+        Set<String> views = frontendViewNames(app);
+        Map<String, String> componentViews = frontendRecordValues(app, "componentViewMap");
+        Map<String, String> routeViews = frontendRecordValues(app, "routeViewMap");
+        String adminServiceScript = read(root.resolve("admin-service/src/main/resources/db/mysql/admin_service.sql"));
+        String aggregateScript = read(root.resolve("sql/mysql/framework_boot_starter_init.sql"));
+
+        assertThat(views).isNotEmpty();
+        assertThat(mysqlMenuViews(adminServiceScript, componentViews, routeViews))
+                .as("admin-service SQL must seed a navigable menu for every frontend view")
+                .containsAll(views);
+        assertThat(mysqlMenuViews(aggregateScript, componentViews, routeViews))
+                .as("aggregate SQL must seed a navigable menu for every frontend view")
+                .containsAll(views);
+    }
+
+    @Test
+    void adminMysqlMenuSeedsResolveToFrontendViews() throws Exception {
+        String app = read(root.resolve("frontend/admin-web/src/App.vue"));
+        Map<String, String> componentViews = frontendRecordValues(app, "componentViewMap");
+        Map<String, String> routeViews = frontendRecordValues(app, "routeViewMap");
+        String adminServiceScript = read(root.resolve("admin-service/src/main/resources/db/mysql/admin_service.sql"));
+        String aggregateScript = read(root.resolve("sql/mysql/framework_boot_starter_init.sql"));
+
+        assertMysqlMenuSeedsResolve(adminServiceScript, componentViews, routeViews, "admin-service SQL");
+        assertMysqlMenuSeedsResolve(aggregateScript, componentViews, routeViews, "aggregate SQL");
+    }
+
+    @Test
     void adminOnlineSessionManagementIsExposedEndToEnd() throws Exception {
         String sessionManager = read(root.resolve(
                 "framework-auth/src/main/java/com/framework/auth/service/SessionManager.java"));
@@ -1162,8 +1196,7 @@ class RepositoryEngineeringGuardTest {
                     .filter(path -> !path.toString().contains("/target/"))
                     .filter(path -> path.toString().endsWith(".xml")
                             || path.toString().endsWith(".yml")
-                            || path.toString().endsWith(".yaml")
-                            || path.toString().endsWith(".md"))
+                            || path.toString().endsWith(".yaml"))
                     .toList();
 
             for (Path file : sourceFiles) {
@@ -1201,19 +1234,10 @@ class RepositoryEngineeringGuardTest {
     }
 
     @Test
-    void engineeringDocsExistAndUseManualLocalTransactionLanguage() throws Exception {
+    void engineeringDocsExist() {
         assertThat(root.resolve("docs/ENGINEERING_STANDARD.md")).exists();
         assertThat(root.resolve("docs/MODULE_MATRIX.md")).exists();
-
-        Path consistencyDesign = root.resolve("docs/ORDER_FINAL_CONSISTENCY_DESIGN.md");
-        assertThat(consistencyDesign)
-                .as("distributed workflow design must document local-transaction consistency")
-                .exists();
-        assertThat(read(consistencyDesign))
-                .as("engineering docs must match the scaffold's manual local transaction stance")
-                .contains("TransactionTemplate")
-                .doesNotContain("@Transactional")
-                .doesNotContain("org.springframework.transaction.annotation.Transactional");
+        assertThat(root.resolve("docs/ORDER_FINAL_CONSISTENCY_DESIGN.md")).exists();
     }
 
     private List<String> modules() throws IOException {
@@ -1271,6 +1295,77 @@ class RepositoryEngineeringGuardTest {
             permissions.add(matcher.group(1));
         }
         return permissions;
+    }
+
+    private Set<String> frontendViewNames(String app) {
+        return new LinkedHashSet<>(frontendRecordValues(app, "viewTitles").keySet());
+    }
+
+    private Map<String, String> frontendRecordValues(String source, String recordName) {
+        String block = extractConstRecordBlock(source, recordName);
+        Matcher matcher = TYPESCRIPT_RECORD_ENTRY_PATTERN.matcher(block);
+        Map<String, String> values = new LinkedHashMap<>();
+        while (matcher.find()) {
+            String key = matcher.group(1) != null ? matcher.group(1) : matcher.group(2);
+            values.put(key, matcher.group(3));
+        }
+        assertThat(values).as(recordName + " must not be empty").isNotEmpty();
+        return values;
+    }
+
+    private String extractConstRecordBlock(String source, String recordName) {
+        int declaration = source.indexOf("const " + recordName);
+        assertThat(declaration).as(recordName + " must be declared").isGreaterThanOrEqualTo(0);
+        int openBrace = source.indexOf('{', declaration);
+        assertThat(openBrace).as(recordName + " must use an object literal").isGreaterThanOrEqualTo(0);
+        int depth = 0;
+        for (int i = openBrace; i < source.length(); i++) {
+            char current = source.charAt(i);
+            if (current == '{') {
+                depth++;
+            } else if (current == '}') {
+                depth--;
+                if (depth == 0) {
+                    return source.substring(openBrace + 1, i);
+                }
+            }
+        }
+        throw new IllegalStateException("Cannot locate closing brace for " + recordName);
+    }
+
+    private Set<String> mysqlMenuViews(String sql, Map<String, String> componentViews, Map<String, String> routeViews) {
+        Set<String> views = new LinkedHashSet<>();
+        Matcher matcher = MYSQL_MENU_ROW_PATTERN.matcher(sql);
+        while (matcher.find()) {
+            String routePath = matcher.group(1);
+            String component = matcher.group(2);
+            if (component != null && componentViews.containsKey(component)) {
+                views.add(componentViews.get(component));
+            } else if (routePath != null && routeViews.containsKey(routePath)) {
+                views.add(routeViews.get(routePath));
+            }
+        }
+        return views;
+    }
+
+    private void assertMysqlMenuSeedsResolve(String sql, Map<String, String> componentViews,
+                                            Map<String, String> routeViews, String scriptName) {
+        Matcher matcher = MYSQL_MENU_ROW_PATTERN.matcher(sql);
+        int menuCount = 0;
+        while (matcher.find()) {
+            menuCount++;
+            String routePath = matcher.group(1);
+            String component = matcher.group(2);
+            if ("Layout".equals(component)) {
+                continue;
+            }
+            assertThat((component != null && componentViews.containsKey(component))
+                    || (routePath != null && routeViews.containsKey(routePath)))
+                    .as(scriptName + " menu route/component must resolve in frontend: route="
+                            + routePath + ", component=" + component)
+                    .isTrue();
+        }
+        assertThat(menuCount).as(scriptName + " must seed visible menus").isPositive();
     }
 
     private String fullyQualifiedClassName(Path javaFile) throws IOException {

@@ -66,7 +66,7 @@ class LocalMessageAdminControllerTest {
     }
 
     @Test
-    void manualRetryTriggersImmediateDispatch() {
+    void manualRetryResetsMessageForImmediateRetry() {
         InMemoryLocalMessageRepository repository = new InMemoryLocalMessageRepository();
         repository.save(localMessage(3L)
                 .setStatus(LocalMessageStatus.FAILED)
@@ -79,12 +79,12 @@ class LocalMessageAdminControllerTest {
         Result<String> result = controller.retryNow(3L, null);
 
         assertThat(result.isSuccess()).isTrue();
-        assertThat(result.getData()).isEqualTo("已触发立即重试");
+        assertThat(result.getData()).isEqualTo("已加入重试队列");
         LocalMessage saved = repository.findById(3L).orElseThrow();
-        assertThat(saved.getStatus()).isEqualTo(LocalMessageStatus.SUCCESS);
-        assertThat(saved.getRetryCount()).isEqualTo(3);
+        assertThat(saved.getStatus()).isEqualTo(LocalMessageStatus.PENDING);
+        assertThat(saved.getRetryCount()).isZero();
         assertThat(saved.getErrorMessage()).isNull();
-        assertThat(saved.getNextRetryTime()).isNull();
+        assertThat(saved.getNextRetryTime()).isNotNull();
     }
 
     @Test
