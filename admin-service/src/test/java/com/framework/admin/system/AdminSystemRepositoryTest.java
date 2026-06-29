@@ -50,6 +50,20 @@ class AdminSystemRepositoryTest {
     }
 
     @Test
+    void updateConfigPreservesExistingSensitiveValueWhenBlankValueIsSubmitted() {
+        ConfigRequest request = new ConfigRequest();
+        request.setConfigKey("oauth.client-secret");
+        request.setConfigName("OAuth Secret");
+        request.setConfigValue(" ");
+        request.setSensitive(true);
+
+        repository.updateConfig(9L, request);
+
+        assertThat(mapper.updatedConfig.getId()).isEqualTo(9L);
+        assertThat(mapper.preserveValue).isTrue();
+    }
+
+    @Test
     void updateConfigStoresNewSensitiveValueWhenValueChanges() {
         ConfigRequest request = new ConfigRequest();
         request.setConfigKey("oauth.client-secret");

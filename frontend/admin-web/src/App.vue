@@ -430,7 +430,12 @@
             <el-table :data="configs" height="520" stripe>
               <el-table-column prop="configKey" label="Key" min-width="220" />
               <el-table-column prop="configName" label="名称" min-width="180" />
-              <el-table-column prop="configValue" label="值" min-width="180" show-overflow-tooltip />
+              <el-table-column label="值" min-width="180" show-overflow-tooltip>
+                <template #default="{ row }">
+                  <el-tag v-if="row.sensitive" type="warning" size="small">{{ MASKED_CONFIG_VALUE }}</el-tag>
+                  <span v-else>{{ row.configValue }}</span>
+                </template>
+              </el-table-column>
               <el-table-column label="敏感" width="86">
                 <template #default="{ row }"><el-tag :type="row.sensitive ? 'warning' : 'info'" size="small">{{ row.sensitive ? '是' : '否' }}</el-tag></template>
               </el-table-column>
@@ -1205,7 +1210,14 @@
     <el-form label-width="88px">
       <el-form-item label="Key"><el-input v-model="configForm.configKey" /></el-form-item>
       <el-form-item label="名称"><el-input v-model="configForm.configName" /></el-form-item>
-      <el-form-item label="值"><el-input v-model="configForm.configValue" type="textarea" :rows="3" /></el-form-item>
+      <el-form-item label="值">
+        <el-input
+          v-model="configForm.configValue"
+          type="textarea"
+          :rows="3"
+          :placeholder="editingConfigId && configForm.sensitive ? '输入新值' : ''"
+        />
+      </el-form-item>
       <el-form-item label="敏感"><el-switch v-model="configForm.sensitive" /></el-form-item>
       <el-form-item label="备注"><el-input v-model="configForm.remark" type="textarea" :rows="2" /></el-form-item>
     </el-form>
@@ -1459,6 +1471,8 @@ const iconMap: Record<string, Component> = {
   Tools,
   User
 }
+
+const MASKED_CONFIG_VALUE = '******'
 
 const authed = ref(false)
 const loginLoading = ref(false)
@@ -2575,7 +2589,7 @@ function openEditConfig(row: ConfigItem) {
   Object.assign(configForm, {
     configKey: row.configKey,
     configName: row.configName,
-    configValue: row.configValue || '',
+    configValue: row.sensitive && row.configValue === MASKED_CONFIG_VALUE ? '' : row.configValue || '',
     sensitive: row.sensitive,
     remark: row.remark || ''
   })
