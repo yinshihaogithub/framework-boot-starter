@@ -36,6 +36,9 @@ export interface DashboardSummary {
   mq: Record<string, number>
   localMessage: Record<string, number>
   logs: Record<string, number>
+  notifications: Record<string, number>
+  excel: Record<string, number>
+  files: Record<string, number>
   modules: Array<{ name: string; status: string }>
 }
 

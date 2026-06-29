@@ -1,12 +1,13 @@
 package com.framework.admin.dashboard;
 
+import com.framework.admin.excel.ExcelAdminRepository;
+import com.framework.admin.file.FileAdminRepository;
+import com.framework.admin.notify.NotifyAdminRepository;
 import com.framework.core.result.Result;
-import com.framework.localmessage.service.LocalMessageService;
-import com.framework.log.mapper.OperationLogMapper;
-import com.framework.mq.deadletter.DeadLetterHandler;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 
+import java.util.Map;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -16,6 +17,9 @@ class DashboardControllerTest {
     @Test
     void moduleStatusesMatchAdminRuntimeModules() {
         DashboardService service = new DashboardService(
+                provider(null),
+                provider(null),
+                provider(null),
                 provider(null),
                 provider(null),
                 provider(null));
@@ -37,6 +41,80 @@ class DashboardControllerTest {
                         "framework-feign",
                         "framework-file")
                 .doesNotContain("framework-job");
+    }
+
+    @Test
+    void summaryIncludesOperationalCenterMetrics() {
+        DashboardService service = new DashboardService(
+                provider(null),
+                provider(null),
+                provider(null),
+                provider(new FakeNotifyRepository()),
+                provider(new FakeExcelRepository()),
+                provider(new FakeFileRepository()));
+        DashboardController controller = new DashboardController(service);
+
+        Result<DashboardController.DashboardSummary> result = controller.summary();
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getData().notifications())
+                .containsEntry("templates", 3L)
+                .containsEntry("successRecords", 7L)
+                .containsEntry("failedRecords", 2L);
+        assertThat(result.getData().excel())
+                .containsEntry("total", 5L)
+                .containsEntry("failed", 1L);
+        assertThat(result.getData().files())
+                .containsEntry("active", 4L)
+                .containsEntry("totalSize", 1024L);
+    }
+
+    private static class FakeNotifyRepository extends NotifyAdminRepository {
+        private FakeNotifyRepository() {
+            super(null);
+        }
+
+        @Override
+        public long countTemplates(String keyword, String channel, String status) {
+            return 3L;
+        }
+
+        @Override
+        public long countTemplatesByStatus(String status) {
+            return 2L;
+        }
+
+        @Override
+        public long countRecords(String channel, Boolean success) {
+            return 9L;
+        }
+
+        @Override
+        public long countRecordsBySuccess(boolean success) {
+            return success ? 7L : 2L;
+        }
+    }
+
+    private static class FakeExcelRepository extends ExcelAdminRepository {
+        private FakeExcelRepository() {
+            super(null);
+        }
+
+        @Override
+        public Map<String, Long> stats() {
+            return Map.of("total", 5L, "success", 4L, "failed", 1L, "import", 2L, "export", 3L);
+        }
+    }
+
+    private static class FakeFileRepository extends FileAdminRepository {
+        private FakeFileRepository() {
+            super(null);
+        }
+
+        @Override
+        public Map<String, Long> stats() {
+            return Map.of("active", 4L, "deleted", 1L, "totalSize", 1024L);
+        }
     }
 
     private static <T> ObjectProvider<T> provider(T value) {

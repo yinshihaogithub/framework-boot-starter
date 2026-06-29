@@ -111,6 +111,10 @@
             <div class="metric"><span>待重试</span><strong>{{ dashboard?.mq?.pending ?? 0 }}</strong></div>
             <div class="metric"><span>本地消息</span><strong>{{ dashboard?.localMessage?.total ?? 0 }}</strong></div>
             <div class="metric"><span>日志总量</span><strong>{{ dashboard?.logs?.total ?? 0 }}</strong></div>
+            <div class="metric"><span>通知记录</span><strong>{{ dashboard?.notifications?.records ?? 0 }}</strong></div>
+            <div class="metric"><span>Excel 任务</span><strong>{{ dashboard?.excel?.total ?? 0 }}</strong></div>
+            <div class="metric"><span>有效文件</span><strong>{{ dashboard?.files?.active ?? 0 }}</strong></div>
+            <div class="metric"><span>文件空间</span><strong>{{ formatBytes(dashboard?.files?.totalSize ?? 0) }}</strong></div>
           </div>
           <el-card shadow="never">
             <template #header><div class="section-head"><span>框架模块</span><el-tag size="small" type="info">{{ dashboard?.modules?.length ?? 0 }}</el-tag></div></template>

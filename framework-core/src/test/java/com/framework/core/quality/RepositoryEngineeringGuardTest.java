@@ -292,13 +292,15 @@ class RepositoryEngineeringGuardTest {
                 .contains("CREATE TABLE IF NOT EXISTS framework_notify_template")
                 .contains("CREATE TABLE IF NOT EXISTS framework_notify_record")
                 .contains("CREATE TABLE IF NOT EXISTS framework_excel_task")
-                .contains("CREATE TABLE IF NOT EXISTS framework_excel_error");
+                .contains("CREATE TABLE IF NOT EXISTS framework_excel_error")
+                .contains("CREATE TABLE IF NOT EXISTS framework_file_record");
         assertThat(adminServiceScript)
                 .as("admin-service must ship its own package-level MySQL initialization script")
                 .contains("CREATE TABLE IF NOT EXISTS sys_tenant")
                 .contains("CREATE TABLE IF NOT EXISTS sys_user")
                 .contains("CREATE TABLE IF NOT EXISTS framework_notify_template")
                 .contains("CREATE TABLE IF NOT EXISTS framework_excel_task")
+                .contains("CREATE TABLE IF NOT EXISTS framework_file_record")
                 .contains("INSERT INTO sys_user")
                 .contains("INSERT INTO sys_menu");
     }
@@ -635,6 +637,37 @@ class RepositoryEngineeringGuardTest {
                 .contains("'file:view'")
                 .contains("'file:upload'")
                 .contains("'file:delete'");
+    }
+
+    @Test
+    void adminDashboardAggregatesOperationalCenters() throws Exception {
+        String controller = read(root.resolve(
+                "admin-service/src/main/java/com/framework/admin/dashboard/DashboardController.java"));
+        String service = read(root.resolve(
+                "admin-service/src/main/java/com/framework/admin/dashboard/DashboardService.java"));
+        String client = read(root.resolve("frontend/admin-web/src/api/client.ts"));
+        String app = read(root.resolve("frontend/admin-web/src/App.vue"));
+
+        assertThat(controller)
+                .contains("Map<String, Long> notifications")
+                .contains("Map<String, Long> excel")
+                .contains("Map<String, Long> files");
+        assertThat(service)
+                .contains("ObjectProvider<NotifyAdminRepository>")
+                .contains("ObjectProvider<ExcelAdminRepository>")
+                .contains("ObjectProvider<FileAdminRepository>")
+                .contains("notifyMetrics()")
+                .contains("excelMetrics()")
+                .contains("fileMetrics()");
+        assertThat(client)
+                .contains("notifications: Record<string, number>")
+                .contains("excel: Record<string, number>")
+                .contains("files: Record<string, number>");
+        assertThat(app)
+                .contains("dashboard?.notifications?.records")
+                .contains("dashboard?.excel?.total")
+                .contains("dashboard?.files?.active")
+                .contains("dashboard?.files?.totalSize");
     }
 
     @Test

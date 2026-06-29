@@ -35,6 +35,9 @@ public class DashboardController {
     public record DashboardSummary(Map<String, Long> mq,
                                    Map<String, Long> localMessage,
                                    Map<String, Long> logs,
+                                   Map<String, Long> notifications,
+                                   Map<String, Long> excel,
+                                   Map<String, Long> files,
                                    List<ModuleStatus> modules) {
     }
 

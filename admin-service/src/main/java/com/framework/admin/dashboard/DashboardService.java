@@ -1,5 +1,8 @@
 package com.framework.admin.dashboard;
 
+import com.framework.admin.excel.ExcelAdminRepository;
+import com.framework.admin.file.FileAdminRepository;
+import com.framework.admin.notify.NotifyAdminRepository;
 import com.framework.localmessage.model.LocalMessageStatus;
 import com.framework.localmessage.service.LocalMessageService;
 import com.framework.log.mapper.OperationLogMapper;
@@ -22,13 +25,22 @@ public class DashboardService {
     private final ObjectProvider<DeadLetterHandler> deadLetterHandlerProvider;
     private final ObjectProvider<LocalMessageService> localMessageServiceProvider;
     private final ObjectProvider<OperationLogMapper> operationLogMapperProvider;
+    private final ObjectProvider<NotifyAdminRepository> notifyAdminRepositoryProvider;
+    private final ObjectProvider<ExcelAdminRepository> excelAdminRepositoryProvider;
+    private final ObjectProvider<FileAdminRepository> fileAdminRepositoryProvider;
 
     public DashboardService(ObjectProvider<DeadLetterHandler> deadLetterHandlerProvider,
                             ObjectProvider<LocalMessageService> localMessageServiceProvider,
-                            ObjectProvider<OperationLogMapper> operationLogMapperProvider) {
+                            ObjectProvider<OperationLogMapper> operationLogMapperProvider,
+                            ObjectProvider<NotifyAdminRepository> notifyAdminRepositoryProvider,
+                            ObjectProvider<ExcelAdminRepository> excelAdminRepositoryProvider,
+                            ObjectProvider<FileAdminRepository> fileAdminRepositoryProvider) {
         this.deadLetterHandlerProvider = deadLetterHandlerProvider;
         this.localMessageServiceProvider = localMessageServiceProvider;
         this.operationLogMapperProvider = operationLogMapperProvider;
+        this.notifyAdminRepositoryProvider = notifyAdminRepositoryProvider;
+        this.excelAdminRepositoryProvider = excelAdminRepositoryProvider;
+        this.fileAdminRepositoryProvider = fileAdminRepositoryProvider;
     }
 
     public DashboardController.DashboardSummary summary() {
@@ -36,6 +48,9 @@ public class DashboardService {
                 mqMetrics(),
                 localMessageMetrics(),
                 logMetrics(),
+                notifyMetrics(),
+                excelMetrics(),
+                fileMetrics(),
                 moduleStatuses());
     }
 
@@ -98,6 +113,70 @@ public class DashboardService {
         } catch (Exception ignored) {
             metrics.put("total", 0L);
         }
+        return metrics;
+    }
+
+    private Map<String, Long> notifyMetrics() {
+        Map<String, Long> metrics = new LinkedHashMap<>();
+        metrics.put("templates", 0L);
+        metrics.put("enabledTemplates", 0L);
+        metrics.put("records", 0L);
+        metrics.put("successRecords", 0L);
+        metrics.put("failedRecords", 0L);
+        NotifyAdminRepository repository = notifyAdminRepositoryProvider.getIfAvailable();
+        if (repository == null) {
+            return metrics;
+        }
+        try {
+            metrics.put("templates", repository.countTemplates(null, null, null));
+            metrics.put("enabledTemplates", repository.countTemplatesByStatus("ENABLED"));
+            metrics.put("records", repository.countRecords(null, null));
+            metrics.put("successRecords", repository.countRecordsBySuccess(true));
+            metrics.put("failedRecords", repository.countRecordsBySuccess(false));
+        } catch (Exception ignored) {
+            return zero(metrics);
+        }
+        return metrics;
+    }
+
+    private Map<String, Long> excelMetrics() {
+        Map<String, Long> metrics = new LinkedHashMap<>();
+        metrics.put("total", 0L);
+        metrics.put("success", 0L);
+        metrics.put("failed", 0L);
+        metrics.put("import", 0L);
+        metrics.put("export", 0L);
+        ExcelAdminRepository repository = excelAdminRepositoryProvider.getIfAvailable();
+        if (repository == null) {
+            return metrics;
+        }
+        try {
+            metrics.putAll(repository.stats());
+        } catch (Exception ignored) {
+            return zero(metrics);
+        }
+        return metrics;
+    }
+
+    private Map<String, Long> fileMetrics() {
+        Map<String, Long> metrics = new LinkedHashMap<>();
+        metrics.put("active", 0L);
+        metrics.put("deleted", 0L);
+        metrics.put("totalSize", 0L);
+        FileAdminRepository repository = fileAdminRepositoryProvider.getIfAvailable();
+        if (repository == null) {
+            return metrics;
+        }
+        try {
+            metrics.putAll(repository.stats());
+        } catch (Exception ignored) {
+            return zero(metrics);
+        }
+        return metrics;
+    }
+
+    private Map<String, Long> zero(Map<String, Long> metrics) {
+        metrics.replaceAll((key, value) -> 0L);
         return metrics;
     }
 
