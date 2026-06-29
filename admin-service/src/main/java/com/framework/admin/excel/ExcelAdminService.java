@@ -60,12 +60,42 @@ public class ExcelAdminService {
         List<ExportUserRow> rows = List.of(
                 new ExportUserRow("admin", "系统管理员", "ENABLED"),
                 new ExportUserRow("ops", "运维人员", "ENABLED"));
-        byte[] bytes = exportService.export("用户清单", ExportUserRow.class, rows);
         String filename = "user-export-" + System.currentTimeMillis() + ".xlsx";
+        String taskName = text(request == null ? null : request.getTaskName(), "用户清单导出任务");
+        String bizType = text(request == null ? null : request.getBizType(), "system-user");
+        byte[] bytes;
+        try {
+            bytes = exportService.export("用户清单", ExportUserRow.class, rows);
+        } catch (RuntimeException e) {
+            String errorMessage = errorMessage(e);
+            ExcelAdminModels.Task failedTask = new ExcelAdminModels.Task()
+                    .setTaskName(taskName)
+                    .setTaskType("EXPORT")
+                    .setBizType(bizType)
+                    .setStatus("FAILED")
+                    .setFilename(filename)
+                    .setTotalRows(rows.size())
+                    .setSuccessRows(0)
+                    .setFailureRows(rows.size())
+                    .setOperatorName(UserContextHolder.getUsername())
+                    .setErrorMessage(errorMessage);
+            Long taskId = repository.createTask(failedTask);
+            auditService.failure(servletRequest, "Excel中心", "创建导出任务", "CREATE",
+                    auditService.params("taskId", taskId, "filename", filename, "rows", rows.size()),
+                    e);
+            return Optional.of(new ExcelAdminModels.TaskResult()
+                    .setTaskId(taskId)
+                    .setFilename(filename)
+                    .setStatus("FAILED")
+                    .setTotalRows(rows.size())
+                    .setSuccessRows(0)
+                    .setFailureRows(rows.size())
+                    .setFileSize(0L));
+        }
         ExcelAdminModels.Task task = new ExcelAdminModels.Task()
-                .setTaskName(text(request == null ? null : request.getTaskName(), "用户清单导出任务"))
+                .setTaskName(taskName)
                 .setTaskType("EXPORT")
-                .setBizType(text(request == null ? null : request.getBizType(), "system-user"))
+                .setBizType(bizType)
                 .setStatus("SUCCESS")
                 .setFilename(filename)
                 .setTotalRows(rows.size())
@@ -135,6 +165,11 @@ public class ExcelAdminService {
 
     private String normalize(String value) {
         return value == null || value.isBlank() ? null : value.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private String errorMessage(RuntimeException exception) {
+        String message = exception.getMessage();
+        return message == null || message.isBlank() ? exception.getClass().getSimpleName() : message;
     }
 
     @Data

@@ -53,6 +53,30 @@ class ExcelAdminServiceTest {
     }
 
     @Test
+    void exportTaskPersistsFailedTaskWhenExportThrows() {
+        InMemoryExcelAdminRepository repository = new InMemoryExcelAdminRepository();
+        CapturingExcelExportService exportService = new CapturingExcelExportService();
+        exportService.failure = new IllegalStateException("template broken");
+        RecordingAuditService auditService = new RecordingAuditService();
+        ExcelAdminService service = service(repository, exportService, auditService);
+
+        Optional<ExcelAdminModels.TaskResult> result = service.createExportTask(null, null);
+
+        assertThat(result).isPresent();
+        assertThat(result.get().getStatus()).isEqualTo("FAILED");
+        assertThat(result.get().getTotalRows()).isEqualTo(2);
+        assertThat(result.get().getSuccessRows()).isZero();
+        assertThat(result.get().getFailureRows()).isEqualTo(2);
+        assertThat(result.get().getFileSize()).isZero();
+        assertThat(repository.tasks)
+                .extracting(ExcelAdminModels.Task::getTaskType, ExcelAdminModels.Task::getStatus,
+                        ExcelAdminModels.Task::getErrorMessage)
+                .containsExactly(org.assertj.core.groups.Tuple.tuple("EXPORT", "FAILED", "template broken"));
+        assertThat(auditService.failureAction).isEqualTo("创建导出任务");
+        assertThat(auditService.failureMessage).isEqualTo("template broken");
+    }
+
+    @Test
     void importFailureTaskCreatesFailedTaskAndErrors() {
         InMemoryExcelAdminRepository repository = new InMemoryExcelAdminRepository();
         ExcelAdminModels.FailureRequest request = new ExcelAdminModels.FailureRequest();
@@ -100,7 +124,12 @@ class ExcelAdminServiceTest {
     }
 
     private static ExcelAdminService service(InMemoryExcelAdminRepository repository, ExcelExportService exportService) {
-        return new ExcelAdminService(repository, provider(exportService), auditService());
+        return service(repository, exportService, auditService());
+    }
+
+    private static ExcelAdminService service(InMemoryExcelAdminRepository repository, ExcelExportService exportService,
+                                             AdminAuditService auditService) {
+        return new ExcelAdminService(repository, provider(exportService), auditService);
     }
 
     private static <T> ObjectProvider<T> provider(T value) {
@@ -148,6 +177,7 @@ class ExcelAdminServiceTest {
     private static class CapturingExcelExportService extends ExcelExportService {
         private String sheetName;
         private int rowCount;
+        private RuntimeException failure;
 
         private CapturingExcelExportService() {
             super(new ExcelProperties());
@@ -155,9 +185,28 @@ class ExcelAdminServiceTest {
 
         @Override
         public <T> byte[] export(String sheetName, Class<T> headClass, java.util.Collection<T> rows) {
+            if (failure != null) {
+                throw failure;
+            }
             this.sheetName = sheetName;
             this.rowCount = rows.size();
             return new byte[]{1, 2, 3, 4, 5};
+        }
+    }
+
+    private static class RecordingAuditService extends AdminAuditService {
+        private String failureAction;
+        private String failureMessage;
+
+        private RecordingAuditService() {
+            super(null, null);
+        }
+
+        @Override
+        public void failure(HttpServletRequest request, String module, String action, String operationType,
+                            Object params, Exception exception) {
+            this.failureAction = action;
+            this.failureMessage = exception == null ? null : exception.getMessage();
         }
     }
 
