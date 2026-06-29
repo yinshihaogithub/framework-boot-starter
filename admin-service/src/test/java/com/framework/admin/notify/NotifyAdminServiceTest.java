@@ -253,6 +253,17 @@ class NotifyAdminServiceTest {
     }
 
     @Test
+    void templateIdOperationsRejectInvalidIdBeforeRepositoryLookup() {
+        InMemoryNotifyAdminRepository repository = new InMemoryNotifyAdminRepository();
+        repository.queryFailure = new RuntimeException("database down");
+        NotifyAdminService service = service(repository, null);
+
+        assertInvalidTemplateId(service.updateTemplate(0L, templateRequest(), null));
+        assertInvalidTemplateId(service.deleteTemplate(0L, null));
+        assertInvalidTemplateId(service.sendTest(0L, null, null));
+    }
+
+    @Test
     void updateTemplateReturnsFalseWhenTemplateDoesNotExist() {
         NotifyAdminService service = service(new InMemoryNotifyAdminRepository(), null);
 
@@ -264,13 +275,25 @@ class NotifyAdminServiceTest {
     }
 
     @Test
+    void deleteTemplateReturnsNotFoundWhenTemplateDoesNotExist() {
+        NotifyAdminService service = service(new InMemoryNotifyAdminRepository(), null);
+
+        NotifyAdminService.ActionResult<String> deleted = service.deleteTemplate(404L, null);
+
+        assertThat(deleted.success()).isFalse();
+        assertThat(deleted.code()).isEqualTo(ResultCode.NOT_FOUND.getCode());
+        assertThat(deleted.message()).isEqualTo("模板不存在");
+    }
+
+    @Test
     void writeOperationsReturnServiceErrorWhenRepositoryFails() {
         InMemoryNotifyAdminRepository repository = new InMemoryNotifyAdminRepository();
+        Long templateId = repository.createTemplate(templateRequest());
         repository.commandFailure = new RuntimeException("database down");
         NotifyAdminService service = service(repository, null);
 
         NotifyAdminService.ActionResult<Long> created = service.createTemplate(templateRequest(), null);
-        NotifyAdminService.ActionResult<String> deleted = service.deleteTemplate(1L, null);
+        NotifyAdminService.ActionResult<String> deleted = service.deleteTemplate(templateId, null);
 
         assertThat(created.success()).isFalse();
         assertThat(created.code()).isEqualTo(ResultCode.SERVICE_ERROR.getCode());
@@ -314,6 +337,12 @@ class NotifyAdminServiceTest {
         request.setWebhookUrl("https://example.com/webhook");
         request.setStatus("ENABLED");
         return request;
+    }
+
+    private static void assertInvalidTemplateId(NotifyAdminService.ActionResult<?> result) {
+        assertThat(result.success()).isFalse();
+        assertThat(result.code()).isEqualTo(ResultCode.PARAM_ERROR.getCode());
+        assertThat(result.message()).isEqualTo("模板ID必须大于0");
     }
 
     private static <T> ObjectProvider<T> provider(T value) {

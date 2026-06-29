@@ -87,6 +87,10 @@ public class NotifyAdminService {
 
     public ActionResult<String> updateTemplate(Long id, NotifyAdminModels.TemplateRequest request,
                                                HttpServletRequest servletRequest) {
+        ActionResult<String> invalidId = invalidTemplateId(id);
+        if (invalidId != null) {
+            return invalidId;
+        }
         try {
             validateTemplate(request);
             if (repository.findTemplate(id).isEmpty()) {
@@ -105,7 +109,14 @@ public class NotifyAdminService {
     }
 
     public ActionResult<String> deleteTemplate(Long id, HttpServletRequest servletRequest) {
+        ActionResult<String> invalidId = invalidTemplateId(id);
+        if (invalidId != null) {
+            return invalidId;
+        }
         try {
+            if (repository.findTemplate(id).isEmpty()) {
+                return ActionResult.fail(ResultCode.NOT_FOUND, "模板不存在");
+            }
             repository.deleteTemplate(id);
             auditSuccess(servletRequest, "删除通知模板", "DELETE", "id", id);
             return ActionResult.success("已删除");
@@ -118,6 +129,10 @@ public class NotifyAdminService {
     public ActionResult<NotifyAdminModels.Record> sendTest(Long id,
                                                            NotifyAdminModels.SendRequest request,
                                                            HttpServletRequest servletRequest) {
+        ActionResult<NotifyAdminModels.Record> invalidId = invalidTemplateId(id);
+        if (invalidId != null) {
+            return invalidId;
+        }
         NotifyAdminModels.Template template;
         try {
             template = repository.findTemplate(id).orElse(null);
@@ -269,6 +284,13 @@ public class NotifyAdminService {
 
     private boolean hasText(String value) {
         return value != null && !value.isBlank();
+    }
+
+    private <T> ActionResult<T> invalidTemplateId(Long id) {
+        if (id == null || id <= 0) {
+            return ActionResult.fail(ResultCode.PARAM_ERROR, "模板ID必须大于0");
+        }
+        return null;
     }
 
     private void auditSuccess(HttpServletRequest request, String action, String operationType, Object... params) {
