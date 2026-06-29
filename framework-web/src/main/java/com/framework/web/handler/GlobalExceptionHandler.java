@@ -20,6 +20,7 @@ import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
@@ -97,6 +98,15 @@ public class GlobalExceptionHandler {
         String message = e.getMessage();
         return Result.fail(ResultCode.PARAM_ERROR.getCode(),
                 message == null || message.isBlank() ? ResultCode.PARAM_ERROR.getMessage() : message);
+    }
+
+    /**
+     * 请求参数类型错误。
+     */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public Result<Void> handleTypeMismatch(MethodArgumentTypeMismatchException e) {
+        return Result.fail(ResultCode.PARAM_ERROR.getCode(), "参数 " + e.getName() + " 类型错误");
     }
 
     /**

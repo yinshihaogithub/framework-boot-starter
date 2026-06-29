@@ -4,6 +4,7 @@ import com.framework.core.result.Result;
 import com.framework.core.result.ResultCode;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
@@ -30,6 +31,15 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    void typeMismatchReturnsParamErrorResult() {
+        Result<Void> result = handler.handleTypeMismatch(new MethodArgumentTypeMismatchException(
+                "unknown", TestStatus.class, "status", null, null));
+
+        assertThat(result.getCode()).isEqualTo(ResultCode.PARAM_ERROR.getCode());
+        assertThat(result.getMessage()).isEqualTo("参数 status 类型错误");
+    }
+
+    @Test
     void noHandlerFoundReturnsNotFoundResult() {
         Result<Void> result = handler.handleNotFound(new NoHandlerFoundException(
                 "GET", "/admin/missing", null));
@@ -45,5 +55,9 @@ class GlobalExceptionHandlerTest {
 
         assertThat(result.getCode()).isEqualTo(ResultCode.NOT_FOUND.getCode());
         assertThat(result.getMessage()).isEqualTo("接口不存在: /admin/excel/tasks/demo-export");
+    }
+
+    private enum TestStatus {
+        PENDING
     }
 }

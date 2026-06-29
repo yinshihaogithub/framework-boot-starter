@@ -5,6 +5,7 @@ import com.framework.web.handler.GlobalExceptionHandler;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
+import org.springframework.format.support.DefaultFormattingConversionService;
 import org.springframework.web.filter.CorsFilter;
 
 import java.time.LocalDateTime;
@@ -34,5 +35,20 @@ class WebAutoConfigurationTest {
             assertThatCode(() -> objectMapper.writeValueAsString(LocalDateTime.of(2026, 6, 25, 15, 0)))
                     .doesNotThrowAnyException();
         });
+    }
+
+    @Test
+    void enumRequestParamsCanBeConvertedIgnoringCase() {
+        DefaultFormattingConversionService conversionService = new DefaultFormattingConversionService();
+
+        new WebAutoConfiguration().addFormatters(conversionService);
+
+        assertThat(conversionService.convert(" pending ", TestStatus.class)).isEqualTo(TestStatus.PENDING);
+        assertThat(conversionService.convert("success", TestStatus.class)).isEqualTo(TestStatus.SUCCESS);
+    }
+
+    private enum TestStatus {
+        PENDING,
+        SUCCESS
     }
 }
