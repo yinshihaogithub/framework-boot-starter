@@ -35,6 +35,8 @@ class RepositoryEngineeringGuardTest {
     private static final Pattern REQUIRE_PERMISSION_PATTERN = Pattern.compile(
             "@RequirePermission\\s*\\(\\s*(?:\\{\\s*)?([^)]*?)(?:\\s*}\\s*)?\\)", Pattern.DOTALL);
     private static final Pattern QUOTED_STRING_PATTERN = Pattern.compile("\"([^\"]+)\"");
+    private static final Pattern FRONTEND_CAN_PERMISSION_PATTERN = Pattern.compile(
+            "can\\(\\s*'([^']+)'\\s*\\)");
     private static final Pattern WRITE_MAPPING_WITH_VIEW_PERMISSION_PATTERN = Pattern.compile(
             "@(?:Post|Put|Delete)Mapping[^\\n]*(?:\\R\\s*@[A-Za-z][^\\n]*)*\\R\\s*@RequirePermission\\(\"[^\"]*:view\"\\)");
 
@@ -493,6 +495,23 @@ class RepositoryEngineeringGuardTest {
     }
 
     @Test
+    void adminFrontendButtonPermissionsAreSeededInMysqlScripts() throws Exception {
+        Set<String> permissions = adminFrontendButtonPermissions();
+        String adminServiceScript = read(root.resolve("admin-service/src/main/resources/db/mysql/admin_service.sql"));
+        String aggregateScript = read(root.resolve("sql/mysql/framework_boot_starter_init.sql"));
+
+        assertThat(permissions).isNotEmpty();
+        for (String permission : permissions) {
+            assertThat(adminServiceScript)
+                    .as("admin-service SQL must seed frontend button permission " + permission)
+                    .contains("'" + permission + "'");
+            assertThat(aggregateScript)
+                    .as("aggregate SQL must seed frontend button permission " + permission)
+                    .contains("'" + permission + "'");
+        }
+    }
+
+    @Test
     void adminOnlineSessionManagementIsExposedEndToEnd() throws Exception {
         String sessionManager = read(root.resolve(
                 "framework-auth/src/main/java/com/framework/auth/service/SessionManager.java"));
@@ -896,6 +915,16 @@ class RepositoryEngineeringGuardTest {
                     }
                 }
             }
+        }
+        return permissions;
+    }
+
+    private Set<String> adminFrontendButtonPermissions() throws IOException {
+        Set<String> permissions = new LinkedHashSet<>();
+        String app = read(root.resolve("frontend/admin-web/src/App.vue"));
+        Matcher matcher = FRONTEND_CAN_PERMISSION_PATTERN.matcher(app);
+        while (matcher.find()) {
+            permissions.add(matcher.group(1));
         }
         return permissions;
     }
