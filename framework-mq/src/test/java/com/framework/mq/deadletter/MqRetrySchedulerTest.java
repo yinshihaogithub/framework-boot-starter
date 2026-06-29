@@ -55,6 +55,56 @@ class MqRetrySchedulerTest {
         assertThat(saved.getOperator()).isEqualTo("ops-user");
         assertThat(saved.getCompensateRemark()).isEqualTo("fixed inventory");
         assertThat(saved.getRetryCount()).isEqualTo(1);
+        assertThat(saved.getNextRetryTime()).isNull();
+    }
+
+    @Test
+    void manualRetryFailurePersistsAttemptAndSchedulesNextRetry() {
+        MqFailedMessage failedMessage = failedMessage("{\"legacy\":true}");
+        failedMessage.setRetryCount(1);
+        InMemoryMqFailedMessageRepository repository = new InMemoryMqFailedMessageRepository(List.of(failedMessage));
+        DeadLetterHandler deadLetterHandler = new DeadLetterHandler(repository, new MqProperties());
+        MqRetryScheduler scheduler = new MqRetryScheduler(
+                deadLetterHandler,
+                new MqMessageSenderRegistry(properties(MqProperties.Provider.RABBIT),
+                        List.of(new FailingSender("broker unavailable"))),
+                3
+        );
+
+        boolean result = scheduler.manualRetry(1L, " ops-user ", " retry now ");
+
+        assertThat(result).isFalse();
+        MqFailedMessage saved = repository.findById(1L).orElseThrow();
+        assertThat(saved.getStatus()).isEqualTo(MqFailedMessage.STATUS_PENDING);
+        assertThat(saved.getRetryCount()).isEqualTo(2);
+        assertThat(saved.getOperator()).isEqualTo("ops-user");
+        assertThat(saved.getCompensateRemark()).isEqualTo("retry now");
+        assertThat(saved.getErrorMessage()).contains("failed", "手动重发失败: broker unavailable");
+        assertThat(saved.getNextRetryTime()).isNotNull();
+    }
+
+    @Test
+    void manualRetryFailureMarksExhaustedWhenRetryLimitReached() {
+        MqFailedMessage failedMessage = failedMessage("{\"legacy\":true}");
+        failedMessage.setRetryCount(2);
+        failedMessage.setMaxRetry(3);
+        InMemoryMqFailedMessageRepository repository = new InMemoryMqFailedMessageRepository(List.of(failedMessage));
+        DeadLetterHandler deadLetterHandler = new DeadLetterHandler(repository, new MqProperties());
+        MqRetryScheduler scheduler = new MqRetryScheduler(
+                deadLetterHandler,
+                new MqMessageSenderRegistry(properties(MqProperties.Provider.RABBIT),
+                        List.of(new FailingSender("broker unavailable"))),
+                3
+        );
+
+        boolean result = scheduler.manualRetry(1L, "ops-user", " ");
+
+        assertThat(result).isFalse();
+        MqFailedMessage saved = repository.findById(1L).orElseThrow();
+        assertThat(saved.getStatus()).isEqualTo(MqFailedMessage.STATUS_EXHAUSTED);
+        assertThat(saved.getRetryCount()).isEqualTo(3);
+        assertThat(saved.getCompensateRemark()).isEqualTo("手动重发失败");
+        assertThat(saved.getNextRetryTime()).isNull();
     }
 
     @Test
@@ -182,6 +232,25 @@ class MqRetrySchedulerTest {
             this.destination = destination;
             this.routingKey = routingKey;
             this.wrapper = wrapper;
+        }
+    }
+
+    private static class FailingSender implements MqMessageSender {
+
+        private final String message;
+
+        private FailingSender(String message) {
+            this.message = message;
+        }
+
+        @Override
+        public MqProperties.Provider provider() {
+            return MqProperties.Provider.RABBIT;
+        }
+
+        @Override
+        public <T> void send(String destination, String routingKey, MessageWrapper<T> wrapper) {
+            throw new IllegalStateException(message);
         }
     }
 

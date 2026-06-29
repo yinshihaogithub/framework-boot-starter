@@ -122,9 +122,10 @@ public class MqAdminService {
         if (scheduler == null) {
             return ActionResult.fail(ResultCode.SERVICE_ERROR, retryUnavailableMessage());
         }
-        boolean ok = scheduler.manualRetry(id, operator, remark);
+        String normalizedOperator = operator(operator);
+        boolean ok = scheduler.manualRetry(id, normalizedOperator, remark);
         auditService.success(servletRequest, "MQ管理", "手动重发MQ消息", "UPDATE",
-                auditService.params("id", id, "operator", operator, "remark", remark, "success", ok));
+                auditService.params("id", id, "operator", normalizedOperator, "remark", remark, "success", ok));
         return ok ? ActionResult.success("重发成功") : ActionResult.fail(ResultCode.BUSINESS_ERROR, "重发失败");
     }
 

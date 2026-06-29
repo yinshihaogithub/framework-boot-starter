@@ -154,7 +154,8 @@ public class MqRetryScheduler {
             msg.setStatus(MqFailedMessage.STATUS_MANUAL);
             msg.setOperator(normalizedOperator);
             msg.setCompensateRemark(normalizedRemark);
-            msg.setRetryCount(msg.getRetryCount() + 1);
+            msg.setRetryCount(retryCount(msg) + 1);
+            msg.setNextRetryTime(null);
             msg.setUpdateTime(new Date());
             deadLetterHandler.updateRecord(msg);
             log.info("[手动重发] id={}, messageId={}, traceId={}, operator={}",
@@ -162,8 +163,26 @@ public class MqRetryScheduler {
             return true;
         } catch (Exception e) {
             log.error("[手动重发失败] id={}, error={}", id, e.getMessage());
+            recordManualRetryFailure(msg, normalizedOperator, normalizedRemark, e);
             return false;
         }
+    }
+
+    private void recordManualRetryFailure(MqFailedMessage msg, String operator, String remark, Exception exception) {
+        int newRetryCount = retryCount(msg) + 1;
+        msg.setRetryCount(newRetryCount);
+        msg.setOperator(operator);
+        msg.setCompensateRemark(remark == null ? "手动重发失败" : remark);
+        msg.setErrorMessage(appendErrorMessage(msg.getErrorMessage(), "手动重发失败: " + exception.getMessage()));
+        if (newRetryCount >= retryLimit(msg)) {
+            msg.setStatus(MqFailedMessage.STATUS_EXHAUSTED);
+            msg.setNextRetryTime(null);
+        } else {
+            msg.setStatus(MqFailedMessage.STATUS_PENDING);
+            msg.setNextRetryTime(calculateNextRetryTime(newRetryCount));
+        }
+        msg.setUpdateTime(new Date());
+        deadLetterHandler.updateRecord(msg);
     }
 
     /**
@@ -270,6 +289,18 @@ public class MqRetryScheduler {
 
     private boolean isBlank(String value) {
         return value == null || value.isBlank();
+    }
+
+    private int retryCount(MqFailedMessage msg) {
+        return msg.getRetryCount() == null ? 0 : msg.getRetryCount();
+    }
+
+    private int retryLimit(MqFailedMessage msg) {
+        return msg.getMaxRetry() == null || msg.getMaxRetry() <= 0 ? maxRetry : msg.getMaxRetry();
+    }
+
+    private String appendErrorMessage(String current, String addition) {
+        return isBlank(current) ? addition : current + " | " + addition;
     }
 
     private String normalize(String value) {
