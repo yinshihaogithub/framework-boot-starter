@@ -858,6 +858,24 @@ class RepositoryEngineeringGuardTest {
     }
 
     @Test
+    void permissionCacheServiceIsOptionalWhenRedisIsMissing() throws Exception {
+        String securityAutoConfiguration = read(root.resolve(
+                "framework-security/src/main/java/com/framework/security/config/SecurityAutoConfiguration.java"));
+        String securityAutoConfigurationTest = read(root.resolve(
+                "framework-security/src/test/java/com/framework/security/config/SecurityAutoConfigurationImportsTest.java"));
+
+        assertThat(securityAutoConfiguration)
+                .as("permission cache must be an optional Redis-backed enhancement")
+                .contains("import org.springframework.boot.autoconfigure.condition.ConditionalOnBean")
+                .contains("@ConditionalOnBean(StringRedisTemplate.class)")
+                .contains("PermissionCacheService permissionCacheService");
+        assertThat(securityAutoConfigurationTest)
+                .contains("permissionCacheServiceIsOptionalWhenRedisIsMissing")
+                .contains("doesNotHaveBean(PermissionCacheService.class)")
+                .contains("permissionCacheServiceIsRegisteredWhenRedisExists");
+    }
+
+    @Test
     void adminSessionsAreRevalidatedAgainstCurrentAccountStatus() throws Exception {
         String tokenFilter = read(root.resolve("framework-auth/src/main/java/com/framework/auth/filter/TokenAuthFilter.java"));
         String authAutoConfiguration = read(root.resolve("framework-auth/src/main/java/com/framework/auth/config/AuthAutoConfiguration.java"));

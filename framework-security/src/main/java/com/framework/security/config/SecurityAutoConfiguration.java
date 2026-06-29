@@ -5,6 +5,7 @@ import com.framework.security.aspect.PermissionAspect;
 import com.framework.security.datascope.DataScopeInterceptor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
@@ -40,6 +41,7 @@ public class SecurityAutoConfiguration {
      * 权限缓存服务
      */
     @Bean
+    @ConditionalOnBean(StringRedisTemplate.class)
     @ConditionalOnMissingBean
     public PermissionCacheService permissionCacheService(StringRedisTemplate redisTemplate) {
         return new PermissionCacheService(redisTemplate);

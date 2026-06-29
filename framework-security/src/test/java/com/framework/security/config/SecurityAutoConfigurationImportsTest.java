@@ -2,6 +2,7 @@ package com.framework.security.config;
 
 import com.framework.security.aspect.PermissionAspect;
 import com.framework.security.datascope.DataScopeInterceptor;
+import com.framework.security.service.PermissionCacheService;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
@@ -15,8 +16,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class SecurityAutoConfigurationImportsTest {
 
     private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
-            .withConfiguration(AutoConfigurations.of(SecurityAutoConfiguration.class))
-            .withBean(StringRedisTemplate.class, () -> new StringRedisTemplate(redisConnectionFactory()));
+            .withConfiguration(AutoConfigurations.of(SecurityAutoConfiguration.class));
 
     @Test
     void autoConfigurationRegistersPermissionAspect() {
@@ -24,6 +24,21 @@ class SecurityAutoConfigurationImportsTest {
                 .hasSingleBean(SecurityAutoConfiguration.class)
                 .hasSingleBean(PermissionAspect.class)
                 .hasSingleBean(DataScopeInterceptor.class));
+    }
+
+    @Test
+    void permissionCacheServiceIsOptionalWhenRedisIsMissing() {
+        contextRunner.run(context -> assertThat(context)
+                .hasNotFailed()
+                .doesNotHaveBean(PermissionCacheService.class));
+    }
+
+    @Test
+    void permissionCacheServiceIsRegisteredWhenRedisExists() {
+        contextRunner
+                .withBean(StringRedisTemplate.class, () -> new StringRedisTemplate(redisConnectionFactory()))
+                .run(context -> assertThat(context)
+                        .hasSingleBean(PermissionCacheService.class));
     }
 
     private static RedisConnectionFactory redisConnectionFactory() {
