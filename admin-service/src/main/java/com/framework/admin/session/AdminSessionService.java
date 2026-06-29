@@ -6,6 +6,7 @@ import com.framework.auth.context.UserContextHolder;
 import com.framework.auth.service.SessionManager;
 import com.framework.core.result.ResultCode;
 import jakarta.servlet.http.HttpServletRequest;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -13,6 +14,7 @@ import java.util.List;
 /**
  * Admin-side online session management.
  */
+@Slf4j
 @Service
 public class AdminSessionService {
 
@@ -25,7 +27,12 @@ public class AdminSessionService {
     }
 
     public List<SessionManager.OnlineSession> listSessions() {
-        return sessionManager.listOnlineSessions();
+        try {
+            return sessionManager.listOnlineSessions();
+        } catch (RuntimeException e) {
+            log.warn("[在线会话] 会话列表查询失败 error={}", e.getMessage());
+            return List.of();
+        }
     }
 
     public ActionResult<String> kickSession(Long userId, String deviceId, HttpServletRequest request) {
@@ -35,12 +42,25 @@ public class AdminSessionService {
         if (isCurrentSession(userId, deviceId)) {
             return ActionResult.failure(ResultCode.PARAM_ERROR.getCode(), "不能强制下线当前会话，请使用退出登录");
         }
-        boolean exists = sessionManager.listOnlineSessions().stream()
-                .anyMatch(session -> userId.equals(session.userId()) && deviceId.equals(session.deviceId()));
+        boolean exists;
+        try {
+            exists = sessionManager.listOnlineSessions().stream()
+                    .anyMatch(session -> userId.equals(session.userId()) && deviceId.equals(session.deviceId()));
+        } catch (RuntimeException e) {
+            log.warn("[在线会话] 强制下线前查询会话失败 userId={}, deviceId={}, error={}",
+                    userId, deviceId, e.getMessage());
+            return ActionResult.failure(ResultCode.SERVICE_ERROR.getCode(), "会话查询失败");
+        }
         if (!exists) {
             return ActionResult.failure(ResultCode.NOT_FOUND.getCode(), "会话不存在或已失效");
         }
-        sessionManager.forceLogout(userId, deviceId);
+        try {
+            sessionManager.forceLogout(userId, deviceId);
+        } catch (RuntimeException e) {
+            log.warn("[在线会话] 强制下线失败 userId={}, deviceId={}, error={}",
+                    userId, deviceId, e.getMessage());
+            return ActionResult.failure(ResultCode.SERVICE_ERROR.getCode(), "强制下线失败");
+        }
         auditService.success(request, "在线会话", "强制下线", "DELETE",
                 auditService.params("userId", userId, "deviceId", deviceId));
         return ActionResult.success("已强制下线");

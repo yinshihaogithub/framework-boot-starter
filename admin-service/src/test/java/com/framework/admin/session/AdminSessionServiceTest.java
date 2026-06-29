@@ -36,6 +36,13 @@ class AdminSessionServiceTest {
     }
 
     @Test
+    void listSessionsReturnsEmptyWhenSessionManagerFails() {
+        sessionManager.listFailure = new RuntimeException("redis down");
+
+        assertThat(sessionService.listSessions()).isEmpty();
+    }
+
+    @Test
     void kickSessionRemovesExistingSessionAndWritesAudit() {
         HttpServletRequest request = new MockHttpServletRequest("DELETE", "/admin/sessions/2/web");
         sessionManager.sessions = List.of(new SessionManager.OnlineSession(2L, "bob", "1", "web", 100L, 3600L));
@@ -71,10 +78,39 @@ class AdminSessionServiceTest {
         assertThat(sessionManager.kicked).isEmpty();
     }
 
+    @Test
+    void kickSessionReturnsServiceErrorWhenListFails() {
+        sessionManager.listFailure = new RuntimeException("redis down");
+
+        AdminSessionService.ActionResult<String> result = sessionService.kickSession(2L, "web", null);
+
+        assertThat(result.success()).isFalse();
+        assertThat(result.code()).isEqualTo(ResultCode.SERVICE_ERROR.getCode());
+        assertThat(result.message()).isEqualTo("会话查询失败");
+        assertThat(sessionManager.kicked).isEmpty();
+        assertThat(auditService.successActions).isEmpty();
+    }
+
+    @Test
+    void kickSessionReturnsServiceErrorWhenForceLogoutFails() {
+        sessionManager.sessions = List.of(new SessionManager.OnlineSession(2L, "bob", "1", "web", 100L, 3600L));
+        sessionManager.forceLogoutFailure = new RuntimeException("redis down");
+
+        AdminSessionService.ActionResult<String> result = sessionService.kickSession(2L, "web", null);
+
+        assertThat(result.success()).isFalse();
+        assertThat(result.code()).isEqualTo(ResultCode.SERVICE_ERROR.getCode());
+        assertThat(result.message()).isEqualTo("强制下线失败");
+        assertThat(sessionManager.kicked).isEmpty();
+        assertThat(auditService.successActions).isEmpty();
+    }
+
     private static final class FakeSessionManager extends SessionManager {
 
         private List<OnlineSession> sessions = List.of();
         private final List<String> kicked = new ArrayList<>();
+        private RuntimeException listFailure;
+        private RuntimeException forceLogoutFailure;
 
         private FakeSessionManager() {
             super(null, null, 0);
@@ -82,11 +118,17 @@ class AdminSessionServiceTest {
 
         @Override
         public List<OnlineSession> listOnlineSessions() {
+            if (listFailure != null) {
+                throw listFailure;
+            }
             return sessions;
         }
 
         @Override
         public void forceLogout(Long userId, String deviceId) {
+            if (forceLogoutFailure != null) {
+                throw forceLogoutFailure;
+            }
             kicked.add(userId + ":" + deviceId);
         }
     }
