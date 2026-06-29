@@ -347,6 +347,23 @@ export interface ExcelTaskResult {
   fileSize: number
 }
 
+export interface FileRecord {
+  id: number
+  fileKey: string
+  originalFilename: string
+  contentType?: string
+  fileSize: number
+  url?: string
+  storageType?: string
+  businessType?: string
+  businessKey?: string
+  operatorId?: number
+  operatorName?: string
+  deleted?: boolean
+  createTime?: string
+  updateTime?: string
+}
+
 const http = axios.create({
   baseURL: '',
   timeout: 10000
@@ -433,6 +450,16 @@ async function deleteData<T>(url: string): Promise<T> {
   return unwrap(response.data)
 }
 
+async function postForm<T>(url: string, data: FormData): Promise<T> {
+  const response = await http.post<ApiResult<T>>(url, data)
+  return unwrap(response.data)
+}
+
+async function getBlob(url: string): Promise<Blob> {
+  const response = await http.get<Blob>(url, { responseType: 'blob' })
+  return response.data
+}
+
 export const api = {
   login: (data: { username: string; password: string; deviceId?: string }) =>
     postData<LoginResponse>('/admin/auth/login', data),
@@ -489,6 +516,11 @@ export const api = {
   createImportFailureTask: (data: Record<string, unknown>) =>
     postData<ExcelTaskResult>('/admin/excel/tasks/import-failure', data),
   excelErrors: (taskId: number) => getData<ExcelErrorRecord[]>(`/admin/excel/tasks/${taskId}/errors`),
+  fileStats: () => getData<Record<string, number>>('/admin/files/stats'),
+  files: (params: Record<string, unknown>) => getData<PageResult<FileRecord>>('/admin/files', params),
+  uploadFile: (data: FormData) => postForm<FileRecord>('/admin/files', data),
+  downloadFile: (id: number) => getBlob(`/admin/files/${id}/download`),
+  deleteFile: (id: number) => deleteData<string>(`/admin/files/${id}`),
   users: (params: Record<string, unknown>) => getData<PageResult<AdminUser>>('/admin/system/users', params),
   tenants: () => getData<Tenant[]>('/admin/system/tenants'),
   createTenant: (data: Record<string, unknown>) => postData<number>('/admin/system/tenants', data),

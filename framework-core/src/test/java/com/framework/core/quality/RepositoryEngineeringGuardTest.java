@@ -582,6 +582,62 @@ class RepositoryEngineeringGuardTest {
     }
 
     @Test
+    void adminFileManagementIsExposedEndToEnd() throws Exception {
+        String controller = read(root.resolve(
+                "admin-service/src/main/java/com/framework/admin/file/FileAdminController.java"));
+        String service = read(root.resolve(
+                "admin-service/src/main/java/com/framework/admin/file/FileAdminService.java"));
+        String mapper = read(root.resolve(
+                "admin-service/src/main/java/com/framework/admin/file/FileAdminMapper.java"));
+        String client = read(root.resolve("frontend/admin-web/src/api/client.ts"));
+        String app = read(root.resolve("frontend/admin-web/src/App.vue"));
+        String adminServiceScript = read(root.resolve("admin-service/src/main/resources/db/mysql/admin_service.sql"));
+        String aggregateScript = read(root.resolve("sql/mysql/framework_boot_starter_init.sql"));
+
+        assertThat(controller)
+                .contains("@RequestMapping(\"/admin/files\")")
+                .contains("@RequirePermission(\"file:view\")")
+                .contains("@RequirePermission(\"file:upload\")")
+                .contains("@RequirePermission(\"file:delete\")")
+                .contains("@GetMapping(\"/{id}/download\")");
+        assertThat(service)
+                .contains("ObjectProvider<FileStorageService>")
+                .contains("storageService.store")
+                .contains("storageService.load")
+                .contains("storageService.delete")
+                .contains("auditService.success");
+        assertThat(mapper)
+                .contains("@Mapper")
+                .contains("framework_file_record")
+                .contains("INSERT INTO framework_file_record")
+                .contains("UPDATE framework_file_record");
+        assertThat(client)
+                .contains("export interface FileRecord")
+                .contains("uploadFile:")
+                .contains("downloadFile:")
+                .contains("deleteFile:");
+        assertThat(app)
+                .contains("activeView === 'files'")
+                .contains("Files: 'files'")
+                .contains("file:upload")
+                .contains("file:delete")
+                .contains("api.uploadFile")
+                .contains("api.downloadFile");
+        assertThat(adminServiceScript)
+                .contains("CREATE TABLE IF NOT EXISTS framework_file_record")
+                .contains("'文件中心'")
+                .contains("'file:view'")
+                .contains("'file:upload'")
+                .contains("'file:delete'");
+        assertThat(aggregateScript)
+                .contains("CREATE TABLE IF NOT EXISTS framework_file_record")
+                .contains("'文件中心'")
+                .contains("'file:view'")
+                .contains("'file:upload'")
+                .contains("'file:delete'");
+    }
+
+    @Test
     void adminCurrentUserCanChangeOwnPasswordEndToEnd() throws Exception {
         String controller = read(root.resolve(
                 "admin-service/src/main/java/com/framework/admin/auth/AdminAuthController.java"));

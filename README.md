@@ -29,7 +29,7 @@ Java 框架脚手架 —— 开箱即用的后端基础能力。
 | `framework-job` | 任务：XXL-JOB 执行器自动配置、JobHandler 注册和本地触发 |
 | `framework-file` | 文件：统一文件模型、本地存储默认实现、对象存储扩展点 |
 | `framework-starter` | 聚合 Starter：一次引入常用脚手架能力 |
-| `admin-service` | 管理后台服务：登录认证、系统管理、Dashboard、MQ 补偿、本地消息、日志审计、监控 API |
+| `admin-service` | 管理后台服务：登录认证、系统管理、Dashboard、MQ 补偿、本地消息、通知/Excel/文件中心、日志审计、监控 API |
 | `frontend/admin-web` | 管理后台前端：登录页、系统管理、运维控制台，Vue3 + Vite + Element Plus |
 | `demo` | 示例启动模块：演示全部能力 |
 
@@ -168,11 +168,12 @@ Java 框架脚手架 —— 开箱即用的后端基础能力。
 
 MQ 治理第一版已经按工程级后台闭环实现：`framework-mq` 保留 RocketMQ、Kafka、RabbitMQ 三类适配，失败消息统一落 MySQL；`admin-service` 提供失败消息查询、手动重发、人工补偿完成、人工终止、删除和清理已处理记录。`framework-local-message` 负责本地消息表、到期重试和状态流转，后台提供查询、扫描重试、人工成功、人工失败和删除。所有人工动作都会写入 `sys_operation_log`，并携带操作人、traceId、请求 URI、关键参数和结果。
 
-通知和 Excel 已按“framework 提供能力、admin-service 提供管理面”的边界接入：`framework-notify`
+通知、Excel 和文件已按“framework 提供能力、admin-service 提供管理面”的边界接入：`framework-notify`
 继续提供 LOG/Webhook/短信/邮件通道抽象，后台提供通知模板、发送测试和发送记录；`framework-excel`
-继续提供 EasyExcel 导入导出服务，后台提供导出任务、导入失败登记和错误明细。相关管理数据统一落 MySQL，
-初始化脚本包含 `framework_notify_template`、`framework_notify_record`、`framework_excel_task` 和
-`framework_excel_error`。
+继续提供 EasyExcel 导入导出服务，后台提供导出任务、导入失败登记和错误明细；`framework-file`
+继续提供本地/对象存储抽象，后台提供文件上传、下载、删除和元数据列表。相关管理数据统一落 MySQL，
+初始化脚本包含 `framework_notify_template`、`framework_notify_record`、`framework_excel_task`、
+`framework_excel_error` 和 `framework_file_record`。
 
 ### 6. 建议落地顺序
 

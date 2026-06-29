@@ -284,6 +284,27 @@ CREATE TABLE IF NOT EXISTS framework_excel_error (
     INDEX idx_task_row (task_id, row_index)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Excel导入错误明细表';
 
+CREATE TABLE IF NOT EXISTS framework_file_record (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    file_key VARCHAR(256) NOT NULL,
+    original_filename VARCHAR(255) NOT NULL,
+    content_type VARCHAR(128),
+    file_size BIGINT NOT NULL DEFAULT 0,
+    url VARCHAR(512),
+    storage_type VARCHAR(32) NOT NULL DEFAULT 'LOCAL',
+    business_type VARCHAR(64),
+    business_key VARCHAR(256),
+    operator_id BIGINT,
+    operator_name VARCHAR(64),
+    deleted TINYINT(1) NOT NULL DEFAULT 0,
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_file_key (file_key),
+    INDEX idx_business (business_type, business_key),
+    INDEX idx_deleted_time (deleted, create_time),
+    INDEX idx_operator_time (operator_id, create_time)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='文件元数据表';
+
 INSERT INTO sys_tenant (id, tenant_code, tenant_name, status)
 VALUES (1, 'default', '默认租户', 'ENABLED')
 ON DUPLICATE KEY UPDATE tenant_name = VALUES(tenant_name), status = VALUES(status);
@@ -319,6 +340,7 @@ VALUES
     (12, 0, 'MENU', '监控中心', 'monitor', 'Monitor', 'monitor:view', 'Monitor', 70, 1),
     (13, 0, 'MENU', '通知中心', 'notify', 'Notify', 'notify:view', 'Bell', 80, 1),
     (14, 0, 'MENU', 'Excel 中心', 'excel', 'Excel', 'excel:view', 'Files', 90, 1),
+    (20, 0, 'MENU', '文件中心', 'files', 'Files', 'file:view', 'FolderOpened', 95, 1),
     (15, 2, 'MENU', '租户管理', 'system/tenants', 'SystemTenants', 'system:tenant:view', 'OfficeBuilding', 21, 1),
     (16, 2, 'MENU', '部门管理', 'system/depts', 'SystemDepts', 'system:dept:view', 'MostlyCloudy', 22, 1),
     (18, 0, 'MENU', '登录日志', 'login-logs', 'LoginLogs', 'log:login:view', 'Document', 31, 1),
@@ -329,6 +351,8 @@ VALUES
     (104, 11, 'BUTTON', '本地消息重试', NULL, NULL, 'local-message:retry', NULL, 1, 0),
     (105, 13, 'BUTTON', '发送测试通知', NULL, NULL, 'notify:send-test', NULL, 1, 0),
     (106, 14, 'BUTTON', '创建Excel任务', NULL, NULL, 'excel:task:create', NULL, 1, 0),
+    (131, 20, 'BUTTON', '上传文件', NULL, NULL, 'file:upload', NULL, 1, 0),
+    (132, 20, 'BUTTON', '删除文件', NULL, NULL, 'file:delete', NULL, 2, 0),
     (107, 15, 'BUTTON', '新增租户', NULL, NULL, 'system:tenant:create', NULL, 1, 0),
     (108, 16, 'BUTTON', '新增部门', NULL, NULL, 'system:dept:create', NULL, 1, 0),
     (109, 15, 'BUTTON', '更新租户', NULL, NULL, 'system:tenant:update', NULL, 2, 0),

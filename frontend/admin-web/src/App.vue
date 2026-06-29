@@ -667,6 +667,49 @@
           </el-card>
         </section>
 
+        <section v-if="activeView === 'files'" class="view">
+          <div class="metrics compact">
+            <div class="metric"><span>有效文件</span><strong>{{ fileStats?.active ?? 0 }}</strong></div>
+            <div class="metric"><span>已删除</span><strong>{{ fileStats?.deleted ?? 0 }}</strong></div>
+            <div class="metric"><span>占用空间</span><strong>{{ formatBytes(fileStats?.totalSize ?? 0) }}</strong></div>
+          </div>
+          <el-card shadow="never">
+            <template #header>
+              <div class="section-head">
+                <span>文件列表</span>
+                <div class="actions">
+                  <el-input v-model="fileQuery.keyword" clearable placeholder="文件/业务键" class="filter" />
+                  <el-input v-model="fileQuery.businessType" clearable placeholder="业务类型" class="filter" />
+                  <el-input v-model="fileQuery.contentType" clearable placeholder="Content-Type" class="filter" />
+                  <el-button :icon="Search" circle type="primary" @click="loadFiles" />
+                  <el-button v-if="can('file:upload')" :icon="Upload" circle @click="chooseFile" />
+                  <input ref="fileInputRef" class="file-input" type="file" @change="uploadSelectedFile" />
+                </div>
+              </div>
+            </template>
+            <el-table :data="fileRecords.records" height="500" stripe>
+              <el-table-column prop="id" label="ID" width="86" />
+              <el-table-column prop="originalFilename" label="文件名" min-width="190" show-overflow-tooltip />
+              <el-table-column prop="contentType" label="类型" min-width="150" show-overflow-tooltip />
+              <el-table-column label="大小" width="110">
+                <template #default="{ row }">{{ formatBytes(row.fileSize) }}</template>
+              </el-table-column>
+              <el-table-column prop="businessType" label="业务类型" min-width="120" show-overflow-tooltip />
+              <el-table-column prop="businessKey" label="业务键" min-width="140" show-overflow-tooltip />
+              <el-table-column prop="operatorName" label="上传人" width="120" />
+              <el-table-column prop="createTime" label="上传时间" min-width="170" />
+              <el-table-column label="操作" width="134" fixed="right">
+                <template #default="{ row }">
+                  <el-button :icon="Download" circle size="small" @click="downloadFile(row)" />
+                  <el-button v-if="can('file:delete')" :icon="Delete" circle size="small" @click="deleteFile(row)" />
+                  <el-button :icon="View" circle size="small" @click="openDetail(row)" />
+                </template>
+              </el-table-column>
+            </el-table>
+            <el-pagination v-model:current-page="fileQuery.pageNum" v-model:page-size="fileQuery.pageSize" class="pager" layout="total, sizes, prev, pager, next" :total="fileRecords.total" @change="loadFiles" />
+          </el-card>
+        </section>
+
         <section v-if="activeView === 'trace'" class="view">
           <div class="metrics compact">
             <div class="metric"><span>日志</span><strong>{{ traceDetail?.summary?.logs ?? 0 }}</strong></div>
@@ -1152,9 +1195,11 @@ import {
   Collection,
   DataBoard,
   Delete,
+  Download,
   Document,
   Edit,
   Files,
+  FolderOpened,
   Lock,
   Menu as MenuIcon,
   Monitor,
@@ -1170,6 +1215,7 @@ import {
   Tickets,
   Tools,
   Unlock,
+  Upload,
   User,
   View
 } from '@element-plus/icons-vue'
@@ -1190,6 +1236,7 @@ import {
   type DictType,
   type ExcelErrorRecord,
   type ExcelTask,
+  type FileRecord,
   type HealthStatus,
   type LoginLog,
   type LocalMessage,
@@ -1208,7 +1255,7 @@ import {
   type TraceDetail
 } from './api/client'
 
-type ViewName = 'dashboard' | 'system-tenants' | 'system-depts' | 'system-users' | 'system-roles' | 'system-menus' | 'system-dicts' | 'system-configs' | 'mq' | 'local' | 'notify' | 'excel' | 'logs' | 'login-logs' | 'sessions' | 'trace' | 'monitor'
+type ViewName = 'dashboard' | 'system-tenants' | 'system-depts' | 'system-users' | 'system-roles' | 'system-menus' | 'system-dicts' | 'system-configs' | 'mq' | 'local' | 'notify' | 'excel' | 'files' | 'logs' | 'login-logs' | 'sessions' | 'trace' | 'monitor'
 type NavItem = {
   index: string
   title: string
@@ -1234,6 +1281,7 @@ const viewTitles: Record<ViewName, string> = {
   local: '本地消息',
   notify: '通知中心',
   excel: 'Excel 中心',
+  files: '文件中心',
   logs: '日志中心',
   'login-logs': '登录日志',
   sessions: '在线会话',
@@ -1254,6 +1302,7 @@ const componentViewMap: Record<string, ViewName> = {
   LocalMessage: 'local',
   Notify: 'notify',
   Excel: 'excel',
+  Files: 'files',
   Logs: 'logs',
   LoginLogs: 'login-logs',
   Sessions: 'sessions',
@@ -1275,6 +1324,7 @@ const routeViewMap: Record<string, ViewName> = {
   local: 'local',
   notify: 'notify',
   excel: 'excel',
+  files: 'files',
   logs: 'logs',
   'login-logs': 'login-logs',
   sessions: 'sessions',
@@ -1290,6 +1340,7 @@ const iconMap: Record<string, Component> = {
   DataBoard,
   Document,
   Files,
+  FolderOpened,
   Menu: MenuIcon,
   Monitor,
   MostlyCloudy,
@@ -1320,6 +1371,8 @@ const notifyRecords = reactive<PageResult<NotifyRecord>>({ records: [], total: 0
 const excelStats = ref<Record<string, number>>({})
 const excelTasks = reactive<PageResult<ExcelTask>>({ records: [], total: 0, pageNum: 1, pageSize: 20, pages: 0 })
 const excelErrors = ref<ExcelErrorRecord[]>([])
+const fileStats = ref<Record<string, number>>({})
+const fileRecords = reactive<PageResult<FileRecord>>({ records: [], total: 0, pageNum: 1, pageSize: 20, pages: 0 })
 const logs = reactive<PageResult<OperationLog>>({ records: [], total: 0, pageNum: 1, pageSize: 20, pages: 0 })
 const loginLogs = reactive<PageResult<LoginLog>>({ records: [], total: 0, pageNum: 1, pageSize: 20, pages: 0 })
 const onlineSessions = ref<OnlineSession[]>([])
@@ -1360,6 +1413,7 @@ const notifyDialogVisible = ref(false)
 const editingNotifyId = ref<number>()
 const selectedDictCode = ref('')
 const changePasswordVisible = ref(false)
+const fileInputRef = ref<HTMLInputElement>()
 
 const tenantForm = reactive({ tenantCode: '', tenantName: '', status: 'ENABLED' })
 const deptForm = reactive({
@@ -1414,6 +1468,7 @@ const localQuery = reactive({ status: '', topic: '', pageNum: 1, pageSize: 20 })
 const notifyQuery = reactive({ keyword: '', channel: '', status: '', pageNum: 1, pageSize: 20 })
 const notifyRecordQuery = reactive<{ channel: string; success: boolean | ''; pageNum: number; pageSize: number }>({ channel: '', success: '', pageNum: 1, pageSize: 20 })
 const excelQuery = reactive({ taskType: '', status: '', pageNum: 1, pageSize: 20 })
+const fileQuery = reactive({ keyword: '', businessType: '', contentType: '', pageNum: 1, pageSize: 20 })
 const logQuery = reactive({ logType: '', traceId: '', pageNum: 1, pageSize: 20 })
 const loginLogQuery = reactive<{ username: string; success: boolean | ''; pageNum: number; pageSize: number }>({ username: '', success: '', pageNum: 1, pageSize: 20 })
 const userQuery = reactive({ keyword: '', status: '', pageNum: 1, pageSize: 20 })
@@ -1534,6 +1589,7 @@ async function refreshCurrent() {
     if (activeView.value === 'local') await loadLocal()
     if (activeView.value === 'notify') await loadNotify()
     if (activeView.value === 'excel') await loadExcel()
+    if (activeView.value === 'files') await loadFiles()
     if (activeView.value === 'logs') await loadLogs()
     if (activeView.value === 'login-logs') await loadLoginLogs()
     if (activeView.value === 'sessions') await loadSessions()
@@ -1630,6 +1686,12 @@ async function loadExcel() {
   excelStats.value = await api.excelStats()
   const page = await api.excelTasks(excelQuery)
   Object.assign(excelTasks, page)
+}
+
+async function loadFiles() {
+  fileStats.value = await api.fileStats()
+  const page = await api.files(fileQuery)
+  Object.assign(fileRecords, page)
 }
 
 async function loadLogs() {
@@ -2171,6 +2233,44 @@ async function loadExcelErrors(row: ExcelTask) {
   detailVisible.value = true
 }
 
+function chooseFile() {
+  fileInputRef.value?.click()
+}
+
+async function uploadSelectedFile(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) {
+    return
+  }
+  const form = new FormData()
+  form.append('file', file)
+  if (fileQuery.businessType) {
+    form.append('businessType', fileQuery.businessType)
+  }
+  const record = await api.uploadFile(form)
+  input.value = ''
+  ElMessage.success(`已上传 ${record.originalFilename}`)
+  await loadFiles()
+}
+
+async function downloadFile(row: FileRecord) {
+  const blob = await api.downloadFile(row.id)
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = row.originalFilename || 'file'
+  link.click()
+  URL.revokeObjectURL(url)
+}
+
+async function deleteFile(row: FileRecord) {
+  await confirmDelete(`删除文件 ${row.originalFilename}？`)
+  await api.deleteFile(row.id)
+  ElMessage.success('已删除')
+  await loadFiles()
+}
+
 async function searchTrace() {
   const traceId = traceKeyword.value.trim()
   if (!traceId) return
@@ -2471,6 +2571,20 @@ function formatRuntime(value: unknown) {
     return `${(value / 1024 / 1024).toFixed(1)} MB`
   }
   return String(value)
+}
+
+function formatBytes(value?: number) {
+  const size = Number(value || 0)
+  if (size >= 1024 * 1024 * 1024) {
+    return `${(size / 1024 / 1024 / 1024).toFixed(1)} GB`
+  }
+  if (size >= 1024 * 1024) {
+    return `${(size / 1024 / 1024).toFixed(1)} MB`
+  }
+  if (size >= 1024) {
+    return `${(size / 1024).toFixed(1)} KB`
+  }
+  return `${size} B`
 }
 
 function formatLoginTime(value: number) {
@@ -2798,6 +2912,10 @@ function formatHealthDetails(details?: Record<string, unknown>) {
   padding: 0 24px;
   border-bottom: 0;
   background: #fff;
+}
+
+.file-input {
+  display: none;
 }
 
 .page-title {
