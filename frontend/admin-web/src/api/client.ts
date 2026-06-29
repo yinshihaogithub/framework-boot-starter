@@ -1,5 +1,21 @@
 import axios from 'axios'
 
+export const AUTH_EXPIRED_EVENT = 'admin-auth-expired'
+
+export class ApiError extends Error {
+  code?: number
+  status?: number
+  traceId?: string
+
+  constructor(message: string, code?: number, status?: number, traceId?: string) {
+    super(message)
+    this.name = 'ApiError'
+    this.code = code
+    this.status = status
+    this.traceId = traceId
+  }
+}
+
 export interface ApiResult<T> {
   code: number
   message: string
@@ -336,6 +352,16 @@ export function clearToken() {
   localStorage.removeItem('admin_token')
 }
 
+export function isAuthExpiredError(error: unknown) {
+  return error instanceof ApiError
+    && (error.status === 401 || error.code === 401 || error.code === 2001 || error.code === 2002)
+}
+
+function notifyAuthExpired(error: ApiError) {
+  clearToken()
+  window.dispatchEvent(new CustomEvent<ApiError>(AUTH_EXPIRED_EVENT, { detail: error }))
+}
+
 http.interceptors.request.use((config) => {
   const token = getToken()
   if (token) {
@@ -344,36 +370,55 @@ http.interceptors.request.use((config) => {
   return config
 })
 
+http.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (axios.isAxiosError(error) && error.response) {
+      const data = error.response.data as Partial<ApiResult<unknown>> | undefined
+      const apiError = new ApiError(
+        data?.message || error.message || '请求失败',
+        data?.code,
+        error.response.status,
+        data?.traceId
+      )
+      if (isAuthExpiredError(apiError)) {
+        notifyAuthExpired(apiError)
+      }
+      return Promise.reject(apiError)
+    }
+    return Promise.reject(error)
+  }
+)
+
+function unwrap<T>(response: ApiResult<T>): T {
+  if (response.code !== 200) {
+    const error = new ApiError(response.message, response.code, undefined, response.traceId)
+    if (isAuthExpiredError(error)) {
+      notifyAuthExpired(error)
+    }
+    throw error
+  }
+  return response.data
+}
+
 async function getData<T>(url: string, params?: Record<string, unknown>): Promise<T> {
   const response = await http.get<ApiResult<T>>(url, { params })
-  if (response.data.code !== 200) {
-    throw new Error(response.data.message)
-  }
-  return response.data.data
+  return unwrap(response.data)
 }
 
 async function postData<T>(url: string, data?: unknown, params?: Record<string, unknown>): Promise<T> {
   const response = await http.post<ApiResult<T>>(url, data, { params })
-  if (response.data.code !== 200) {
-    throw new Error(response.data.message)
-  }
-  return response.data.data
+  return unwrap(response.data)
 }
 
 async function putData<T>(url: string, data?: unknown, params?: Record<string, unknown>): Promise<T> {
   const response = await http.put<ApiResult<T>>(url, data, { params })
-  if (response.data.code !== 200) {
-    throw new Error(response.data.message)
-  }
-  return response.data.data
+  return unwrap(response.data)
 }
 
 async function deleteData<T>(url: string): Promise<T> {
   const response = await http.delete<ApiResult<T>>(url)
-  if (response.data.code !== 200) {
-    throw new Error(response.data.message)
-  }
-  return response.data.data
+  return unwrap(response.data)
 }
 
 export const api = {

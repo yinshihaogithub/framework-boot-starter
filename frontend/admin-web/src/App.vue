@@ -1065,7 +1065,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, reactive, ref, type Component } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, type Component } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   ArrowDown,
@@ -1099,9 +1099,12 @@ import {
 } from '@element-plus/icons-vue'
 import {
   api,
+  AUTH_EXPIRED_EVENT,
   clearToken,
   getToken,
+  isAuthExpiredError,
   setToken,
+  type ApiError,
   type AdminUser,
   type ConfigItem,
   type CurrentUser,
@@ -1220,6 +1223,7 @@ const iconMap: Record<string, Component> = {
 
 const authed = ref(false)
 const loginLoading = ref(false)
+const authExpiredNotified = ref(false)
 const currentUser = ref<CurrentUser>()
 const loginForm = reactive({ username: '', password: '' })
 const activeView = ref<ViewName>('dashboard')
@@ -1345,7 +1349,18 @@ function can(permission: string) {
   return currentUser.value?.permissions?.includes(permission) ?? false
 }
 
+function handleAuthExpired(event: Event) {
+  const detail = event instanceof CustomEvent ? event.detail as ApiError | undefined : undefined
+  currentUser.value = undefined
+  authed.value = false
+  if (!authExpiredNotified.value) {
+    authExpiredNotified.value = true
+    ElMessage.warning(detail?.message || '登录已过期，请重新登录')
+  }
+}
+
 onMounted(async () => {
+  window.addEventListener(AUTH_EXPIRED_EVENT, handleAuthExpired)
   if (!getToken()) {
     return
   }
@@ -1359,11 +1374,16 @@ onMounted(async () => {
   }
 })
 
+onUnmounted(() => {
+  window.removeEventListener(AUTH_EXPIRED_EVENT, handleAuthExpired)
+})
+
 async function login() {
   loginLoading.value = true
   try {
     const response = await api.login({ ...loginForm, deviceId: 'admin-web' })
     setToken(response.accessToken)
+    authExpiredNotified.value = false
     currentUser.value = { ...response.user, menus: response.user.menus ?? response.menus }
     authed.value = true
     syncActiveViewWithMenus()
@@ -1381,6 +1401,7 @@ async function logout() {
     await api.logout()
   } finally {
     clearToken()
+    authExpiredNotified.value = false
     authed.value = false
   }
 }
@@ -1404,6 +1425,9 @@ async function refreshCurrent() {
     if (activeView.value === 'trace') await loadTrace()
     if (activeView.value === 'monitor') await loadMonitor()
   } catch (error) {
+    if (isAuthExpiredError(error)) {
+      return
+    }
     ElMessage.error(error instanceof Error ? error.message : '加载失败')
   }
 }
