@@ -56,6 +56,19 @@ class AdminSessionServiceTest {
     }
 
     @Test
+    void kickSessionSucceedsWhenAuditServiceFails() {
+        FakeSessionManager manager = new FakeSessionManager();
+        manager.sessions = List.of(new SessionManager.OnlineSession(2L, "bob", "1", "web", 100L, 3600L));
+        AdminSessionService service = new AdminSessionService(manager, new ThrowingAuditService());
+
+        AdminSessionService.ActionResult<String> result = service.kickSession(2L, "web", null);
+
+        assertThat(result.success()).isTrue();
+        assertThat(result.data()).isEqualTo("已强制下线");
+        assertThat(manager.kicked).containsExactly("2:web");
+    }
+
+    @Test
     void kickSessionRejectsCurrentSession() {
         UserContextHolder.set(new LoginUser().setUserId(1L).setDeviceId("admin-web"));
 
@@ -144,6 +157,18 @@ class AdminSessionServiceTest {
         @Override
         public void success(HttpServletRequest request, String module, String action, String operationType, Object params) {
             successActions.add(module + ":" + action + ":" + operationType);
+        }
+    }
+
+    private static final class ThrowingAuditService extends AdminAuditService {
+
+        private ThrowingAuditService() {
+            super(null, null);
+        }
+
+        @Override
+        public void success(HttpServletRequest request, String module, String action, String operationType, Object params) {
+            throw new RuntimeException("audit down");
         }
     }
 }

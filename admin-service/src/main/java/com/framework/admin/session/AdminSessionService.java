@@ -61,9 +61,19 @@ public class AdminSessionService {
                     userId, deviceId, e.getMessage());
             return ActionResult.failure(ResultCode.SERVICE_ERROR.getCode(), "强制下线失败");
         }
-        auditService.success(request, "在线会话", "强制下线", "DELETE",
-                auditService.params("userId", userId, "deviceId", deviceId));
+        auditSuccess(request, "强制下线", "DELETE", "userId", userId, "deviceId", deviceId);
         return ActionResult.success("已强制下线");
+    }
+
+    private void auditSuccess(HttpServletRequest request, String action, String operationType, Object... params) {
+        if (auditService == null) {
+            return;
+        }
+        try {
+            auditService.success(request, "在线会话", action, operationType, auditService.params(params));
+        } catch (RuntimeException e) {
+            log.warn("[在线会话] 审计日志写入失败 action={}, error={}", action, e.getMessage());
+        }
     }
 
     private boolean isCurrentSession(Long userId, String deviceId) {
