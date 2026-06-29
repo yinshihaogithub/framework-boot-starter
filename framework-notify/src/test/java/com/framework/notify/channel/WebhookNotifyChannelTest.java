@@ -1,6 +1,8 @@
 package com.framework.notify.channel;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.framework.core.constant.FrameworkConstants;
+import com.framework.core.trace.TraceContext;
 import com.framework.notify.config.NotifyProperties;
 import com.framework.notify.model.NotifyChannelType;
 import com.framework.notify.model.NotifyMessage;
@@ -81,6 +83,35 @@ class WebhookNotifyChannelTest {
         assertThatThrownBy(() -> new WebhookNotifyChannel(properties, new ObjectMapper()))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("framework.notify.webhook.url");
+    }
+
+    @Test
+    void sendsTraceIdInHeaderAndBody() throws Exception {
+        AtomicReference<String> traceHeader = new AtomicReference<>();
+        AtomicReference<String> requestBody = new AtomicReference<>();
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/hook", exchange -> {
+            traceHeader.set(exchange.getRequestHeaders().getFirst(FrameworkConstants.TRACE_ID_HEADER));
+            requestBody.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+            exchange.sendResponseHeaders(204, -1);
+            exchange.close();
+        });
+        server.start();
+        TraceContext.putTraceId("trace-webhook-001");
+        try {
+            NotifyProperties properties = new NotifyProperties();
+            properties.getWebhook().setUrl("http://127.0.0.1:" + server.getAddress().getPort() + "/hook");
+            WebhookNotifyChannel channel = new WebhookNotifyChannel(properties, new ObjectMapper());
+
+            NotifyResult result = channel.send(message(null));
+
+            assertThat(result.isSuccess()).isTrue();
+            assertThat(traceHeader.get()).isEqualTo("trace-webhook-001");
+            assertThat(requestBody.get()).contains("\"traceId\":\"trace-webhook-001\"");
+        } finally {
+            TraceContext.clear();
+            server.stop(0);
+        }
     }
 
     @Test

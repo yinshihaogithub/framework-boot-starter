@@ -1,6 +1,8 @@
 package com.framework.notify.channel;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.framework.core.constant.FrameworkConstants;
+import com.framework.core.trace.TraceContext;
 import com.framework.notify.config.NotifyProperties;
 import com.framework.notify.model.NotifyChannelType;
 import com.framework.notify.model.NotifyMessage;
@@ -64,15 +66,18 @@ public class WebhookNotifyChannel implements NotifyChannel {
         }
 
         try {
+            String traceId = TraceContext.ensureTraceId();
             String body = objectMapper.writeValueAsString(Map.of(
                     "title", message.getTitle(),
                     "content", message.getContent(),
                     "receivers", receivers(message),
-                    "templateParams", templateParams(message)
+                    "templateParams", templateParams(message),
+                    "traceId", traceId
             ));
             HttpRequest request = HttpRequest.newBuilder(uri)
                     .timeout(timeout())
                     .header("Content-Type", "application/json")
+                    .header(FrameworkConstants.TRACE_ID_HEADER, traceId)
                     .POST(HttpRequest.BodyPublishers.ofString(body))
                     .build();
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
