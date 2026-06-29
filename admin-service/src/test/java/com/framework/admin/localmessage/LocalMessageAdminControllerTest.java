@@ -222,6 +222,47 @@ class LocalMessageAdminControllerTest {
         assertThat(result.getData().getRecords()).extracting(LocalMessageVO::getId).containsExactly(1L);
     }
 
+    @Test
+    void listTrimsFiltersAndKeepsNullCreateTimeLast() {
+        InMemoryLocalMessageRepository repository = new InMemoryLocalMessageRepository();
+        repository.save(localMessage(1L)
+                .setTopic("order.created")
+                .setTraceId("trace-a")
+                .setBusinessKey("ORD-1")
+                .setCreateTime(null));
+        repository.save(localMessage(2L)
+                .setTopic("order.created")
+                .setTraceId("trace-a")
+                .setBusinessKey("ORD-2")
+                .setCreateTime(LocalDateTime.now()));
+        LocalMessageAdminController controller = controller(repository);
+
+        Result<PageResult<LocalMessageVO>> result = controller.list(
+                " order.created ", null, " trace-a ", " ORD-", 1, 20);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getData().getTotal()).isEqualTo(2);
+        assertThat(result.getData().getRecords()).extracting(LocalMessageVO::getId).containsExactly(2L, 1L);
+        assertThat(result.getData().getRecords().get(1).getCreateTime()).isNull();
+    }
+
+    @Test
+    void listReturnsEmptyPageForInvalidTraceIdFilter() {
+        InMemoryLocalMessageRepository repository = new InMemoryLocalMessageRepository();
+        repository.save(localMessage(1L)
+                .setTopic("order.created")
+                .setTraceId("trace-a")
+                .setCreateTime(LocalDateTime.now()));
+        LocalMessageAdminController controller = controller(repository);
+
+        Result<PageResult<LocalMessageVO>> result = controller.list(
+                null, null, "bad\ntrace", null, 1, 20);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getData().getTotal()).isZero();
+        assertThat(result.getData().getRecords()).isEmpty();
+    }
+
     private static LocalMessageAdminController controller(LocalMessageRepository repository) {
         return controller(repository, auditService());
     }

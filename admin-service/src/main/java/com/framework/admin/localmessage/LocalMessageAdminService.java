@@ -4,6 +4,7 @@ import com.framework.admin.audit.AdminAuditService;
 import com.framework.admin.support.AdminPageSupport;
 import com.framework.core.result.PageResult;
 import com.framework.core.result.ResultCode;
+import com.framework.core.trace.TraceContext;
 import com.framework.localmessage.model.LocalMessage;
 import com.framework.localmessage.model.LocalMessageStatus;
 import com.framework.localmessage.repository.LocalMessageRepository;
@@ -61,18 +62,23 @@ public class LocalMessageAdminService {
                                            String businessKey, int pageNum, int pageSize) {
         int safePageNum = AdminPageSupport.safePageNum(pageNum);
         int safePageSize = AdminPageSupport.safePageSize(pageSize);
+        String safeTopic = trimToNull(topic);
+        String safeTraceId = normalizeTraceIdFilter(traceId);
+        String safeBusinessKey = trimToNull(businessKey);
+        if (isInvalidTraceIdFilter(traceId, safeTraceId)) {
+            return PageResult.empty(safePageNum, safePageSize);
+        }
         LocalMessageService service = available(localMessageServiceProvider);
         if (service == null) {
             return PageResult.empty(safePageNum, safePageSize);
         }
         try {
             List<LocalMessage> filtered = service.findAll().stream()
-                    .filter(message -> isBlank(topic) || topic.equals(message.getTopic()))
+                    .filter(message -> safeTopic == null || safeTopic.equals(message.getTopic()))
                     .filter(message -> status == null || status == message.getStatus())
-                    .filter(message -> isBlank(traceId) || contains(message.getTraceId(), traceId))
-                    .filter(message -> isBlank(businessKey) || contains(message.getBusinessKey(), businessKey))
-                    .sorted(Comparator.comparing(LocalMessage::getCreateTime,
-                            Comparator.nullsLast(Comparator.naturalOrder())).reversed())
+                    .filter(message -> safeTraceId == null || contains(message.getTraceId(), safeTraceId))
+                    .filter(message -> safeBusinessKey == null || contains(message.getBusinessKey(), safeBusinessKey))
+                    .sorted(Comparator.comparing(LocalMessage::getCreateTime, newestFirst()))
                     .toList();
             int total = filtered.size();
             long offset = (long) (safePageNum - 1) * safePageSize;
@@ -226,6 +232,26 @@ public class LocalMessageAdminService {
 
     private boolean isBlank(String value) {
         return value == null || value.isBlank();
+    }
+
+    private String trimToNull(String value) {
+        if (isBlank(value)) {
+            return null;
+        }
+        return value.trim();
+    }
+
+    private String normalizeTraceIdFilter(String traceId) {
+        String trimmedTraceId = trimToNull(traceId);
+        return trimmedTraceId == null ? null : TraceContext.normalizeTraceId(trimmedTraceId);
+    }
+
+    private boolean isInvalidTraceIdFilter(String originalTraceId, String normalizedTraceId) {
+        return !isBlank(originalTraceId) && normalizedTraceId == null;
+    }
+
+    private <T extends Comparable<? super T>> Comparator<T> newestFirst() {
+        return Comparator.nullsLast(Comparator.reverseOrder());
     }
 
     private Map<String, Long> zero(Map<String, Long> stats) {
