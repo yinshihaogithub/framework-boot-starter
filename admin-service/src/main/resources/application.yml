@@ -16,6 +16,7 @@ spring:
       mode: always
       continue-on-error: true
       schema-locations:
+        - optional:classpath:db/mysql/admin_service.sql
         - optional:file:./sql/mysql/framework_boot_starter_init.sql
         - optional:file:../sql/mysql/framework_boot_starter_init.sql
   jackson:

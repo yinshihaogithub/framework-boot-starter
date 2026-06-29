@@ -225,6 +225,7 @@ class RepositoryEngineeringGuardTest {
         scripts.put("framework-log", "src/main/resources/db/mysql/sys_operation_log.sql");
         scripts.put("framework-local-message", "src/main/resources/db/mysql/framework_local_message.sql");
         scripts.put("framework-mq", "src/main/resources/db/mysql/framework_mq.sql");
+        scripts.put("admin-service", "src/main/resources/db/mysql/admin_service.sql");
 
         for (Map.Entry<String, String> entry : scripts.entrySet()) {
             Path script = root.resolve(entry.getKey()).resolve(entry.getValue());
@@ -271,6 +272,7 @@ class RepositoryEngineeringGuardTest {
     @Test
     void aggregateMysqlScriptIncludesAdminServiceTables() throws Exception {
         String aggregateScript = read(root.resolve("sql/mysql/framework_boot_starter_init.sql"));
+        String adminServiceScript = read(root.resolve("admin-service/src/main/resources/db/mysql/admin_service.sql"));
 
         assertThat(aggregateScript)
                 .contains("CREATE TABLE IF NOT EXISTS sys_tenant")
@@ -286,6 +288,23 @@ class RepositoryEngineeringGuardTest {
                 .contains("CREATE TABLE IF NOT EXISTS framework_notify_record")
                 .contains("CREATE TABLE IF NOT EXISTS framework_excel_task")
                 .contains("CREATE TABLE IF NOT EXISTS framework_excel_error");
+        assertThat(adminServiceScript)
+                .as("admin-service must ship its own package-level MySQL initialization script")
+                .contains("CREATE TABLE IF NOT EXISTS sys_tenant")
+                .contains("CREATE TABLE IF NOT EXISTS sys_user")
+                .contains("CREATE TABLE IF NOT EXISTS framework_notify_template")
+                .contains("CREATE TABLE IF NOT EXISTS framework_excel_task")
+                .contains("INSERT INTO sys_user")
+                .contains("INSERT INTO sys_menu");
+    }
+
+    @Test
+    void adminServiceLoadsPackageLevelMysqlScriptOnStartup() throws Exception {
+        String applicationYml = read(root.resolve("admin-service/src/main/resources/application.yml"));
+
+        assertThat(applicationYml)
+                .contains("optional:classpath:db/mysql/admin_service.sql")
+                .contains("optional:file:./sql/mysql/framework_boot_starter_init.sql");
     }
 
     @Test

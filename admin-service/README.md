@@ -38,11 +38,20 @@ mvn -pl admin-service -am package -DskipTests
 java -jar admin-service/target/admin-service-1.0.0.jar
 ```
 
-默认使用 MySQL。初始化脚本复用工程聚合脚本：
+默认使用 MySQL。`admin-service` 随包携带后台管理表初始化脚本：
+
+```bash
+mysql -uroot -proot framework_admin < admin-service/src/main/resources/db/mysql/admin_service.sql
+```
+
+如果要一次性初始化整个脚手架的框架表和后台表，也可以使用工程聚合脚本：
 
 ```bash
 mysql -uroot -proot framework_admin < sql/mysql/framework_boot_starter_init.sql
 ```
+
+本地启动时 `spring.sql.init.schema-locations` 会优先加载 classpath 下的
+`db/mysql/admin_service.sql`，根目录聚合脚本用于源码工程内一键初始化。
 
 默认后台账号：
 
