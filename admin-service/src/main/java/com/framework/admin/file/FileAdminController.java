@@ -42,10 +42,11 @@ public class FileAdminController {
     @GetMapping
     public Result<PageResult<FileAdminModels.FileRecord>> list(@RequestParam(required = false) String keyword,
                                                                @RequestParam(required = false) String businessType,
+                                                               @RequestParam(required = false) String businessKey,
                                                                @RequestParam(required = false) String contentType,
                                                                @RequestParam(defaultValue = "1") int pageNum,
                                                                @RequestParam(defaultValue = "20") int pageSize) {
-        return Result.success(fileAdminService.list(keyword, businessType, contentType, pageNum, pageSize));
+        return Result.success(fileAdminService.list(keyword, businessType, businessKey, contentType, pageNum, pageSize));
     }
 
     @Operation(summary = "上传文件")

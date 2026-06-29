@@ -43,6 +43,7 @@ public interface FileAdminMapper {
                         OR business_key LIKE #{keyword})
                 </if>
                 <if test="businessType != null">AND business_type = #{businessType}</if>
+                <if test="businessKey != null">AND business_key LIKE #{businessKey}</if>
                 <if test="contentType != null">AND content_type LIKE #{contentType}</if>
             </where>
             ORDER BY id DESC
@@ -67,6 +68,7 @@ public interface FileAdminMapper {
     })
     List<FileAdminModels.FileRecord> list(@Param("keyword") String keyword,
                                           @Param("businessType") String businessType,
+                                          @Param("businessKey") String businessKey,
                                           @Param("contentType") String contentType,
                                           @Param("offset") int offset,
                                           @Param("pageSize") int pageSize);
@@ -83,12 +85,14 @@ public interface FileAdminMapper {
                         OR business_key LIKE #{keyword})
                 </if>
                 <if test="businessType != null">AND business_type = #{businessType}</if>
+                <if test="businessKey != null">AND business_key LIKE #{businessKey}</if>
                 <if test="contentType != null">AND content_type LIKE #{contentType}</if>
             </where>
             </script>
             """)
     long count(@Param("keyword") String keyword,
                @Param("businessType") String businessType,
+               @Param("businessKey") String businessKey,
                @Param("contentType") String contentType);
 
     @Select("SELECT COUNT(*) FROM framework_file_record WHERE deleted = 0")

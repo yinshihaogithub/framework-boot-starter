@@ -15,13 +15,14 @@ public class FileAdminRepository {
         this.mapper = mapper;
     }
 
-    public List<FileAdminModels.FileRecord> list(String keyword, String businessType, String contentType,
-                                                 int pageNum, int pageSize) {
-        return mapper.list(like(keyword), text(businessType), like(contentType), offset(pageNum, pageSize), pageSize);
+    public List<FileAdminModels.FileRecord> list(String keyword, String businessType, String businessKey,
+                                                 String contentType, int pageNum, int pageSize) {
+        return mapper.list(like(keyword), text(businessType), like(businessKey), like(contentType),
+                offset(pageNum, pageSize), pageSize);
     }
 
-    public long count(String keyword, String businessType, String contentType) {
-        return mapper.count(like(keyword), text(businessType), like(contentType));
+    public long count(String keyword, String businessType, String businessKey, String contentType) {
+        return mapper.count(like(keyword), text(businessType), like(businessKey), like(contentType));
     }
 
     public Map<String, Long> stats() {

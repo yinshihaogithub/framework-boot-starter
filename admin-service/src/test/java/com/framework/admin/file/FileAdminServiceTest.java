@@ -39,13 +39,17 @@ class FileAdminServiceTest {
         repository.count = 1;
         repository.stats = Map.of("active", 1L, "deleted", 0L, "totalSize", 3L);
 
-        PageResult<FileAdminModels.FileRecord> page = service.list(" a ", null, null, -1, 500);
+        PageResult<FileAdminModels.FileRecord> page = service.list(" a ", "system", "order-1", " text ", -1, 500);
 
         assertThat(page.getPageNum()).isEqualTo(1);
         assertThat(page.getPageSize()).isEqualTo(200);
         assertThat(page.getRecords()).hasSize(1);
         assertThat(repository.listPageNum).isEqualTo(1);
         assertThat(repository.listPageSize).isEqualTo(200);
+        assertThat(repository.listKeyword).isEqualTo(" a ");
+        assertThat(repository.listBusinessType).isEqualTo("system");
+        assertThat(repository.listBusinessKey).isEqualTo("order-1");
+        assertThat(repository.listContentType).isEqualTo(" text ");
         assertThat(service.stats()).containsEntry("totalSize", 3L);
     }
 
@@ -112,6 +116,10 @@ class FileAdminServiceTest {
         private long count;
         private int listPageNum;
         private int listPageSize;
+        private String listKeyword;
+        private String listBusinessType;
+        private String listBusinessKey;
+        private String listContentType;
         private Map<String, Long> stats = Map.of("active", 0L, "deleted", 0L, "totalSize", 0L);
         private FileAdminModels.FileRecord created;
         private FileAdminModels.FileRecord record;
@@ -122,15 +130,19 @@ class FileAdminServiceTest {
         }
 
         @Override
-        public List<FileAdminModels.FileRecord> list(String keyword, String businessType, String contentType,
-                                                     int pageNum, int pageSize) {
+        public List<FileAdminModels.FileRecord> list(String keyword, String businessType, String businessKey,
+                                                     String contentType, int pageNum, int pageSize) {
+            this.listKeyword = keyword;
+            this.listBusinessType = businessType;
+            this.listBusinessKey = businessKey;
+            this.listContentType = contentType;
             this.listPageNum = pageNum;
             this.listPageSize = pageSize;
             return records;
         }
 
         @Override
-        public long count(String keyword, String businessType, String contentType) {
+        public long count(String keyword, String businessType, String businessKey, String contentType) {
             return count;
         }
 

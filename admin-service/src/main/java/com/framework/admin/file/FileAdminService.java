@@ -46,13 +46,13 @@ public class FileAdminService {
         return repository.stats();
     }
 
-    public PageResult<FileAdminModels.FileRecord> list(String keyword, String businessType, String contentType,
-                                                       int pageNum, int pageSize) {
+    public PageResult<FileAdminModels.FileRecord> list(String keyword, String businessType, String businessKey,
+                                                       String contentType, int pageNum, int pageSize) {
         int safePageNum = safePageNum(pageNum);
         int safePageSize = safePageSize(pageSize);
         return PageResult.of(
-                repository.list(keyword, businessType, contentType, safePageNum, safePageSize),
-                repository.count(keyword, businessType, contentType),
+                repository.list(keyword, businessType, businessKey, contentType, safePageNum, safePageSize),
+                repository.count(keyword, businessType, businessKey, contentType),
                 safePageNum,
                 safePageSize);
     }

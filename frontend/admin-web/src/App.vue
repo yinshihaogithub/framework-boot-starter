@@ -754,6 +754,7 @@
                 <div class="actions">
                   <el-input v-model="fileQuery.keyword" clearable placeholder="文件/业务键" class="filter" />
                   <el-input v-model="fileQuery.businessType" clearable placeholder="业务类型" class="filter" />
+                  <el-input v-model="fileQuery.businessKey" clearable placeholder="业务键" class="filter" />
                   <el-input v-model="fileQuery.contentType" clearable placeholder="Content-Type" class="filter" />
                   <el-button :icon="Search" circle type="primary" @click="loadFiles" />
                   <el-button v-if="can('file:upload')" :icon="Upload" circle @click="chooseFile" />
@@ -1564,7 +1565,7 @@ const localQuery = reactive({ status: '', topic: '', businessKey: '', traceId: '
 const notifyQuery = reactive({ keyword: '', channel: '', status: '', pageNum: 1, pageSize: 20 })
 const notifyRecordQuery = reactive<{ channel: string; success: boolean | ''; pageNum: number; pageSize: number }>({ channel: '', success: '', pageNum: 1, pageSize: 20 })
 const excelQuery = reactive({ taskType: '', status: '', pageNum: 1, pageSize: 20 })
-const fileQuery = reactive({ keyword: '', businessType: '', contentType: '', pageNum: 1, pageSize: 20 })
+const fileQuery = reactive({ keyword: '', businessType: '', businessKey: '', contentType: '', pageNum: 1, pageSize: 20 })
 const logQuery = reactive({ logType: '', traceId: '', pageNum: 1, pageSize: 20 })
 const loginLogQuery = reactive<{ username: string; success: boolean | ''; pageNum: number; pageSize: number }>({ username: '', success: '', pageNum: 1, pageSize: 20 })
 const userQuery = reactive({ keyword: '', status: '', pageNum: 1, pageSize: 20 })
@@ -2418,6 +2419,9 @@ async function uploadSelectedFile(event: Event) {
   form.append('file', file)
   if (fileQuery.businessType) {
     form.append('businessType', fileQuery.businessType)
+  }
+  if (fileQuery.businessKey) {
+    form.append('businessKey', fileQuery.businessKey)
   }
   const record = await api.uploadFile(form)
   input.value = ''
