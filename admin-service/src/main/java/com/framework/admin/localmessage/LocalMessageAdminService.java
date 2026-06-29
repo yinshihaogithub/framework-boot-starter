@@ -42,15 +42,19 @@ public class LocalMessageAdminService {
             stats.put(status.name(), 0L);
         }
         stats.put("TOTAL", 0L);
-        LocalMessageService service = localMessageServiceProvider.getIfAvailable();
+        LocalMessageService service = available(localMessageServiceProvider);
         if (service == null) {
             return stats;
         }
-        List<LocalMessage> messages = service.findAll();
-        for (LocalMessageStatus status : LocalMessageStatus.values()) {
-            stats.put(status.name(), messages.stream().filter(message -> status == message.getStatus()).count());
+        try {
+            List<LocalMessage> messages = service.findAll();
+            for (LocalMessageStatus status : LocalMessageStatus.values()) {
+                stats.put(status.name(), messages.stream().filter(message -> status == message.getStatus()).count());
+            }
+            stats.put("TOTAL", (long) messages.size());
+        } catch (Exception ignored) {
+            return zero(stats);
         }
-        stats.put("TOTAL", (long) messages.size());
         return stats;
     }
 
@@ -58,117 +62,145 @@ public class LocalMessageAdminService {
                                            String businessKey, int pageNum, int pageSize) {
         int safePageNum = safePageNum(pageNum);
         int safePageSize = safePageSize(pageSize);
-        LocalMessageService service = localMessageServiceProvider.getIfAvailable();
+        LocalMessageService service = available(localMessageServiceProvider);
         if (service == null) {
             return PageResult.empty(safePageNum, safePageSize);
         }
-        List<LocalMessage> filtered = service.findAll().stream()
-                .filter(message -> isBlank(topic) || topic.equals(message.getTopic()))
-                .filter(message -> status == null || status == message.getStatus())
-                .filter(message -> isBlank(traceId) || contains(message.getTraceId(), traceId))
-                .filter(message -> isBlank(businessKey) || contains(message.getBusinessKey(), businessKey))
-                .sorted(Comparator.comparing(LocalMessage::getCreateTime,
-                        Comparator.nullsLast(Comparator.naturalOrder())).reversed())
-                .toList();
-        int total = filtered.size();
-        long offset = (long) (safePageNum - 1) * safePageSize;
-        int start = offset < total ? (int) offset : total;
-        int end = Math.min(start + safePageSize, total);
-        List<LocalMessageVO> records = start < total
-                ? filtered.subList(start, end).stream().map(LocalMessageVO::from).toList()
-                : List.of();
-        return PageResult.of(records, total, safePageNum, safePageSize);
+        try {
+            List<LocalMessage> filtered = service.findAll().stream()
+                    .filter(message -> isBlank(topic) || topic.equals(message.getTopic()))
+                    .filter(message -> status == null || status == message.getStatus())
+                    .filter(message -> isBlank(traceId) || contains(message.getTraceId(), traceId))
+                    .filter(message -> isBlank(businessKey) || contains(message.getBusinessKey(), businessKey))
+                    .sorted(Comparator.comparing(LocalMessage::getCreateTime,
+                            Comparator.nullsLast(Comparator.naturalOrder())).reversed())
+                    .toList();
+            int total = filtered.size();
+            long offset = (long) (safePageNum - 1) * safePageSize;
+            int start = offset < total ? (int) offset : total;
+            int end = Math.min(start + safePageSize, total);
+            List<LocalMessageVO> records = start < total
+                    ? filtered.subList(start, end).stream().map(LocalMessageVO::from).toList()
+                    : List.of();
+            return PageResult.of(records, total, safePageNum, safePageSize);
+        } catch (Exception ignored) {
+            return PageResult.empty(safePageNum, safePageSize);
+        }
     }
 
     public ActionResult<LocalMessageVO> detail(Long id) {
-        LocalMessageService service = localMessageServiceProvider.getIfAvailable();
+        LocalMessageService service = available(localMessageServiceProvider);
         if (service == null) {
             return ActionResult.fail(ResultCode.SERVICE_ERROR, "本地消息服务未启用");
         }
-        return service.findById(id)
-                .map(LocalMessageVO::from)
-                .map(ActionResult::success)
-                .orElseGet(() -> ActionResult.fail(ResultCode.NOT_FOUND, "消息不存在"));
+        try {
+            return service.findById(id)
+                    .map(LocalMessageVO::from)
+                    .map(ActionResult::success)
+                    .orElseGet(() -> ActionResult.fail(ResultCode.NOT_FOUND, "消息不存在"));
+        } catch (Exception ignored) {
+            return ActionResult.fail(ResultCode.SERVICE_ERROR, "本地消息查询失败");
+        }
     }
 
     public ActionResult<Integer> retryDueMessages(HttpServletRequest servletRequest) {
-        LocalMessageService service = localMessageServiceProvider.getIfAvailable();
+        LocalMessageService service = available(localMessageServiceProvider);
         if (service == null) {
             return ActionResult.fail(ResultCode.SERVICE_ERROR, "本地消息服务未启用");
         }
-        int count = service.retryDueMessages();
-        auditService.success(servletRequest, "本地消息", "扫描并重试到期本地消息", "UPDATE",
-                auditService.params("count", count));
-        return ActionResult.success(count);
+        try {
+            int count = service.retryDueMessages();
+            auditService.success(servletRequest, "本地消息", "扫描并重试到期本地消息", "UPDATE",
+                    auditService.params("count", count));
+            return ActionResult.success(count);
+        } catch (Exception ignored) {
+            return ActionResult.fail(ResultCode.SERVICE_ERROR, "本地消息重试失败");
+        }
     }
 
     public ActionResult<String> retryNow(Long id, HttpServletRequest servletRequest) {
-        LocalMessageRepository repository = repositoryProvider.getIfAvailable();
+        LocalMessageRepository repository = available(repositoryProvider);
         if (repository == null) {
             return ActionResult.fail(ResultCode.SERVICE_ERROR, "本地消息仓储未启用");
         }
-        LocalMessage message = repository.findById(id).orElse(null);
-        if (message == null) {
-            return ActionResult.fail(ResultCode.NOT_FOUND, "消息不存在");
+        try {
+            LocalMessage message = repository.findById(id).orElse(null);
+            if (message == null) {
+                return ActionResult.fail(ResultCode.NOT_FOUND, "消息不存在");
+            }
+            message.setStatus(LocalMessageStatus.PENDING);
+            message.setRetryCount(0);
+            message.setErrorMessage(null);
+            message.setNextRetryTime(LocalDateTime.now());
+            repository.save(message);
+            auditService.success(servletRequest, "本地消息", "人工立即重试本地消息", "UPDATE",
+                    auditService.params("id", id, "messageId", message.getMessageId(),
+                            "traceId", message.getTraceId(), "status", message.getStatus()));
+            return ActionResult.success("已加入重试队列");
+        } catch (Exception ignored) {
+            return ActionResult.fail(ResultCode.SERVICE_ERROR, "本地消息操作失败");
         }
-        message.setStatus(LocalMessageStatus.PENDING);
-        message.setRetryCount(0);
-        message.setErrorMessage(null);
-        message.setNextRetryTime(LocalDateTime.now());
-        repository.save(message);
-        auditService.success(servletRequest, "本地消息", "人工立即重试本地消息", "UPDATE",
-                auditService.params("id", id, "messageId", message.getMessageId(),
-                        "traceId", message.getTraceId(), "status", message.getStatus()));
-        return ActionResult.success("已加入重试队列");
     }
 
     public ActionResult<String> markSuccess(Long id, HttpServletRequest servletRequest) {
-        LocalMessageRepository repository = repositoryProvider.getIfAvailable();
+        LocalMessageRepository repository = available(repositoryProvider);
         if (repository == null) {
             return ActionResult.fail(ResultCode.SERVICE_ERROR, "本地消息仓储未启用");
         }
-        LocalMessage message = repository.findById(id).orElse(null);
-        if (message == null) {
-            return ActionResult.fail(ResultCode.NOT_FOUND, "消息不存在");
+        try {
+            LocalMessage message = repository.findById(id).orElse(null);
+            if (message == null) {
+                return ActionResult.fail(ResultCode.NOT_FOUND, "消息不存在");
+            }
+            message.setStatus(LocalMessageStatus.SUCCESS);
+            message.setErrorMessage(null);
+            message.setNextRetryTime(null);
+            repository.save(message);
+            auditService.success(servletRequest, "本地消息", "人工标记本地消息成功", "UPDATE",
+                    auditService.params("id", id, "messageId", message.getMessageId(), "traceId", message.getTraceId()));
+            return ActionResult.success("已标记成功");
+        } catch (Exception ignored) {
+            return ActionResult.fail(ResultCode.SERVICE_ERROR, "本地消息操作失败");
         }
-        message.setStatus(LocalMessageStatus.SUCCESS);
-        message.setErrorMessage(null);
-        message.setNextRetryTime(null);
-        repository.save(message);
-        auditService.success(servletRequest, "本地消息", "人工标记本地消息成功", "UPDATE",
-                auditService.params("id", id, "messageId", message.getMessageId(), "traceId", message.getTraceId()));
-        return ActionResult.success("已标记成功");
     }
 
     public ActionResult<String> markFailure(Long id, String reason, HttpServletRequest servletRequest) {
-        LocalMessageRepository repository = repositoryProvider.getIfAvailable();
+        LocalMessageRepository repository = available(repositoryProvider);
         if (repository == null) {
             return ActionResult.fail(ResultCode.SERVICE_ERROR, "本地消息仓储未启用");
         }
-        LocalMessage message = repository.findById(id).orElse(null);
-        if (message == null) {
-            return ActionResult.fail(ResultCode.NOT_FOUND, "消息不存在");
+        try {
+            LocalMessage message = repository.findById(id).orElse(null);
+            if (message == null) {
+                return ActionResult.fail(ResultCode.NOT_FOUND, "消息不存在");
+            }
+            String safeReason = isBlank(reason) ? "manual terminate" : reason;
+            message.setStatus(LocalMessageStatus.FAILED);
+            message.setErrorMessage(safeReason);
+            message.setNextRetryTime(null);
+            repository.save(message);
+            auditService.success(servletRequest, "本地消息", "人工标记本地消息失败", "UPDATE",
+                    auditService.params("id", id, "messageId", message.getMessageId(), "traceId", message.getTraceId(),
+                            "reason", safeReason));
+            return ActionResult.success("已标记失败");
+        } catch (Exception ignored) {
+            return ActionResult.fail(ResultCode.SERVICE_ERROR, "本地消息操作失败");
         }
-        String safeReason = isBlank(reason) ? "manual terminate" : reason;
-        message.setStatus(LocalMessageStatus.FAILED);
-        message.setErrorMessage(safeReason);
-        message.setNextRetryTime(null);
-        repository.save(message);
-        auditService.success(servletRequest, "本地消息", "人工标记本地消息失败", "UPDATE",
-                auditService.params("id", id, "messageId", message.getMessageId(), "traceId", message.getTraceId(),
-                        "reason", safeReason));
-        return ActionResult.success("已标记失败");
     }
 
     public ActionResult<String> delete(Long id, HttpServletRequest servletRequest) {
-        LocalMessageRepository repository = repositoryProvider.getIfAvailable();
+        LocalMessageRepository repository = available(repositoryProvider);
         if (repository == null) {
             return ActionResult.fail(ResultCode.SERVICE_ERROR, "本地消息仓储未启用");
         }
-        repository.delete(id);
-        auditService.success(servletRequest, "本地消息", "删除本地消息", "DELETE",
-                auditService.params("id", id));
-        return ActionResult.success("已删除");
+        try {
+            repository.delete(id);
+            auditService.success(servletRequest, "本地消息", "删除本地消息", "DELETE",
+                    auditService.params("id", id));
+            return ActionResult.success("已删除");
+        } catch (Exception ignored) {
+            return ActionResult.fail(ResultCode.SERVICE_ERROR, "本地消息操作失败");
+        }
     }
 
     private int safePageNum(int pageNum) {
@@ -188,6 +220,22 @@ public class LocalMessageAdminService {
 
     private boolean isBlank(String value) {
         return value == null || value.isBlank();
+    }
+
+    private Map<String, Long> zero(Map<String, Long> stats) {
+        stats.replaceAll((key, value) -> 0L);
+        return stats;
+    }
+
+    private <T> T available(ObjectProvider<T> provider) {
+        if (provider == null) {
+            return null;
+        }
+        try {
+            return provider.getIfAvailable();
+        } catch (RuntimeException ignored) {
+            return null;
+        }
     }
 
     public record ActionResult<T>(boolean success, int code, String message, T data) {

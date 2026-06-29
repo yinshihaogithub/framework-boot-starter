@@ -110,6 +110,43 @@ class LocalMessageAdminControllerTest {
     }
 
     @Test
+    void queryEndpointsFallBackWhenLocalMessageProviderFails() {
+        LocalMessageAdminController controller = failingController();
+
+        Result<Map<String, Long>> stats = controller.stats();
+        Result<PageResult<LocalMessageVO>> page = controller.list(null, null, null, null, -1, 500);
+        Result<LocalMessageVO> detail = controller.detail(1L);
+
+        assertThat(stats.isSuccess()).isTrue();
+        assertThat(stats.getData()).containsEntry("TOTAL", 0L);
+        assertThat(page.isSuccess()).isTrue();
+        assertThat(page.getData().getPageNum()).isEqualTo(1);
+        assertThat(page.getData().getPageSize()).isEqualTo(200);
+        assertThat(page.getData().getRecords()).isEmpty();
+        assertThat(detail.isSuccess()).isFalse();
+        assertThat(detail.getCode()).isEqualTo(ResultCode.SERVICE_ERROR.getCode());
+        assertThat(detail.getMessage()).isEqualTo("本地消息服务未启用");
+    }
+
+    @Test
+    void manualEndpointsReportServiceErrorWhenRepositoryProviderFails() {
+        LocalMessageAdminController controller = failingController();
+
+        Result<String> retry = controller.retryNow(1L, null);
+        Result<String> success = controller.markSuccess(1L, null);
+        LocalMessageAdminController.FailureRequest failureRequest = new LocalMessageAdminController.FailureRequest();
+        Result<String> failure = controller.markFailure(1L, failureRequest, null);
+        Result<String> delete = controller.delete(1L, null);
+
+        assertThat(retry.isSuccess()).isFalse();
+        assertThat(retry.getCode()).isEqualTo(ResultCode.SERVICE_ERROR.getCode());
+        assertThat(retry.getMessage()).isEqualTo("本地消息仓储未启用");
+        assertThat(success.getCode()).isEqualTo(ResultCode.SERVICE_ERROR.getCode());
+        assertThat(failure.getCode()).isEqualTo(ResultCode.SERVICE_ERROR.getCode());
+        assertThat(delete.getCode()).isEqualTo(ResultCode.SERVICE_ERROR.getCode());
+    }
+
+    @Test
     void listFiltersAndUsesSafePaging() {
         InMemoryLocalMessageRepository repository = new InMemoryLocalMessageRepository();
         repository.save(localMessage(1L)
@@ -146,6 +183,14 @@ class LocalMessageAdminControllerTest {
         LocalMessageAdminService service = new LocalMessageAdminService(
                 provider(null),
                 provider(null),
+                auditService());
+        return new LocalMessageAdminController(service);
+    }
+
+    private static LocalMessageAdminController failingController() {
+        LocalMessageAdminService service = new LocalMessageAdminService(
+                failingProvider(),
+                failingProvider(),
                 auditService());
         return new LocalMessageAdminController(service);
     }
@@ -188,6 +233,35 @@ class LocalMessageAdminControllerTest {
             @Override
             public Stream<T> stream() {
                 return value == null ? Stream.empty() : Stream.of(value);
+            }
+        };
+    }
+
+    private static <T> ObjectProvider<T> failingProvider() {
+        return new ObjectProvider<>() {
+            @Override
+            public T getObject(Object... args) {
+                throw new IllegalStateException("local message provider unavailable");
+            }
+
+            @Override
+            public T getIfAvailable() {
+                throw new IllegalStateException("local message provider unavailable");
+            }
+
+            @Override
+            public T getIfUnique() {
+                throw new IllegalStateException("local message provider unavailable");
+            }
+
+            @Override
+            public T getObject() {
+                throw new IllegalStateException("local message provider unavailable");
+            }
+
+            @Override
+            public Stream<T> stream() {
+                return Stream.empty();
             }
         };
     }
