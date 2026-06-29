@@ -30,9 +30,16 @@
           <div class="brand-name">GP Framework</div>
         </div>
         <nav class="top-nav" aria-label="主导航">
-          <button type="button" class="top-nav-item">首页</button>
-          <button type="button" class="top-nav-item active">控制台</button>
-          <button type="button" class="top-nav-item">模型广场</button>
+          <button
+            v-for="item in quickNavItems"
+            :key="item.view"
+            type="button"
+            class="top-nav-item"
+            :class="{ active: activeView === item.view }"
+            @click="selectView(item.view)"
+          >
+            {{ item.title }}
+          </button>
         </nav>
       </div>
       <div class="header-actions">
@@ -41,14 +48,35 @@
             <el-icon><Search /></el-icon>
           </template>
         </el-input>
-        <el-badge value="1" class="header-badge">
-          <el-button :icon="Bell" circle />
-        </el-badge>
+        <el-popover placement="bottom-end" trigger="click" width="320">
+          <template #reference>
+            <el-badge :value="alertBadge" :hidden="alertCount === 0" class="header-badge">
+              <el-button :icon="Bell" circle @click="loadDashboard" />
+            </el-badge>
+          </template>
+          <div class="alert-panel">
+            <div class="alert-panel-head">
+              <span>运行告警</span>
+              <el-button :icon="Refresh" circle size="small" @click="loadDashboard" />
+            </div>
+            <button
+              v-for="item in alertItems"
+              :key="item.title"
+              type="button"
+              class="alert-item"
+              @click="selectView(item.view)"
+            >
+              <span>
+                <strong>{{ item.title }}</strong>
+                <small>{{ item.desc }}</small>
+              </span>
+              <el-tag :type="item.type" size="small">{{ item.count }}</el-tag>
+            </button>
+            <el-empty v-if="alertItems.length === 0" description="暂无告警" :image-size="72" />
+          </div>
+        </el-popover>
         <el-tooltip content="刷新">
           <el-button :icon="Refresh" circle @click="refreshCurrent" />
-        </el-tooltip>
-        <el-tooltip content="语言">
-          <el-button circle>文</el-button>
         </el-tooltip>
         <el-tooltip content="修改密码">
           <el-button :icon="Lock" circle @click="openChangePassword" />
@@ -1271,6 +1299,17 @@ type NavOption = {
   value: ViewName
   label: string
 }
+type QuickNavItem = {
+  title: string
+  view: ViewName
+}
+type AlertItem = {
+  title: string
+  desc: string
+  count: number
+  type: 'danger' | 'warning' | 'success' | 'info' | 'primary'
+  view: ViewName
+}
 
 const viewTitles: Record<ViewName, string> = {
   dashboard: '数据看板',
@@ -1482,6 +1521,15 @@ const viewTitle = computed(() => viewTitles[activeView.value])
 const navMenus = computed(() => buildNavItems(currentUser.value?.menus ?? []))
 const mobileNavOptions = computed(() => buildNavOptions(navMenus.value))
 const userInitial = computed(() => (currentUser.value?.username || 'A').slice(0, 1).toUpperCase())
+const quickNavItems = computed<QuickNavItem[]>(() => {
+  const items: QuickNavItem[] = [
+    { title: '首页', view: 'dashboard' },
+    { title: '链路', view: 'trace' },
+    { title: '消息', view: 'mq' },
+    { title: '监控', view: 'monitor' }
+  ]
+  return items.filter((item) => canOpenView(item.view))
+})
 const greetingTitle = computed(() => {
   if (activeView.value !== 'dashboard') {
     return viewTitle.value
@@ -1490,9 +1538,63 @@ const greetingTitle = computed(() => {
 })
 
 const menuCount = computed(() => flattenMenus(menus.value).length)
+const alertItems = computed<AlertItem[]>(() => {
+  const data = dashboard.value
+  if (!data) {
+    return []
+  }
+  const items: AlertItem[] = [
+    {
+      title: 'MQ 待人工处理',
+      desc: '失败消息已耗尽重试',
+      count: metric(data.mq, 'exhausted'),
+      type: 'danger',
+      view: 'mq'
+    },
+    {
+      title: 'MQ 待重试',
+      desc: '失败消息等待重新投递',
+      count: metric(data.mq, 'pending') + metric(data.mq, 'retrying'),
+      type: 'warning',
+      view: 'mq'
+    },
+    {
+      title: '本地消息失败',
+      desc: '本地消息表需要人工确认',
+      count: metric(data.localMessage, 'failed'),
+      type: 'danger',
+      view: 'local'
+    },
+    {
+      title: '通知发送失败',
+      desc: '通知记录返回失败结果',
+      count: metric(data.notifications, 'failedRecords'),
+      type: 'warning',
+      view: 'notify'
+    },
+    {
+      title: 'Excel 失败任务',
+      desc: '导入导出任务执行失败',
+      count: metric(data.excel, 'failed'),
+      type: 'warning',
+      view: 'excel'
+    }
+  ]
+  return items.filter((item) => item.count > 0 && canOpenView(item.view))
+})
+const alertCount = computed(() => alertItems.value.reduce((total, item) => total + item.count, 0))
+const alertBadge = computed(() => alertCount.value > 99 ? '99+' : alertCount.value)
 
 function can(permission: string) {
   return currentUser.value?.permissions?.includes(permission) ?? false
+}
+
+function canOpenView(view: ViewName) {
+  return navMenus.value.length === 0 || isViewAllowed(view)
+}
+
+function metric(values: Record<string, number> | undefined, key: string) {
+  return Number(values?.[key] ?? 0)
 }
 
 function handleAuthExpired(event: Event) {
@@ -2708,6 +2810,63 @@ function formatHealthDetails(details?: Record<string, unknown>) {
 
 .top-nav-item.active {
   color: #111827;
+}
+
+.alert-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.alert-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #f1f1f1;
+  color: #202124;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.alert-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 54px;
+  padding: 10px 12px;
+  border: 1px solid #f1f1f1;
+  border-radius: 8px;
+  background: #fff;
+  color: #202124;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+
+.alert-item:hover {
+  border-color: #dcd7ff;
+  background: #faf9ff;
+}
+
+.alert-item span {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.alert-item strong {
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+.alert-item small {
+  color: #71717a;
+  font-size: 12px;
+  line-height: 1.3;
 }
 
 .user-chip {
