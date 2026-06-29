@@ -51,9 +51,10 @@ public class DefaultNotifyService implements NotifyService {
             }
             return result;
         } catch (Exception e) {
+            String failureMessage = failureMessage(e);
             log.warn("[通知发送失败] channel={}, title={}, error={}",
-                    channelType, message.getTitle(), e.getMessage());
-            return NotifyResult.failure(channelType, e.getMessage());
+                    channelType, message.getTitle(), failureMessage);
+            return NotifyResult.failure(channelType, failureMessage);
         }
     }
 
@@ -124,5 +125,9 @@ public class DefaultNotifyService implements NotifyService {
             }
             this.channels.put(type, channel);
         }
+    }
+
+    private String failureMessage(Exception e) {
+        return e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
     }
 }

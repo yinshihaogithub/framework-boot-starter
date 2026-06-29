@@ -64,6 +64,21 @@ class DefaultNotifyServiceTest {
     }
 
     @Test
+    void returnsFailureClassNameWhenChannelThrowsExceptionWithoutMessage() {
+        NotifyProperties properties = new NotifyProperties();
+        properties.setDefaultChannel(NotifyChannelType.WEBHOOK);
+        DefaultNotifyService notifyService = new DefaultNotifyService(properties, List.of(new EmptyMessageThrowingChannel()));
+
+        NotifyResult result = notifyService.send(new NotifyMessage()
+                .setTitle("inventory alarm")
+                .setContent("SKU-1001 is low"));
+
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getChannel()).isEqualTo(NotifyChannelType.WEBHOOK);
+        assertThat(result.getMessage()).isEqualTo("IllegalStateException");
+    }
+
+    @Test
     void returnsFailureWhenChannelReturnsNull() {
         NotifyProperties properties = new NotifyProperties();
         properties.setDefaultChannel(NotifyChannelType.SMS);
@@ -247,6 +262,19 @@ class DefaultNotifyServiceTest {
         @Override
         public NotifyResult send(NotifyMessage message) {
             return null;
+        }
+    }
+
+    private static class EmptyMessageThrowingChannel implements NotifyChannel {
+
+        @Override
+        public NotifyChannelType type() {
+            return NotifyChannelType.WEBHOOK;
+        }
+
+        @Override
+        public NotifyResult send(NotifyMessage message) {
+            throw new IllegalStateException();
         }
     }
 }
