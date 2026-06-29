@@ -4,10 +4,12 @@ import com.alibaba.excel.annotation.ExcelProperty;
 import com.framework.admin.audit.AdminAuditService;
 import com.framework.auth.context.UserContextHolder;
 import com.framework.core.result.PageResult;
+import com.framework.core.result.ResultCode;
 import com.framework.excel.service.ExcelExportService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.extern.slf4j.Slf4j;
 import lombok.NoArgsConstructor;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
@@ -15,8 +17,8 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Optional;
 
+@Slf4j
 @Service
 public class ExcelAdminService {
 
@@ -59,11 +61,11 @@ public class ExcelAdminService {
         }
     }
 
-    public Optional<ExcelAdminModels.TaskResult> createExportTask(ExcelAdminModels.ExportRequest request,
-                                                                  HttpServletRequest servletRequest) {
+    public ActionResult<ExcelAdminModels.TaskResult> createExportTask(ExcelAdminModels.ExportRequest request,
+                                                                      HttpServletRequest servletRequest) {
         ExcelExportService exportService = available(exportServiceProvider);
         if (exportService == null) {
-            return Optional.empty();
+            return ActionResult.fail(ResultCode.SERVICE_ERROR, "Excel导出服务未启用");
         }
         List<ExportUserRow> rows = List.of(
                 new ExportUserRow("admin", "系统管理员", "ENABLED"),
@@ -87,18 +89,24 @@ public class ExcelAdminService {
                     .setFailureRows(rows.size())
                     .setOperatorName(UserContextHolder.getUsername())
                     .setErrorMessage(errorMessage);
-            Long taskId = repository.createTask(failedTask);
-            auditService.failure(servletRequest, "Excel中心", "创建导出任务", "CREATE",
-                    auditService.params("taskId", taskId, "filename", filename, "rows", rows.size()),
-                    e);
-            return Optional.of(new ExcelAdminModels.TaskResult()
-                    .setTaskId(taskId)
-                    .setFilename(filename)
-                    .setStatus("FAILED")
-                    .setTotalRows(rows.size())
-                    .setSuccessRows(0)
-                    .setFailureRows(rows.size())
-                    .setFileSize(0L));
+            try {
+                Long taskId = repository.createTask(failedTask);
+                auditService.failure(servletRequest, "Excel中心", "创建导出任务", "CREATE",
+                        auditService.params("taskId", taskId, "filename", filename, "rows", rows.size()),
+                        e);
+                return ActionResult.success(new ExcelAdminModels.TaskResult()
+                        .setTaskId(taskId)
+                        .setFilename(filename)
+                        .setStatus("FAILED")
+                        .setTotalRows(rows.size())
+                        .setSuccessRows(0)
+                        .setFailureRows(rows.size())
+                        .setFileSize(0L));
+            } catch (RuntimeException saveFailure) {
+                log.warn("[Excel中心] 记录导出失败任务失败 filename={}, error={}",
+                        filename, saveFailure.getMessage());
+                return ActionResult.fail(ResultCode.SERVICE_ERROR, "Excel导出任务创建失败");
+            }
         }
         ExcelAdminModels.Task task = new ExcelAdminModels.Task()
                 .setTaskName(taskName)
@@ -110,21 +118,26 @@ public class ExcelAdminService {
                 .setSuccessRows(rows.size())
                 .setFailureRows(0)
                 .setOperatorName(UserContextHolder.getUsername());
-        Long taskId = repository.createTask(task);
-        auditService.success(servletRequest, "Excel中心", "创建导出任务", "CREATE",
-                auditService.params("taskId", taskId, "filename", filename, "rows", rows.size()));
-        return Optional.of(new ExcelAdminModels.TaskResult()
-                .setTaskId(taskId)
-                .setFilename(filename)
-                .setStatus("SUCCESS")
-                .setTotalRows(rows.size())
-                .setSuccessRows(rows.size())
-                .setFailureRows(0)
-                .setFileSize((long) bytes.length));
+        try {
+            Long taskId = repository.createTask(task);
+            auditService.success(servletRequest, "Excel中心", "创建导出任务", "CREATE",
+                    auditService.params("taskId", taskId, "filename", filename, "rows", rows.size()));
+            return ActionResult.success(new ExcelAdminModels.TaskResult()
+                    .setTaskId(taskId)
+                    .setFilename(filename)
+                    .setStatus("SUCCESS")
+                    .setTotalRows(rows.size())
+                    .setSuccessRows(rows.size())
+                    .setFailureRows(0)
+                    .setFileSize((long) bytes.length));
+        } catch (RuntimeException e) {
+            log.warn("[Excel中心] 创建导出任务失败 filename={}, error={}", filename, e.getMessage());
+            return ActionResult.fail(ResultCode.SERVICE_ERROR, "Excel导出任务创建失败");
+        }
     }
 
-    public ExcelAdminModels.TaskResult createImportFailureTask(ExcelAdminModels.FailureRequest request,
-                                                              HttpServletRequest servletRequest) {
+    public ActionResult<ExcelAdminModels.TaskResult> createImportFailureTask(ExcelAdminModels.FailureRequest request,
+                                                                            HttpServletRequest servletRequest) {
         String errorMessage = text(request == null ? null : request.getErrorMessage(), "模板表头不匹配");
         ExcelAdminModels.Task task = new ExcelAdminModels.Task()
                 .setTaskName(text(request == null ? null : request.getTaskName(), "用户导入失败任务"))
@@ -137,19 +150,24 @@ public class ExcelAdminService {
                 .setFailureRows(2)
                 .setOperatorName(UserContextHolder.getUsername())
                 .setErrorMessage(errorMessage);
-        Long taskId = repository.createTask(task);
-        repository.createError(taskId, 2, errorMessage, "{\"username\":\"\",\"nickname\":\"空用户名\"}");
-        repository.createError(taskId, 3, "手机号格式错误", "{\"username\":\"ops\",\"mobile\":\"123\"}");
-        auditService.success(servletRequest, "Excel中心", "登记导入失败任务", "CREATE",
-                auditService.params("taskId", taskId, "errorMessage", errorMessage));
-        return new ExcelAdminModels.TaskResult()
-                .setTaskId(taskId)
-                .setFilename(task.getFilename())
-                .setStatus("FAILED")
-                .setTotalRows(3)
-                .setSuccessRows(1)
-                .setFailureRows(2)
-                .setFileSize(0L);
+        try {
+            Long taskId = repository.createTask(task);
+            repository.createError(taskId, 2, errorMessage, "{\"username\":\"\",\"nickname\":\"空用户名\"}");
+            repository.createError(taskId, 3, "手机号格式错误", "{\"username\":\"ops\",\"mobile\":\"123\"}");
+            auditService.success(servletRequest, "Excel中心", "登记导入失败任务", "CREATE",
+                    auditService.params("taskId", taskId, "errorMessage", errorMessage));
+            return ActionResult.success(new ExcelAdminModels.TaskResult()
+                    .setTaskId(taskId)
+                    .setFilename(task.getFilename())
+                    .setStatus("FAILED")
+                    .setTotalRows(3)
+                    .setSuccessRows(1)
+                    .setFailureRows(2)
+                    .setFileSize(0L));
+        } catch (RuntimeException e) {
+            log.warn("[Excel中心] 登记导入失败任务失败 error={}", e.getMessage());
+            return ActionResult.fail(ResultCode.SERVICE_ERROR, "Excel导入失败任务登记失败");
+        }
     }
 
     public List<ExcelAdminModels.ErrorRecord> errors(Long taskId) {
@@ -194,8 +212,20 @@ public class ExcelAdminService {
         }
         try {
             return provider.getIfAvailable();
-        } catch (RuntimeException ignored) {
+        } catch (RuntimeException e) {
+            log.warn("[Excel中心] 获取导出服务失败 error={}", e.getMessage());
             return null;
+        }
+    }
+
+    public record ActionResult<T>(boolean success, int code, String message, T data) {
+
+        public static <T> ActionResult<T> success(T data) {
+            return new ActionResult<>(true, ResultCode.SUCCESS.getCode(), ResultCode.SUCCESS.getMessage(), data);
+        }
+
+        public static <T> ActionResult<T> fail(ResultCode code, String message) {
+            return new ActionResult<>(false, code.getCode(), message, null);
         }
     }
 

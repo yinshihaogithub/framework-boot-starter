@@ -2,6 +2,7 @@ package com.framework.admin.excel;
 
 import com.framework.admin.audit.AdminAuditService;
 import com.framework.core.result.PageResult;
+import com.framework.core.result.ResultCode;
 import com.framework.excel.config.ExcelProperties;
 import com.framework.excel.service.ExcelExportService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -12,7 +13,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -23,9 +23,11 @@ class ExcelAdminServiceTest {
     void exportTaskReturnsEmptyWhenExportServiceIsMissing() {
         ExcelAdminService service = service(new InMemoryExcelAdminRepository(), null);
 
-        Optional<ExcelAdminModels.TaskResult> result = service.createExportTask(null, null);
+        ExcelAdminService.ActionResult<ExcelAdminModels.TaskResult> result = service.createExportTask(null, null);
 
-        assertThat(result).isEmpty();
+        assertThat(result.success()).isFalse();
+        assertThat(result.code()).isEqualTo(ResultCode.SERVICE_ERROR.getCode());
+        assertThat(result.message()).isEqualTo("Excel导出服务未启用");
     }
 
     @Test
@@ -33,9 +35,11 @@ class ExcelAdminServiceTest {
         ExcelAdminService service = new ExcelAdminService(
                 new InMemoryExcelAdminRepository(), failingProvider(), auditService());
 
-        Optional<ExcelAdminModels.TaskResult> result = service.createExportTask(null, null);
+        ExcelAdminService.ActionResult<ExcelAdminModels.TaskResult> result = service.createExportTask(null, null);
 
-        assertThat(result).isEmpty();
+        assertThat(result.success()).isFalse();
+        assertThat(result.code()).isEqualTo(ResultCode.SERVICE_ERROR.getCode());
+        assertThat(result.message()).isEqualTo("Excel导出服务未启用");
     }
 
     @Test
@@ -47,13 +51,13 @@ class ExcelAdminServiceTest {
         request.setBizType(" user ");
         ExcelAdminService service = service(repository, exportService);
 
-        Optional<ExcelAdminModels.TaskResult> result = service.createExportTask(request, null);
+        ExcelAdminService.ActionResult<ExcelAdminModels.TaskResult> result = service.createExportTask(request, null);
 
-        assertThat(result).isPresent();
-        assertThat(result.get().getStatus()).isEqualTo("SUCCESS");
-        assertThat(result.get().getTotalRows()).isEqualTo(2);
-        assertThat(result.get().getSuccessRows()).isEqualTo(2);
-        assertThat(result.get().getFileSize()).isEqualTo(5L);
+        assertThat(result.success()).isTrue();
+        assertThat(result.data().getStatus()).isEqualTo("SUCCESS");
+        assertThat(result.data().getTotalRows()).isEqualTo(2);
+        assertThat(result.data().getSuccessRows()).isEqualTo(2);
+        assertThat(result.data().getFileSize()).isEqualTo(5L);
         assertThat(exportService.sheetName).isEqualTo("用户清单");
         assertThat(exportService.rowCount).isEqualTo(2);
         assertThat(repository.tasks)
@@ -70,14 +74,14 @@ class ExcelAdminServiceTest {
         RecordingAuditService auditService = new RecordingAuditService();
         ExcelAdminService service = service(repository, exportService, auditService);
 
-        Optional<ExcelAdminModels.TaskResult> result = service.createExportTask(null, null);
+        ExcelAdminService.ActionResult<ExcelAdminModels.TaskResult> result = service.createExportTask(null, null);
 
-        assertThat(result).isPresent();
-        assertThat(result.get().getStatus()).isEqualTo("FAILED");
-        assertThat(result.get().getTotalRows()).isEqualTo(2);
-        assertThat(result.get().getSuccessRows()).isZero();
-        assertThat(result.get().getFailureRows()).isEqualTo(2);
-        assertThat(result.get().getFileSize()).isZero();
+        assertThat(result.success()).isTrue();
+        assertThat(result.data().getStatus()).isEqualTo("FAILED");
+        assertThat(result.data().getTotalRows()).isEqualTo(2);
+        assertThat(result.data().getSuccessRows()).isZero();
+        assertThat(result.data().getFailureRows()).isEqualTo(2);
+        assertThat(result.data().getFileSize()).isZero();
         assertThat(repository.tasks)
                 .extracting(ExcelAdminModels.Task::getTaskType, ExcelAdminModels.Task::getStatus,
                         ExcelAdminModels.Task::getErrorMessage)
@@ -93,17 +97,38 @@ class ExcelAdminServiceTest {
         request.setErrorMessage("手机号格式错误");
         ExcelAdminService service = service(repository, null);
 
-        ExcelAdminModels.TaskResult result = service.createImportFailureTask(request, null);
+        ExcelAdminService.ActionResult<ExcelAdminModels.TaskResult> result = service.createImportFailureTask(request, null);
 
-        assertThat(result.getStatus()).isEqualTo("FAILED");
-        assertThat(result.getTotalRows()).isEqualTo(3);
-        assertThat(result.getFailureRows()).isEqualTo(2);
+        assertThat(result.success()).isTrue();
+        assertThat(result.data().getStatus()).isEqualTo("FAILED");
+        assertThat(result.data().getTotalRows()).isEqualTo(3);
+        assertThat(result.data().getFailureRows()).isEqualTo(2);
         assertThat(repository.tasks).hasSize(1);
-        assertThat(repository.errors(result.getTaskId()))
+        assertThat(repository.errors(result.data().getTaskId()))
                 .extracting(ExcelAdminModels.ErrorRecord::getRowIndex, ExcelAdminModels.ErrorRecord::getErrorMessage)
                 .containsExactly(
                         org.assertj.core.groups.Tuple.tuple(2, "手机号格式错误"),
                         org.assertj.core.groups.Tuple.tuple(3, "手机号格式错误"));
+    }
+
+    @Test
+    void writeTasksReturnServiceErrorWhenRepositoryFails() {
+        InMemoryExcelAdminRepository repository = new InMemoryExcelAdminRepository();
+        repository.commandFailure = new RuntimeException("database down");
+        ExcelAdminService exportService = service(repository, new CapturingExcelExportService());
+        ExcelAdminService importService = service(repository, null);
+
+        ExcelAdminService.ActionResult<ExcelAdminModels.TaskResult> exportResult =
+                exportService.createExportTask(null, null);
+        ExcelAdminService.ActionResult<ExcelAdminModels.TaskResult> importResult =
+                importService.createImportFailureTask(null, null);
+
+        assertThat(exportResult.success()).isFalse();
+        assertThat(exportResult.code()).isEqualTo(ResultCode.SERVICE_ERROR.getCode());
+        assertThat(exportResult.message()).isEqualTo("Excel导出任务创建失败");
+        assertThat(importResult.success()).isFalse();
+        assertThat(importResult.code()).isEqualTo(ResultCode.SERVICE_ERROR.getCode());
+        assertThat(importResult.message()).isEqualTo("Excel导入失败任务登记失败");
     }
 
     @Test
@@ -274,6 +299,7 @@ class ExcelAdminServiceTest {
         private final List<ExcelAdminModels.ErrorRecord> errorRecords = new ArrayList<>();
         private long nextTaskId = 1;
         private long nextErrorId = 1;
+        private RuntimeException commandFailure;
 
         private InMemoryExcelAdminRepository() {
             super(null);
@@ -305,6 +331,7 @@ class ExcelAdminServiceTest {
 
         @Override
         public Long createTask(ExcelAdminModels.Task task) {
+            failCommandIfNeeded();
             long id = nextTaskId++;
             task.setId(id);
             tasks.add(task);
@@ -313,6 +340,7 @@ class ExcelAdminServiceTest {
 
         @Override
         public void createError(Long taskId, int rowIndex, String errorMessage, String rawData) {
+            failCommandIfNeeded();
             errorRecords.add(new ExcelAdminModels.ErrorRecord()
                     .setId(nextErrorId++)
                     .setTaskId(taskId)
@@ -330,6 +358,12 @@ class ExcelAdminServiceTest {
             return errorRecords.stream()
                     .filter(error -> taskId.equals(error.getTaskId()))
                     .toList();
+        }
+
+        private void failCommandIfNeeded() {
+            if (commandFailure != null) {
+                throw commandFailure;
+            }
         }
     }
 

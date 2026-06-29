@@ -2,7 +2,6 @@ package com.framework.admin.excel;
 
 import com.framework.core.result.PageResult;
 import com.framework.core.result.Result;
-import com.framework.core.result.ResultCode;
 import com.framework.security.annotation.RequirePermission;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -50,9 +49,7 @@ public class ExcelAdminController {
     @RequirePermission("excel:task:create")
     public Result<ExcelAdminModels.TaskResult> createExportTask(@RequestBody(required = false) ExcelAdminModels.ExportRequest request,
                                                                HttpServletRequest servletRequest) {
-        return excelAdminService.createExportTask(request, servletRequest)
-                .map(Result::success)
-                .orElseGet(() -> Result.fail(ResultCode.SERVICE_ERROR.getCode(), "Excel导出服务未启用"));
+        return toResult(excelAdminService.createExportTask(request, servletRequest));
     }
 
     @Operation(summary = "登记导入失败任务")
@@ -60,12 +57,16 @@ public class ExcelAdminController {
     @RequirePermission("excel:task:create")
     public Result<ExcelAdminModels.TaskResult> createImportFailureTask(@RequestBody(required = false) ExcelAdminModels.FailureRequest request,
                                                                       HttpServletRequest servletRequest) {
-        return Result.success(excelAdminService.createImportFailureTask(request, servletRequest));
+        return toResult(excelAdminService.createImportFailureTask(request, servletRequest));
     }
 
     @Operation(summary = "Excel错误明细")
     @GetMapping("/tasks/{taskId}/errors")
     public Result<List<ExcelAdminModels.ErrorRecord>> errors(@PathVariable Long taskId) {
         return Result.success(excelAdminService.errors(taskId));
+    }
+
+    private <T> Result<T> toResult(ExcelAdminService.ActionResult<T> result) {
+        return result.success() ? Result.success(result.data()) : Result.fail(result.code(), result.message());
     }
 }
