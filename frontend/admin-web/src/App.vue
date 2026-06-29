@@ -1925,6 +1925,11 @@ async function deleteDept(row: Dept) {
 }
 
 async function createUser() {
+  const passwordError = validateStrongPassword(userForm.password)
+  if (passwordError !== true) {
+    ElMessage.warning(passwordError)
+    return
+  }
   await api.createUser(userForm)
   userDialogVisible.value = false
   resetUserForm()

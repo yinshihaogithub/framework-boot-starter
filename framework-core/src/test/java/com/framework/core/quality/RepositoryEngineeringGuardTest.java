@@ -727,6 +727,7 @@ class RepositoryEngineeringGuardTest {
                 .contains("changePasswordVisible")
                 .contains("openChangePassword")
                 .contains("changeOwnPassword")
+                .contains("validateStrongPassword(userForm.password)")
                 .contains("两次输入的新密码不一致")
                 .contains("clearToken()");
         assertThat(adminServiceScript)
