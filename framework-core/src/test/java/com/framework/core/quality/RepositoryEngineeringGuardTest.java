@@ -430,6 +430,31 @@ class RepositoryEngineeringGuardTest {
     }
 
     @Test
+    void sessionManagerRedisFailuresFailClosedOrDegradeByOperationType() throws Exception {
+        String sessionManager = read(root.resolve(
+                "framework-auth/src/main/java/com/framework/auth/service/SessionManager.java"));
+        String test = read(root.resolve(
+                "framework-auth/src/test/java/com/framework/auth/service/SessionManagerTest.java"));
+
+        assertThat(sessionManager)
+                .as("security-sensitive session reads must fail closed while admin cleanup views degrade")
+                .contains("会话服务暂不可用，请稍后重试")
+                .contains("Token黑名单检查失败")
+                .contains("return true")
+                .contains("扫描会话失败")
+                .contains("批量删除会话失败")
+                .contains("读取在线会话失败")
+                .contains("return List.of()")
+                .contains("deleteSessionKey");
+        assertThat(test)
+                .contains("redisFailureDuringCreateSessionFailsClosedWithAuthException")
+                .contains("redisFailuresDuringOnlineSessionManagementDoNotLeak")
+                .contains("redisFailuresDuringLogoutDoNotLeak")
+                .contains("redisFailuresDuringTokenValidationFailClosed")
+                .contains("redis unavailable");
+    }
+
+    @Test
     void codegenModuleIsRemovedFromTheScaffold() throws Exception {
         assertThat(modules())
                 .as("codegen is intentionally not part of this scaffold")

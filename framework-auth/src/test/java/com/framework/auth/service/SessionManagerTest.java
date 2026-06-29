@@ -3,6 +3,7 @@ package com.framework.auth.service;
 import com.framework.auth.context.LoginUser;
 import com.framework.auth.jwt.JwtUtils;
 import com.framework.core.constant.FrameworkConstants;
+import com.framework.core.exception.AuthException;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.redis.core.Cursor;
 import org.springframework.data.redis.core.HashOperations;
@@ -20,7 +21,9 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class SessionManagerTest {
 
@@ -124,6 +127,44 @@ class SessionManagerTest {
                         org.assertj.core.groups.Tuple.tuple(2L, "bob", "tenant-b", "mobile", 3600L),
                         org.assertj.core.groups.Tuple.tuple(1L, "alice", "tenant-a", "web", 3600L));
         assertThat(sessions.get(0).loginTime()).isGreaterThanOrEqualTo(sessions.get(1).loginTime());
+    }
+
+    @Test
+    void redisFailureDuringCreateSessionFailsClosedWithAuthException() {
+        SessionManager manager = new SessionManager(new ThrowingRedisTemplate(), jwtUtils, 3600);
+
+        assertThatThrownBy(() -> manager.createSession(1L, "alice", "tenant-a", "web",
+                new String[]{"ADMIN"}, new String[]{"user:view"}))
+                .isInstanceOf(AuthException.class)
+                .hasMessage("会话服务暂不可用，请稍后重试");
+    }
+
+    @Test
+    void redisFailuresDuringOnlineSessionManagementDoNotLeak() {
+        SessionManager manager = new SessionManager(new ThrowingRedisTemplate(), jwtUtils, 3600);
+
+        assertThat(manager.listOnlineSessions()).isEmpty();
+        assertThat(manager.getOnlineUserCount()).isZero();
+        assertThatCode(() -> manager.forceLogout(1L, "web")).doesNotThrowAnyException();
+        assertThatCode(() -> manager.forceLogoutAll(1L)).doesNotThrowAnyException();
+        assertThatCode(manager::forceLogoutAll).doesNotThrowAnyException();
+    }
+
+    @Test
+    void redisFailuresDuringLogoutDoNotLeak() {
+        SessionManager manager = new SessionManager(new ThrowingRedisTemplate(), jwtUtils, 3600);
+        String token = jwtUtils.generateAccessToken(1L, "alice", "tenant-a", "web");
+
+        assertThatCode(() -> manager.logout(token)).doesNotThrowAnyException();
+    }
+
+    @Test
+    void redisFailuresDuringTokenValidationFailClosed() {
+        SessionManager manager = new SessionManager(new ThrowingRedisTemplate(), jwtUtils, 3600);
+        String token = jwtUtils.generateAccessToken(1L, "alice", "tenant-a", "web");
+
+        assertThat(manager.validateAccessToken(token)).isFalse();
+        assertThat(manager.getLoginUser(token)).isNull();
     }
 
     private static final class InMemoryRedisTemplate extends StringRedisTemplate {
@@ -265,6 +306,73 @@ class SessionManagerTest {
                     .replace(".", "\\.")
                     .replace("*", ".*");
             return key.matches(regex);
+        }
+    }
+
+    private static final class ThrowingRedisTemplate extends StringRedisTemplate {
+
+        @Override
+        public Boolean hasKey(String key) {
+            throw unavailable();
+        }
+
+        @Override
+        public Boolean expire(String key, long timeout, TimeUnit unit) {
+            throw unavailable();
+        }
+
+        @Override
+        public Boolean delete(String key) {
+            throw unavailable();
+        }
+
+        @Override
+        public Long delete(Collection<String> keys) {
+            throw unavailable();
+        }
+
+        @Override
+        public Cursor<String> scan(ScanOptions options) {
+            throw unavailable();
+        }
+
+        @Override
+        public Long getExpire(String key, TimeUnit timeUnit) {
+            throw unavailable();
+        }
+
+        @Override
+        @SuppressWarnings("unchecked")
+        public HashOperations<String, Object, Object> opsForHash() {
+            return (HashOperations<String, Object, Object>) Proxy.newProxyInstance(
+                    HashOperations.class.getClassLoader(),
+                    new Class<?>[]{HashOperations.class},
+                    (proxy, method, args) -> {
+                        if ("putAll".equals(method.getName())
+                                || "get".equals(method.getName())
+                                || "entries".equals(method.getName())) {
+                            throw unavailable();
+                        }
+                        return null;
+                    });
+        }
+
+        @Override
+        @SuppressWarnings("unchecked")
+        public ValueOperations<String, String> opsForValue() {
+            return (ValueOperations<String, String>) Proxy.newProxyInstance(
+                    ValueOperations.class.getClassLoader(),
+                    new Class<?>[]{ValueOperations.class},
+                    (proxy, method, args) -> {
+                        if ("set".equals(method.getName()) || "get".equals(method.getName())) {
+                            throw unavailable();
+                        }
+                        return null;
+                    });
+        }
+
+        private static IllegalStateException unavailable() {
+            return new IllegalStateException("redis unavailable");
         }
     }
 

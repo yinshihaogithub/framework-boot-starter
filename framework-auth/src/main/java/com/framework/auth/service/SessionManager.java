@@ -63,8 +63,7 @@ public class SessionManager {
         sessionData.put("roles", writeArray(roles));
         sessionData.put("permissions", writeArray(permissions));
         sessionData.put("loginTime", String.valueOf(System.currentTimeMillis()));
-        redis.opsForHash().putAll(sessionKey, sessionData);
-        redis.expire(sessionKey, sessionTimeoutSeconds, TimeUnit.SECONDS);
+        persistSession(sessionKey, sessionData);
 
         LoginUser user = new LoginUser()
                 .setUserId(userId)
@@ -90,27 +89,35 @@ public class SessionManager {
         Long userId = jwtUtils.getUserId(refreshToken);
         String deviceId = jwtUtils.getDeviceId(refreshToken);
 
-        // 校验会话是否存在
-        String sessionKey = buildSessionKey(userId, deviceId);
-        if (Boolean.FALSE.equals(redis.hasKey(sessionKey))) {
-            throw new AuthException(ResultCode.TOKEN_EXPIRED, "会话已失效，请重新登录");
+        try {
+            // 校验会话是否存在
+            String sessionKey = buildSessionKey(userId, deviceId);
+            if (Boolean.FALSE.equals(redis.hasKey(sessionKey))) {
+                throw new AuthException(ResultCode.TOKEN_EXPIRED, "会话已失效，请重新登录");
+            }
+
+            // 校验 refreshToken 是否匹配
+            Object storedRefresh = redis.opsForHash().get(sessionKey, "refreshToken");
+            if (!refreshToken.equals(storedRefresh)) {
+                throw new AuthException("refreshToken不匹配");
+            }
+
+            // 生成新 accessToken
+            String username = (String) redis.opsForHash().get(sessionKey, "username");
+            String tenantId = (String) redis.opsForHash().get(sessionKey, "tenantId");
+            String newAccessToken = jwtUtils.generateAccessToken(userId, username, tenantId, deviceId);
+
+            // 续期会话
+            redis.expire(sessionKey, sessionTimeoutSeconds, TimeUnit.SECONDS);
+
+            return newAccessToken;
+        } catch (AuthException e) {
+            throw e;
+        } catch (Exception e) {
+            log.warn("[会话管理] refreshToken 校验失败 userId={} deviceId={} error={}",
+                    userId, deviceId, e.getMessage());
+            throw new AuthException(ResultCode.SERVICE_ERROR, "会话服务暂不可用，请稍后重试");
         }
-
-        // 校验 refreshToken 是否匹配
-        Object storedRefresh = redis.opsForHash().get(sessionKey, "refreshToken");
-        if (!refreshToken.equals(storedRefresh)) {
-            throw new AuthException("refreshToken不匹配");
-        }
-
-        // 生成新 accessToken
-        String username = (String) redis.opsForHash().get(sessionKey, "username");
-        String tenantId = (String) redis.opsForHash().get(sessionKey, "tenantId");
-        String newAccessToken = jwtUtils.generateAccessToken(userId, username, tenantId, deviceId);
-
-        // 续期会话
-        redis.expire(sessionKey, sessionTimeoutSeconds, TimeUnit.SECONDS);
-
-        return newAccessToken;
     }
 
     /**
@@ -124,7 +131,7 @@ public class SessionManager {
         String deviceId = jwtUtils.getDeviceId(accessToken);
 
         // 删除会话
-        redis.delete(buildSessionKey(userId, deviceId));
+        deleteSessionKey(buildSessionKey(userId, deviceId), "登出");
 
         // accessToken 加入黑名单（TTL = 剩余有效期）
         addToBlacklist(accessToken);
@@ -167,18 +174,23 @@ public class SessionManager {
         Long userId = jwtUtils.getUserId(accessToken);
         String deviceId = jwtUtils.getDeviceId(accessToken);
         String sessionKey = buildSessionKey(userId, deviceId);
-        Map<Object, Object> sessionData = redis.opsForHash().entries(sessionKey);
-        if (sessionData == null || sessionData.isEmpty()) {
+        try {
+            Map<Object, Object> sessionData = redis.opsForHash().entries(sessionKey);
+            if (sessionData == null || sessionData.isEmpty()) {
+                return null;
+            }
+            return new LoginUser()
+                    .setUserId(userId)
+                    .setUsername(asString(sessionData.get("username")))
+                    .setTenantId(asString(sessionData.get("tenantId")))
+                    .setDeviceId(deviceId)
+                    .setAccessToken(accessToken)
+                    .setRoles(readArray(sessionData.get("roles")))
+                    .setPermissions(readArray(sessionData.get("permissions")));
+        } catch (Exception e) {
+            log.warn("[会话管理] 读取会话失败 key={} error={}", sessionKey, e.getMessage());
             return null;
         }
-        return new LoginUser()
-                .setUserId(userId)
-                .setUsername(asString(sessionData.get("username")))
-                .setTenantId(asString(sessionData.get("tenantId")))
-                .setDeviceId(deviceId)
-                .setAccessToken(accessToken)
-                .setRoles(readArray(sessionData.get("roles")))
-                .setPermissions(readArray(sessionData.get("permissions")));
     }
 
     /**
@@ -204,7 +216,7 @@ public class SessionManager {
      * 强制下线
      */
     public void forceLogout(Long userId, String deviceId) {
-        redis.delete(buildSessionKey(userId, deviceId));
+        deleteSessionKey(buildSessionKey(userId, deviceId), "强制下线");
         log.info("[强制下线] userId={}, deviceId={}", userId, deviceId);
     }
 
@@ -231,10 +243,25 @@ public class SessionManager {
 
     private void kickOutOldSession(Long userId, String deviceId) {
         String sessionKey = buildSessionKey(userId, deviceId);
-        if (Boolean.TRUE.equals(redis.hasKey(sessionKey))) {
-            // 旧会话存在，删除并记录日志
-            redis.delete(sessionKey);
-            log.info("[多端互踢] userId={}, deviceId={} 旧会话已踢下线", userId, deviceId);
+        try {
+            if (Boolean.TRUE.equals(redis.hasKey(sessionKey))) {
+                // 旧会话存在，删除并记录日志
+                redis.delete(sessionKey);
+                log.info("[多端互踢] userId={}, deviceId={} 旧会话已踢下线", userId, deviceId);
+            }
+        } catch (Exception e) {
+            log.warn("[会话管理] 多端互踢失败 userId={} deviceId={} error={}",
+                    userId, deviceId, e.getMessage());
+        }
+    }
+
+    private void persistSession(String sessionKey, Map<String, String> sessionData) {
+        try {
+            redis.opsForHash().putAll(sessionKey, sessionData);
+            redis.expire(sessionKey, sessionTimeoutSeconds, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            log.warn("[会话管理] 创建会话失败 key={} error={}", sessionKey, e.getMessage());
+            throw new AuthException(ResultCode.SERVICE_ERROR, "会话服务暂不可用，请稍后重试");
         }
     }
 
@@ -252,7 +279,12 @@ public class SessionManager {
     }
 
     private boolean isInBlacklist(String token) {
-        return Boolean.TRUE.equals(redis.hasKey(FrameworkConstants.TOKEN_BLACKLIST_PREFIX + token));
+        try {
+            return Boolean.TRUE.equals(redis.hasKey(FrameworkConstants.TOKEN_BLACKLIST_PREFIX + token));
+        } catch (Exception e) {
+            log.warn("[会话管理] Token黑名单检查失败 error={}", e.getMessage());
+            return true;
+        }
     }
 
     private long deleteSessionKeys(String pattern) {
@@ -260,26 +292,48 @@ public class SessionManager {
         if (keys.isEmpty()) {
             return 0;
         }
-        Long deleted = redis.delete(keys);
-        return deleted == null ? 0 : deleted;
+        try {
+            Long deleted = redis.delete(keys);
+            return deleted == null ? 0 : deleted;
+        } catch (Exception e) {
+            log.warn("[会话管理] 批量删除会话失败 pattern={} error={}", pattern, e.getMessage());
+            return 0;
+        }
+    }
+
+    private void deleteSessionKey(String sessionKey, String action) {
+        try {
+            redis.delete(sessionKey);
+        } catch (Exception e) {
+            log.warn("[会话管理] {}删除会话失败 key={} error={}", action, sessionKey, e.getMessage());
+        }
     }
 
     private List<String> scanKeys(String pattern) {
         List<String> keys = new ArrayList<>();
-        Cursor<String> cursor = redis.scan(ScanOptions.scanOptions()
-                .match(pattern)
-                .count(1000)
-                .build());
-        if (cursor == null) {
-            return keys;
-        }
         try {
-            while (cursor.hasNext()) {
-                keys.add(cursor.next());
+            Cursor<String> cursor = redis.scan(ScanOptions.scanOptions()
+                    .match(pattern)
+                    .count(1000)
+                    .build());
+            if (cursor == null) {
+                return keys;
             }
-            return keys;
-        } finally {
-            cursor.close();
+            try {
+                while (cursor.hasNext()) {
+                    keys.add(cursor.next());
+                }
+                return keys;
+            } finally {
+                try {
+                    cursor.close();
+                } catch (Exception e) {
+                    log.warn("[会话管理] 关闭扫描游标失败 pattern={} error={}", pattern, e.getMessage());
+                }
+            }
+        } catch (Exception e) {
+            log.warn("[会话管理] 扫描会话失败 pattern={} error={}", pattern, e.getMessage());
+            return List.of();
         }
     }
 
@@ -288,15 +342,20 @@ public class SessionManager {
     }
 
     private OnlineSession readOnlineSession(String sessionKey) {
-        Map<Object, Object> data = redis.opsForHash().entries(sessionKey);
-        Long ttlSeconds = redis.getExpire(sessionKey, TimeUnit.SECONDS);
-        return new OnlineSession(
-                parseLong(data.get("userId")),
-                asString(data.get("username")),
-                asString(data.get("tenantId")),
-                asString(data.get("deviceId")),
-                parseLongOrDefault(data.get("loginTime"), 0L),
-                ttlSeconds == null ? -1L : ttlSeconds);
+        try {
+            Map<Object, Object> data = redis.opsForHash().entries(sessionKey);
+            Long ttlSeconds = redis.getExpire(sessionKey, TimeUnit.SECONDS);
+            return new OnlineSession(
+                    parseLong(data.get("userId")),
+                    asString(data.get("username")),
+                    asString(data.get("tenantId")),
+                    asString(data.get("deviceId")),
+                    parseLongOrDefault(data.get("loginTime"), 0L),
+                    ttlSeconds == null ? -1L : ttlSeconds);
+        } catch (Exception e) {
+            log.warn("[会话管理] 读取在线会话失败 key={} error={}", sessionKey, e.getMessage());
+            return new OnlineSession(null, null, null, null, 0L, -1L);
+        }
     }
 
     private String writeArray(String[] values) {
