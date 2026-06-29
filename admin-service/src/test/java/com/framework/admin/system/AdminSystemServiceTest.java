@@ -498,6 +498,39 @@ class AdminSystemServiceTest {
     }
 
     @Test
+    void dictTypeIdOperationsRejectInvalidIdBeforeRepositoryLookup() {
+        repository.commandFailure = new RuntimeException("database down");
+
+        assertInvalidResourceId(service.updateDictType(0L, dictTypeRequest(), null), "字典类型ID必须大于0");
+        assertInvalidResourceId(service.deleteDictType(0L, null), "字典类型ID必须大于0");
+
+        assertThat(repository.updatedDictTypeId).isNull();
+        assertThat(repository.deletedDictTypeId).isNull();
+    }
+
+    @Test
+    void dictItemIdOperationsRejectInvalidIdBeforeRepositoryLookup() {
+        repository.commandFailure = new RuntimeException("database down");
+
+        assertInvalidResourceId(service.updateDictItem(0L, dictItemRequest(), null), "字典项ID必须大于0");
+        assertInvalidResourceId(service.deleteDictItem(0L, null), "字典项ID必须大于0");
+
+        assertThat(repository.updatedDictItemId).isNull();
+        assertThat(repository.deletedDictItemId).isNull();
+    }
+
+    @Test
+    void configIdOperationsRejectInvalidIdBeforeRepositoryLookup() {
+        repository.commandFailure = new RuntimeException("database down");
+
+        assertInvalidResourceId(service.updateConfig(0L, configRequest(), null), "系统参数ID必须大于0");
+        assertInvalidResourceId(service.deleteConfig(0L, null), "系统参数ID必须大于0");
+
+        assertThat(repository.updatedConfigId).isNull();
+        assertThat(repository.deletedConfigId).isNull();
+    }
+
+    @Test
     void createTenantValidatesRequiredFields() {
         TenantRequest request = new TenantRequest();
         request.setTenantCode("tenant-a");
@@ -687,6 +720,12 @@ class AdminSystemServiceTest {
         private Long updatedMenuId;
         private MenuRequest updatedMenu;
         private Long deletedMenuId;
+        private Long updatedDictTypeId;
+        private Long deletedDictTypeId;
+        private Long updatedDictItemId;
+        private Long deletedDictItemId;
+        private Long updatedConfigId;
+        private Long deletedConfigId;
         private RuntimeException queryFailure;
         private RuntimeException commandFailure;
 
@@ -901,11 +940,13 @@ class AdminSystemServiceTest {
         @Override
         public void updateDictType(Long id, DictTypeRequest request) {
             failCommandIfNeeded();
+            this.updatedDictTypeId = id;
         }
 
         @Override
         public void deleteDictType(Long id) {
             failCommandIfNeeded();
+            this.deletedDictTypeId = id;
         }
 
         @Override
@@ -917,11 +958,13 @@ class AdminSystemServiceTest {
         @Override
         public void updateDictItem(Long id, DictItemRequest request) {
             failCommandIfNeeded();
+            this.updatedDictItemId = id;
         }
 
         @Override
         public void deleteDictItem(Long id) {
             failCommandIfNeeded();
+            this.deletedDictItemId = id;
         }
 
         @Override
@@ -933,11 +976,13 @@ class AdminSystemServiceTest {
         @Override
         public void updateConfig(Long id, ConfigRequest request) {
             failCommandIfNeeded();
+            this.updatedConfigId = id;
         }
 
         @Override
         public void deleteConfig(Long id) {
             failCommandIfNeeded();
+            this.deletedConfigId = id;
         }
 
         private void failQueryIfNeeded() {

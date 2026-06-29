@@ -543,6 +543,10 @@ public class AdminSystemService {
     }
 
     public Result<String> updateDictType(Long id, DictTypeRequest request, HttpServletRequest servletRequest) {
+        Result<String> invalidId = invalidResourceId(id, "字典类型");
+        if (invalidId != null) {
+            return invalidId;
+        }
         Result<String> validation = validateDictType(request);
         if (validation != null) {
             return validation;
@@ -558,6 +562,10 @@ public class AdminSystemService {
     }
 
     public Result<String> deleteDictType(Long id, HttpServletRequest servletRequest) {
+        Result<String> invalidId = invalidResourceId(id, "字典类型");
+        if (invalidId != null) {
+            return invalidId;
+        }
         try {
             repository.deleteDictType(id);
             auditSuccess(servletRequest, "删除字典类型", "DELETE", "dictTypeId", id);
@@ -593,6 +601,10 @@ public class AdminSystemService {
     }
 
     public Result<String> updateDictItem(Long id, DictItemRequest request, HttpServletRequest servletRequest) {
+        Result<String> invalidId = invalidResourceId(id, "字典项");
+        if (invalidId != null) {
+            return invalidId;
+        }
         Result<String> validation = validateDictItem(request);
         if (validation != null) {
             return validation;
@@ -609,6 +621,10 @@ public class AdminSystemService {
     }
 
     public Result<String> deleteDictItem(Long id, HttpServletRequest servletRequest) {
+        Result<String> invalidId = invalidResourceId(id, "字典项");
+        if (invalidId != null) {
+            return invalidId;
+        }
         try {
             repository.deleteDictItem(id);
             auditSuccess(servletRequest, "删除字典项", "DELETE", "dictItemId", id);
@@ -644,6 +660,10 @@ public class AdminSystemService {
     }
 
     public Result<String> updateConfig(Long id, ConfigRequest request, HttpServletRequest servletRequest) {
+        Result<String> invalidId = invalidResourceId(id, "系统参数");
+        if (invalidId != null) {
+            return invalidId;
+        }
         Result<String> validation = validateConfig(request);
         if (validation != null) {
             return validation;
@@ -660,6 +680,10 @@ public class AdminSystemService {
     }
 
     public Result<String> deleteConfig(Long id, HttpServletRequest servletRequest) {
+        Result<String> invalidId = invalidResourceId(id, "系统参数");
+        if (invalidId != null) {
+            return invalidId;
+        }
         try {
             repository.deleteConfig(id);
             auditSuccess(servletRequest, "删除系统参数", "DELETE", "configId", id);
