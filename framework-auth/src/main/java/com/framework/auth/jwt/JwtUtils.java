@@ -16,6 +16,8 @@ import java.util.Map;
 @Slf4j
 public class JwtUtils {
 
+    private static final int CLAIM_TEXT_MAX_LENGTH = 128;
+
     private final SecretKey key;
     private final long accessTokenExpire;
     private final long refreshTokenExpire;
@@ -39,24 +41,46 @@ public class JwtUtils {
      * 生成 access token
      */
     public String generateAccessToken(Long userId, String username, String tenantId, String deviceId) {
-        return buildToken(userId, username, tenantId, deviceId, accessTokenExpire, "access");
+        return buildToken(requireUserId(userId), requireText(username, "username"),
+                requireText(tenantId, "tenantId"), requireText(deviceId, "deviceId"),
+                accessTokenExpire, "access");
     }
 
     /**
      * 生成 refresh token
      */
     public String generateRefreshToken(Long userId, String deviceId) {
+        Long safeUserId = requireUserId(userId);
+        String safeDeviceId = requireText(deviceId, "deviceId");
         Map<String, Object> claims = new HashMap<>();
-        claims.put("userId", userId);
-        claims.put("deviceId", deviceId);
+        claims.put("userId", safeUserId);
+        claims.put("deviceId", safeDeviceId);
         claims.put("type", "refresh");
         return Jwts.builder()
                 .claims(claims)
-                .subject(String.valueOf(userId))
+                .subject(String.valueOf(safeUserId))
                 .issuedAt(new Date())
                 .expiration(new Date(System.currentTimeMillis() + refreshTokenExpire))
                 .signWith(key)
                 .compact();
+    }
+
+    private Long requireUserId(Long userId) {
+        if (userId == null || userId <= 0) {
+            throw new IllegalArgumentException("userId must be greater than 0");
+        }
+        return userId;
+    }
+
+    private String requireText(String value, String fieldName) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(fieldName + " must not be blank");
+        }
+        String normalized = value.trim();
+        if (normalized.length() > CLAIM_TEXT_MAX_LENGTH) {
+            throw new IllegalArgumentException(fieldName + " length must not exceed 128 characters");
+        }
+        return normalized;
     }
 
     private String buildToken(Long userId, String username, String tenantId,

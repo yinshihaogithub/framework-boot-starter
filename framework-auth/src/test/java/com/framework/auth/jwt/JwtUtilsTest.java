@@ -26,7 +26,7 @@ class JwtUtilsTest {
     void accessTokenCarriesExpectedClaims() {
         JwtUtils jwtUtils = new JwtUtils(SECRET, 3600, 86400);
 
-        String token = jwtUtils.generateAccessToken(1L, "alice", "tenant-a", "web");
+        String token = jwtUtils.generateAccessToken(1L, " alice ", " tenant-a ", " web ");
 
         assertThat(jwtUtils.validateToken(token)).isTrue();
         assertThat(jwtUtils.getUserId(token)).isEqualTo(1L);
@@ -34,6 +34,36 @@ class JwtUtilsTest {
         assertThat(jwtUtils.getTenantId(token)).isEqualTo("tenant-a");
         assertThat(jwtUtils.getDeviceId(token)).isEqualTo("web");
         assertThat(jwtUtils.getTokenType(token)).isEqualTo("access");
+    }
+
+    @Test
+    void refreshTokenCarriesExpectedClaims() {
+        JwtUtils jwtUtils = new JwtUtils(SECRET, 3600, 86400);
+
+        String token = jwtUtils.generateRefreshToken(1L, " web ");
+
+        assertThat(jwtUtils.validateToken(token)).isTrue();
+        assertThat(jwtUtils.getUserId(token)).isEqualTo(1L);
+        assertThat(jwtUtils.getDeviceId(token)).isEqualTo("web");
+        assertThat(jwtUtils.getTokenType(token)).isEqualTo("refresh");
+    }
+
+    @Test
+    void tokenGenerationRejectsInvalidClaims() {
+        JwtUtils jwtUtils = new JwtUtils(SECRET, 3600, 86400);
+
+        assertThatThrownBy(() -> jwtUtils.generateAccessToken(0L, "alice", "tenant-a", "web"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("userId must be greater than 0");
+        assertThatThrownBy(() -> jwtUtils.generateAccessToken(1L, " ", "tenant-a", "web"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("username must not be blank");
+        assertThatThrownBy(() -> jwtUtils.generateAccessToken(1L, "alice", " ", "web"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("tenantId must not be blank");
+        assertThatThrownBy(() -> jwtUtils.generateRefreshToken(1L, "d".repeat(129)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("deviceId length must not exceed 128 characters");
     }
 
     @Test
