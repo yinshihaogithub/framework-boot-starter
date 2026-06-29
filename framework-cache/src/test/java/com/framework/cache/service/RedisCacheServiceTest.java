@@ -15,6 +15,7 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class RedisCacheServiceTest {
@@ -94,6 +95,34 @@ class RedisCacheServiceTest {
         assertThat(redis.keyPatterns).isEmpty();
         assertThat(redis.scanPatterns).containsExactly("framework:cache:*");
         assertThat(redis.deletedCollections).containsExactly(List.of("framework:cache:user:1"));
+    }
+
+    @Test
+    void readFailuresFallbackToMissingCache() {
+        RedisCacheService cacheService = new RedisCacheService(new ThrowingRedis());
+
+        assertThat(cacheService.get("user:1", String.class)).isNull();
+        assertThat(cacheService.get("user:2", String.class, () -> "alice")).isEqualTo("alice");
+        assertThat(cacheService.get("user:3", String.class, () -> null)).isNull();
+    }
+
+    @Test
+    void writeFailuresDoNotLeakToBusinessFlow() {
+        RedisCacheService cacheService = new RedisCacheService(new ThrowingRedis());
+
+        assertThatCode(() -> cacheService.set("user:1", "alice")).doesNotThrowAnyException();
+        assertThatCode(() -> cacheService.expire("user:1", 30, TimeUnit.SECONDS)).doesNotThrowAnyException();
+        assertThat(cacheService.exists("user:1")).isFalse();
+        assertThat(cacheService.getTtl("user:1")).isEqualTo(-1);
+    }
+
+    @Test
+    void deleteAndScanFailuresDoNotLeakToBusinessFlow() {
+        RedisCacheService cacheService = new RedisCacheService(new ThrowingRedis());
+
+        assertThatCode(() -> cacheService.delete("user:1")).doesNotThrowAnyException();
+        assertThatCode(() -> cacheService.deleteByPattern("user:*")).doesNotThrowAnyException();
+        assertThatCode(cacheService::clear).doesNotThrowAnyException();
     }
 
     private static final class RecordingRedis extends StringRedisTemplate {
@@ -176,6 +205,57 @@ class RedisCacheServiceTest {
                 return 0D;
             }
             return null;
+        }
+    }
+
+    private static final class ThrowingRedis extends StringRedisTemplate {
+
+        @Override
+        public Boolean hasKey(String key) {
+            throw unavailable();
+        }
+
+        @Override
+        public Boolean delete(String key) {
+            throw unavailable();
+        }
+
+        @Override
+        public Long delete(Collection<String> keys) {
+            throw unavailable();
+        }
+
+        @Override
+        public Boolean expire(String key, long timeout, TimeUnit unit) {
+            throw unavailable();
+        }
+
+        @Override
+        public Long getExpire(String key, TimeUnit timeUnit) {
+            throw unavailable();
+        }
+
+        @Override
+        public Cursor<String> scan(ScanOptions options) {
+            throw unavailable();
+        }
+
+        @Override
+        @SuppressWarnings("unchecked")
+        public ValueOperations<String, String> opsForValue() {
+            return (ValueOperations<String, String>) Proxy.newProxyInstance(
+                    ValueOperations.class.getClassLoader(),
+                    new Class<?>[]{ValueOperations.class},
+                    (proxy, method, args) -> {
+                        if ("get".equals(method.getName()) || "set".equals(method.getName())) {
+                            throw unavailable();
+                        }
+                        return RecordingRedis.defaultValue(method.getReturnType());
+                    });
+        }
+
+        private static IllegalStateException unavailable() {
+            return new IllegalStateException("redis unavailable");
         }
     }
 

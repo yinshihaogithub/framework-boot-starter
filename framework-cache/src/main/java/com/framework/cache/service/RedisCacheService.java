@@ -59,7 +59,7 @@ public class RedisCacheService implements CacheService {
             long randomTtl = ttl + (long) (Math.random() * 60);
             redis.opsForValue().set(key, json, randomTtl, unit);
         } catch (Exception e) {
-            log.error("[Redis缓存] 设置失败 key={}", key, e);
+            log.warn("[Redis缓存] 设置失败 key={} error={}", key, e.getMessage());
         }
     }
 
@@ -67,14 +67,14 @@ public class RedisCacheService implements CacheService {
     public <T> T get(String key, Class<T> type) {
         CacheSupport.requireKey(key);
         CacheSupport.requireType(type);
-        String json = redis.opsForValue().get(key);
-        if (json == null) {
-            return null;
-        }
         try {
+            String json = redis.opsForValue().get(key);
+            if (json == null) {
+                return null;
+            }
             return objectMapper.readValue(json, type);
         } catch (Exception e) {
-            log.error("[Redis缓存] 反序列化失败 key={}", key, e);
+            log.warn("[Redis缓存] 读取失败 key={} error={}", key, e.getMessage());
             return null;
         }
     }
@@ -99,7 +99,7 @@ public class RedisCacheService implements CacheService {
         }
 
         // 2. 查空值缓存（防穿透）
-        if (Boolean.TRUE.equals(redis.hasKey(NULL_VALUE_PREFIX + key))) {
+        if (hasNullValue(key)) {
             return null;
         }
 
@@ -118,9 +118,7 @@ public class RedisCacheService implements CacheService {
             if (value != null) {
                 set(key, value, ttl, unit);
             } else {
-                // 空值缓存（防穿透），短 TTL
-                redis.opsForValue().set(NULL_VALUE_PREFIX + key, NULL_VALUE,
-                        60, TimeUnit.SECONDS);
+                cacheNullValue(key);
             }
             return value;
         } finally {
@@ -131,8 +129,12 @@ public class RedisCacheService implements CacheService {
     @Override
     public void delete(String key) {
         CacheSupport.requireKey(key);
-        redis.delete(key);
-        redis.delete(NULL_VALUE_PREFIX + key);
+        try {
+            redis.delete(key);
+            redis.delete(NULL_VALUE_PREFIX + key);
+        } catch (Exception e) {
+            log.warn("[Redis缓存] 删除失败 key={} error={}", key, e.getMessage());
+        }
     }
 
     @Override
@@ -140,27 +142,46 @@ public class RedisCacheService implements CacheService {
         CacheSupport.requirePattern(pattern);
         Collection<String> keys = scanKeys(CacheSupport.redisGlobPattern(pattern));
         if (keys != null && !keys.isEmpty()) {
-            redis.delete(keys);
+            try {
+                redis.delete(keys);
+            } catch (Exception e) {
+                log.warn("[Redis缓存] 批量删除失败 pattern={} error={}", pattern, e.getMessage());
+            }
         }
     }
 
     @Override
     public boolean exists(String key) {
         CacheSupport.requireKey(key);
-        return Boolean.TRUE.equals(redis.hasKey(key));
+        try {
+            return Boolean.TRUE.equals(redis.hasKey(key));
+        } catch (Exception e) {
+            log.warn("[Redis缓存] 判断存在失败 key={} error={}", key, e.getMessage());
+            return false;
+        }
     }
 
     @Override
     public void expire(String key, long ttl, TimeUnit unit) {
         CacheSupport.requireKey(key);
         CacheSupport.requireTtl(ttl, unit);
-        redis.expire(key, ttl, unit);
+        try {
+            redis.expire(key, ttl, unit);
+        } catch (Exception e) {
+            log.warn("[Redis缓存] 设置过期时间失败 key={} error={}", key, e.getMessage());
+        }
     }
 
     @Override
     public long getTtl(String key) {
         CacheSupport.requireKey(key);
-        return redis.getExpire(key, TimeUnit.SECONDS);
+        try {
+            Long ttl = redis.getExpire(key, TimeUnit.SECONDS);
+            return ttl == null ? -1 : ttl;
+        } catch (Exception e) {
+            log.warn("[Redis缓存] 查询过期时间失败 key={} error={}", key, e.getMessage());
+            return -1;
+        }
     }
 
     @Override
@@ -168,26 +189,57 @@ public class RedisCacheService implements CacheService {
         // 仅清除 framework: 前缀的 key
         Collection<String> keys = scanKeys("framework:cache:*");
         if (keys != null && !keys.isEmpty()) {
-            redis.delete(keys);
+            try {
+                redis.delete(keys);
+            } catch (Exception e) {
+                log.warn("[Redis缓存] 清空失败 error={}", e.getMessage());
+            }
         }
     }
 
     private List<String> scanKeys(String pattern) {
         List<String> keys = new ArrayList<>();
-        Cursor<String> cursor = redis.scan(ScanOptions.scanOptions()
-                .match(pattern)
-                .count(1000)
-                .build());
-        if (cursor == null) {
-            return keys;
-        }
         try {
-            while (cursor.hasNext()) {
-                keys.add(cursor.next());
+            Cursor<String> cursor = redis.scan(ScanOptions.scanOptions()
+                    .match(pattern)
+                    .count(1000)
+                    .build());
+            if (cursor == null) {
+                return keys;
             }
-            return keys;
-        } finally {
-            cursor.close();
+            try {
+                while (cursor.hasNext()) {
+                    keys.add(cursor.next());
+                }
+            } finally {
+                try {
+                    cursor.close();
+                } catch (Exception e) {
+                    log.warn("[Redis缓存] 关闭扫描游标失败 pattern={} error={}", pattern, e.getMessage());
+                }
+            }
+        } catch (Exception e) {
+            log.warn("[Redis缓存] 扫描失败 pattern={} error={}", pattern, e.getMessage());
+            return List.of();
+        }
+        return keys;
+    }
+
+    private boolean hasNullValue(String key) {
+        try {
+            return Boolean.TRUE.equals(redis.hasKey(NULL_VALUE_PREFIX + key));
+        } catch (Exception e) {
+            log.warn("[Redis缓存] 读取空值标记失败 key={} error={}", key, e.getMessage());
+            return false;
+        }
+    }
+
+    private void cacheNullValue(String key) {
+        try {
+            // 空值缓存（防穿透），短 TTL
+            redis.opsForValue().set(NULL_VALUE_PREFIX + key, NULL_VALUE, 60, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            log.warn("[Redis缓存] 写入空值标记失败 key={} error={}", key, e.getMessage());
         }
     }
 }
