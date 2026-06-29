@@ -605,6 +605,30 @@ class RepositoryEngineeringGuardTest {
     }
 
     @Test
+    void adminAuditLogMasksSensitiveParamsBeforeStorage() throws Exception {
+        String service = read(root.resolve(
+                "admin-service/src/main/java/com/framework/admin/audit/AdminAuditService.java"));
+        String test = read(root.resolve(
+                "admin-service/src/test/java/com/framework/admin/audit/AdminAuditServiceTest.java"));
+
+        assertThat(service)
+                .contains("MASKED_VALUE")
+                .contains("SENSITIVE_KEYWORDS")
+                .contains("maskValue")
+                .contains("isSensitiveKey")
+                .contains("password")
+                .contains("token")
+                .contains("secret")
+                .contains("credential");
+        assertThat(test)
+                .contains("paramsMaskSensitiveValuesBeforeWritingOperationLog")
+                .contains("doesNotContain(\"Admin@123\")")
+                .contains("doesNotContain(\"token-value\")")
+                .contains("configKey")
+                .contains("site.name");
+    }
+
+    @Test
     void adminFileManagementIsExposedEndToEnd() throws Exception {
         String controller = read(root.resolve(
                 "admin-service/src/main/java/com/framework/admin/file/FileAdminController.java"));

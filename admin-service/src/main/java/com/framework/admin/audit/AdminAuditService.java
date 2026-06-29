@@ -1,6 +1,5 @@
 package com.framework.admin.audit;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.framework.auth.context.UserContextHolder;
 import com.framework.core.trace.TraceContext;
@@ -9,8 +8,13 @@ import com.framework.log.mapper.OperationLogMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.stereotype.Service;
 
+import java.lang.reflect.Array;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Date;
 import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -20,13 +24,18 @@ import java.util.Map;
 public class AdminAuditService {
 
     private static final int MAX_TEXT_LENGTH = 4000;
+    private static final String MASKED_VALUE = "******";
+    private static final List<String> SENSITIVE_KEYWORDS = List.of(
+            "password", "passwd", "pwd", "token", "secret", "credential",
+            "privatekey", "apikey", "authorization"
+    );
 
     private final OperationLogMapper operationLogMapper;
     private final ObjectMapper objectMapper;
 
     public AdminAuditService(OperationLogMapper operationLogMapper, ObjectMapper objectMapper) {
         this.operationLogMapper = operationLogMapper;
-        this.objectMapper = objectMapper;
+        this.objectMapper = objectMapper == null ? new ObjectMapper() : objectMapper;
     }
 
     public void success(HttpServletRequest request, String module, String action, String operationType, Object params) {
@@ -71,10 +80,55 @@ public class AdminAuditService {
             return null;
         }
         try {
-            return truncate(objectMapper.writeValueAsString(params));
-        } catch (JsonProcessingException e) {
-            return truncate(String.valueOf(params));
+            return truncate(objectMapper.writeValueAsString(maskValue(normalize(params))));
+        } catch (Exception e) {
+            return "[序列化失败]";
         }
+    }
+
+    private Object normalize(Object value) {
+        if (value == null
+                || value instanceof Map<?, ?>
+                || value instanceof Collection<?>
+                || value.getClass().isArray()
+                || value instanceof CharSequence
+                || value instanceof Number
+                || value instanceof Boolean
+                || value instanceof Enum<?>) {
+            return value;
+        }
+        return objectMapper.convertValue(value, Object.class);
+    }
+
+    private Object maskValue(Object value) {
+        if (value instanceof Map<?, ?> source) {
+            Map<String, Object> masked = new LinkedHashMap<>();
+            source.forEach((key, item) -> {
+                String name = String.valueOf(key);
+                masked.put(name, isSensitiveKey(name) ? MASKED_VALUE : maskValue(item));
+            });
+            return masked;
+        }
+        if (value instanceof Collection<?> source) {
+            List<Object> masked = new ArrayList<>(source.size());
+            for (Object item : source) {
+                masked.add(maskValue(item));
+            }
+            return masked;
+        }
+        if (value != null && value.getClass().isArray()) {
+            List<Object> masked = new ArrayList<>(Array.getLength(value));
+            for (int i = 0; i < Array.getLength(value); i++) {
+                masked.add(maskValue(Array.get(value, i)));
+            }
+            return masked;
+        }
+        return value;
+    }
+
+    private boolean isSensitiveKey(String key) {
+        String normalized = key.toLowerCase(Locale.ROOT).replace("_", "").replace("-", "");
+        return SENSITIVE_KEYWORDS.stream().anyMatch(normalized::contains);
     }
 
     private String clientIp(HttpServletRequest request) {

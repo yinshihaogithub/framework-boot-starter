@@ -69,6 +69,25 @@ class AdminAuditServiceTest {
     }
 
     @Test
+    void paramsMaskSensitiveValuesBeforeWritingOperationLog() {
+        service.success(null, "系统管理", "创建用户", "INSERT",
+                service.params("username", "bob",
+                        "password", "Admin@123",
+                        "profile", Map.of("accessToken", "token-value", "configKey", "site.name"),
+                        "items", List.of(Map.of("apiKey", "api-key-value", "nickname", "Bob"))));
+
+        assertThat(mapper.inserted.getParams())
+                .contains("\"username\":\"bob\"")
+                .contains("\"password\":\"******\"")
+                .contains("\"accessToken\":\"******\"")
+                .contains("\"apiKey\":\"******\"")
+                .contains("\"configKey\":\"site.name\"")
+                .doesNotContain("Admin@123")
+                .doesNotContain("token-value")
+                .doesNotContain("api-key-value");
+    }
+
+    @Test
     void mapperFailureDoesNotBlockAdminFlow() {
         mapper.throwOnInsert = true;
 
