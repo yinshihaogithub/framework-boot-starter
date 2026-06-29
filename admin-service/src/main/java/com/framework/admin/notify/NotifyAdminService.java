@@ -14,8 +14,10 @@ import org.springframework.stereotype.Service;
 
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 @Service
 public class NotifyAdminService {
@@ -23,6 +25,7 @@ public class NotifyAdminService {
     private static final int DEFAULT_PAGE_NUM = 1;
     private static final int DEFAULT_PAGE_SIZE = 20;
     private static final int MAX_PAGE_SIZE = 200;
+    private static final Set<String> SUPPORTED_STATUSES = Set.of("ENABLED", "DISABLED");
 
     private final NotifyAdminRepository repository;
     private final ObjectProvider<NotifyService> notifyServiceProvider;
@@ -164,7 +167,11 @@ public class NotifyAdminService {
         if (!hasText(channel)) {
             return NotifyChannelType.LOG;
         }
-        return NotifyChannelType.valueOf(channel.trim());
+        try {
+            return NotifyChannelType.valueOf(channel.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("通知通道不支持");
+        }
     }
 
     private void validateTemplate(NotifyAdminModels.TemplateRequest request) {
@@ -186,6 +193,10 @@ public class NotifyAdminService {
         }
         if (!hasText(request.getContent())) {
             throw new IllegalArgumentException("通知内容不能为空");
+        }
+        if (hasText(request.getStatus())
+                && !SUPPORTED_STATUSES.contains(request.getStatus().trim().toUpperCase(Locale.ROOT))) {
+            throw new IllegalArgumentException("状态只能是 ENABLED 或 DISABLED");
         }
     }
 

@@ -14,7 +14,7 @@ class NotifyAdminRepositoryTest {
 
     @Test
     void listTemplatesTrimsFiltersAndCalculatesOffset() {
-        repository.listTemplates(" alarm ", " EMAIL ", " ENABLED ", 2, 10);
+        repository.listTemplates(" alarm ", " email ", " enabled ", 2, 10);
 
         assertThat(mapper.keywordLike).isEqualTo("%alarm%");
         assertThat(mapper.channel).isEqualTo("EMAIL");
@@ -28,10 +28,11 @@ class NotifyAdminRepositoryTest {
         NotifyAdminModels.TemplateRequest request = new NotifyAdminModels.TemplateRequest();
         request.setTemplateCode(" welcome ");
         request.setTemplateName(" 欢迎 ");
-        request.setChannel(" LOG ");
+        request.setChannel(" log ");
         request.setTitle(" hello ");
         request.setContent(" content ");
         request.setReceivers(Arrays.asList(" admin@example.com ", "", null, "ops@example.com"));
+        request.setStatus(" disabled ");
 
         Long id = repository.createTemplate(request);
 
@@ -40,7 +41,7 @@ class NotifyAdminRepositoryTest {
         assertThat(mapper.templateRow.getTemplateName()).isEqualTo("欢迎");
         assertThat(mapper.templateRow.getChannel()).isEqualTo("LOG");
         assertThat(mapper.templateRow.getReceivers()).isEqualTo("admin@example.com,ops@example.com");
-        assertThat(mapper.templateRow.getStatus()).isEqualTo("ENABLED");
+        assertThat(mapper.templateRow.getStatus()).isEqualTo("DISABLED");
     }
 
     @Test

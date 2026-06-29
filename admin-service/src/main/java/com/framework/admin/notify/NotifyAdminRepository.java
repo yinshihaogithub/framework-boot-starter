@@ -4,6 +4,7 @@ import org.springframework.stereotype.Repository;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 
 @Repository
@@ -17,7 +18,7 @@ public class NotifyAdminRepository {
 
     public List<NotifyAdminModels.Template> listTemplates(String keyword, String channel, String status,
                                                           int pageNum, int pageSize) {
-        return mapper.listTemplates(like(keyword), blankToNull(channel), blankToNull(status),
+        return mapper.listTemplates(like(keyword), normalize(channel), normalize(status),
                         offset(pageNum, pageSize), pageSize)
                 .stream()
                 .map(this::toTemplate)
@@ -25,7 +26,7 @@ public class NotifyAdminRepository {
     }
 
     public long countTemplates(String keyword, String channel, String status) {
-        return mapper.countTemplates(like(keyword), blankToNull(channel), blankToNull(status));
+        return mapper.countTemplates(like(keyword), normalize(channel), normalize(status));
     }
 
     public Optional<NotifyAdminModels.Template> findTemplate(Long id) {
@@ -53,14 +54,14 @@ public class NotifyAdminRepository {
     }
 
     public List<NotifyAdminModels.Record> listRecords(String channel, Boolean success, int pageNum, int pageSize) {
-        return mapper.listRecords(blankToNull(channel), success, offset(pageNum, pageSize), pageSize)
+        return mapper.listRecords(normalize(channel), success, offset(pageNum, pageSize), pageSize)
                 .stream()
                 .map(this::toRecord)
                 .toList();
     }
 
     public long countRecords(String channel, Boolean success) {
-        return mapper.countRecords(blankToNull(channel), success);
+        return mapper.countRecords(normalize(channel), success);
     }
 
     public long countRecordsBySuccess(boolean success) {
@@ -75,7 +76,7 @@ public class NotifyAdminRepository {
         return new NotifyAdminMapper.TemplateRow()
                 .setTemplateCode(text(request.getTemplateCode()))
                 .setTemplateName(text(request.getTemplateName()))
-                .setChannel(text(request.getChannel()))
+                .setChannel(normalize(request.getChannel()))
                 .setTitle(text(request.getTitle()))
                 .setContent(text(request.getContent()))
                 .setReceivers(join(request.getReceivers()))
@@ -137,10 +138,6 @@ public class NotifyAdminRepository {
         return text == null ? null : "%" + text + "%";
     }
 
-    private static String blankToNull(String value) {
-        return text(value);
-    }
-
     private static String text(String value) {
         if (value == null || value.isBlank()) {
             return null;
@@ -148,8 +145,13 @@ public class NotifyAdminRepository {
         return value.trim();
     }
 
+    private static String normalize(String value) {
+        String text = text(value);
+        return text == null ? null : text.toUpperCase(Locale.ROOT);
+    }
+
     private static String defaultStatus(String status) {
-        String text = text(status);
+        String text = normalize(status);
         return text == null ? "ENABLED" : text;
     }
 

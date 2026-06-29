@@ -33,6 +33,28 @@ class NotifyAdminServiceTest {
     }
 
     @Test
+    void rejectsUnsupportedTemplateChannel() {
+        NotifyAdminService service = service(new InMemoryNotifyAdminRepository(), null);
+        NotifyAdminModels.TemplateRequest request = templateRequest();
+        request.setChannel("ding-talk");
+
+        assertThatThrownBy(() -> service.createTemplate(request, null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("通知通道不支持");
+    }
+
+    @Test
+    void rejectsUnsupportedTemplateStatus() {
+        NotifyAdminService service = service(new InMemoryNotifyAdminRepository(), null);
+        NotifyAdminModels.TemplateRequest request = templateRequest();
+        request.setStatus("ARCHIVED");
+
+        assertThatThrownBy(() -> service.createTemplate(request, null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("状态只能是 ENABLED 或 DISABLED");
+    }
+
+    @Test
     void listsTemplatesWithSafePaging() {
         InMemoryNotifyAdminRepository repository = new InMemoryNotifyAdminRepository();
         repository.createTemplate(templateRequest());
@@ -69,6 +91,21 @@ class NotifyAdminServiceTest {
         assertThat(notifyService.message.getContent()).isEqualTo("hello Codex");
         assertThat(notifyService.message.getReceivers()).containsExactly("ops@example.com");
         assertThat(repository.records).hasSize(1);
+    }
+
+    @Test
+    void sendTestAcceptsLowercaseTemplateChannel() {
+        InMemoryNotifyAdminRepository repository = new InMemoryNotifyAdminRepository();
+        NotifyAdminModels.TemplateRequest templateRequest = templateRequest();
+        templateRequest.setChannel("webhook");
+        Long templateId = repository.createTemplate(templateRequest);
+        CapturingNotifyService notifyService = new CapturingNotifyService(true, "sent");
+        NotifyAdminService service = service(repository, notifyService);
+
+        Optional<NotifyAdminModels.Record> record = service.sendTest(templateId, null, null);
+
+        assertThat(record).isPresent();
+        assertThat(notifyService.message.getChannel()).isEqualTo(NotifyChannelType.WEBHOOK);
     }
 
     @Test
