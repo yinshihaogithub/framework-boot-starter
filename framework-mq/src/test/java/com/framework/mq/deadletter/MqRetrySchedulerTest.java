@@ -84,6 +84,26 @@ class MqRetrySchedulerTest {
     }
 
     @Test
+    void manualRetryFailureUsesExceptionClassNameWhenMessageIsEmpty() {
+        MqFailedMessage failedMessage = failedMessage("{\"legacy\":true}");
+        InMemoryMqFailedMessageRepository repository = new InMemoryMqFailedMessageRepository(List.of(failedMessage));
+        DeadLetterHandler deadLetterHandler = new DeadLetterHandler(repository, new MqProperties());
+        MqRetryScheduler scheduler = new MqRetryScheduler(
+                deadLetterHandler,
+                new MqMessageSenderRegistry(properties(MqProperties.Provider.RABBIT),
+                        List.of(new EmptyMessageFailingSender())),
+                3
+        );
+
+        boolean result = scheduler.manualRetry(1L, "ops-user", "retry now");
+
+        assertThat(result).isFalse();
+        MqFailedMessage saved = repository.findById(1L).orElseThrow();
+        assertThat(saved.getErrorMessage()).contains("手动重发失败: IllegalStateException");
+        assertThat(saved.getErrorMessage()).doesNotContain("null");
+    }
+
+    @Test
     void manualRetryFailureMarksExhaustedWhenRetryLimitReached() {
         MqFailedMessage failedMessage = failedMessage("{\"legacy\":true}");
         failedMessage.setRetryCount(2);
@@ -251,6 +271,19 @@ class MqRetrySchedulerTest {
         @Override
         public <T> void send(String destination, String routingKey, MessageWrapper<T> wrapper) {
             throw new IllegalStateException(message);
+        }
+    }
+
+    private static class EmptyMessageFailingSender implements MqMessageSender {
+
+        @Override
+        public MqProperties.Provider provider() {
+            return MqProperties.Provider.RABBIT;
+        }
+
+        @Override
+        public <T> void send(String destination, String routingKey, MessageWrapper<T> wrapper) {
+            throw new IllegalStateException();
         }
     }
 

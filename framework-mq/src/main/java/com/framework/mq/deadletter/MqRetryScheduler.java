@@ -104,14 +104,15 @@ public class MqRetryScheduler {
             deadLetterHandler.updateRecord(msg);
 
         } catch (Exception e) {
-            log.error("[重试失败] id={}, messageId={}, error={}", msg.getId(), msg.getMessageId(), e.getMessage());
+            String failureMessage = failureMessage(e);
+            log.error("[重试失败] id={}, messageId={}, error={}", msg.getId(), msg.getMessageId(), failureMessage);
 
             int newRetryCount = msg.getRetryCount() + 1;
             msg.setRetryCount(newRetryCount);
 
             if (newRetryCount >= maxRetry) {
                 msg.setStatus(MqFailedMessage.STATUS_EXHAUSTED);
-                msg.setErrorMessage(msg.getErrorMessage() + " | 重试失败: " + e.getMessage());
+                msg.setErrorMessage(appendErrorMessage(msg.getErrorMessage(), "重试失败: " + failureMessage));
             } else {
                 msg.setStatus(MqFailedMessage.STATUS_PENDING);
                 msg.setNextRetryTime(calculateNextRetryTime(newRetryCount));
@@ -162,7 +163,8 @@ public class MqRetryScheduler {
                     id, msg.getMessageId(), msg.getTraceId(), normalizedOperator);
             return true;
         } catch (Exception e) {
-            log.error("[手动重发失败] id={}, error={}", id, e.getMessage());
+            String failureMessage = failureMessage(e);
+            log.error("[手动重发失败] id={}, error={}", id, failureMessage);
             recordManualRetryFailure(msg, normalizedOperator, normalizedRemark, e);
             return false;
         }
@@ -173,7 +175,7 @@ public class MqRetryScheduler {
         msg.setRetryCount(newRetryCount);
         msg.setOperator(operator);
         msg.setCompensateRemark(remark == null ? "手动重发失败" : remark);
-        msg.setErrorMessage(appendErrorMessage(msg.getErrorMessage(), "手动重发失败: " + exception.getMessage()));
+        msg.setErrorMessage(appendErrorMessage(msg.getErrorMessage(), "手动重发失败: " + failureMessage(exception)));
         if (newRetryCount >= retryLimit(msg)) {
             msg.setStatus(MqFailedMessage.STATUS_EXHAUSTED);
             msg.setNextRetryTime(null);
@@ -301,6 +303,10 @@ public class MqRetryScheduler {
 
     private String appendErrorMessage(String current, String addition) {
         return isBlank(current) ? addition : current + " | " + addition;
+    }
+
+    private String failureMessage(Exception exception) {
+        return exception.getMessage() != null ? exception.getMessage() : exception.getClass().getSimpleName();
     }
 
     private String normalize(String value) {
