@@ -9,6 +9,7 @@ import com.framework.auth.service.LoginSecurityService;
 import com.framework.auth.service.SessionManager;
 import com.framework.auth.util.PasswordValidator;
 import com.framework.core.constant.FrameworkConstants;
+import com.framework.core.exception.BusinessException;
 import com.framework.core.result.Result;
 import com.framework.core.result.ResultCode;
 import com.framework.crypto.util.PasswordUtils;
@@ -82,6 +83,9 @@ public class AdminAuthService {
                     .setAccessToken(loginUser.getAccessToken())
                     .setUser(toCurrentUser(user))
                     .setMenus(systemRepository.listMenusByUserId(user.getId())));
+        } catch (BusinessException e) {
+            systemRepository.insertLoginLog(username, null, clientIp, false, e.getMessage());
+            return Result.fail(e.getCode(), e.getMessage());
         } catch (Exception e) {
             systemRepository.insertLoginLog(username, null, clientIp, false, e.getMessage());
             return Result.fail(ResultCode.LOGIN_FAIL.getCode(), e.getMessage());

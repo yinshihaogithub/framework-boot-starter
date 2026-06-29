@@ -8,6 +8,7 @@ import com.framework.auth.context.UserContextHolder;
 import com.framework.auth.service.LoginSecurityService;
 import com.framework.auth.service.SessionManager;
 import com.framework.core.constant.FrameworkConstants;
+import com.framework.core.exception.AuthException;
 import com.framework.core.result.Result;
 import com.framework.core.result.ResultCode;
 import com.framework.crypto.util.PasswordUtils;
@@ -83,6 +84,26 @@ class AdminAuthServiceTest {
                 .extracting(LoginLogRecord::username, LoginLogRecord::userId, LoginLogRecord::clientIp,
                         LoginLogRecord::success, LoginLogRecord::message)
                 .containsExactly(tuple("admin", 1L, "10.0.0.8", false, "账号或密码错误"));
+    }
+
+    @Test
+    void loginPreservesAccountLockedCodeFromLoginSecurity() {
+        FakeLoginSecurityService loginSecurityService = new FakeLoginSecurityService();
+        loginSecurityService.lockedMessage = "账号已被锁定，请 10 分钟后再试";
+        AdminAuthService lockedService = new AdminAuthService(repository, sessionManager, provider(loginSecurityService));
+        AdminAuthController.LoginRequest request = new AdminAuthController.LoginRequest();
+        request.setUsername("admin");
+        request.setPassword("Admin@123");
+
+        Result<AdminAuthController.LoginResponse> result = lockedService.login(request, "10.0.0.8");
+
+        assertThat(result.getCode()).isEqualTo(ResultCode.ACCOUNT_LOCKED.getCode());
+        assertThat(result.getMessage()).isEqualTo("账号已被锁定，请 10 分钟后再试");
+        assertThat(sessionManager.createdDeviceId).isNull();
+        assertThat(repository.loginLogs)
+                .extracting(LoginLogRecord::username, LoginLogRecord::userId, LoginLogRecord::clientIp,
+                        LoginLogRecord::success, LoginLogRecord::message)
+                .containsExactly(tuple("admin", null, "10.0.0.8", false, "账号已被锁定，请 10 分钟后再试"));
     }
 
     @Test
@@ -287,6 +308,21 @@ class AdminAuthServiceTest {
         @Override
         public void forceLogoutAll(Long userId) {
             this.forceLogoutAllUserId = userId;
+        }
+    }
+
+    private static class FakeLoginSecurityService extends LoginSecurityService {
+        private String lockedMessage;
+
+        private FakeLoginSecurityService() {
+            super(null, 3, 30);
+        }
+
+        @Override
+        public void checkAccountLocked(String username) {
+            if (lockedMessage != null) {
+                throw new AuthException(ResultCode.ACCOUNT_LOCKED, lockedMessage);
+            }
         }
     }
 
