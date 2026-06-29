@@ -31,11 +31,34 @@ class ExcelAutoConfigurationTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("framework.excel.default-sheet-name");
 
+        properties.setDefaultSheetName("bad/name");
+
+        assertThatThrownBy(properties::afterPropertiesSet)
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("framework.excel.default-sheet-name")
+                .hasMessageContaining("invalid character");
+
+        properties.setDefaultSheetName("'Sheet1'");
+
+        assertThatThrownBy(properties::afterPropertiesSet)
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("apostrophe");
+
         properties.setDefaultSheetName("Sheet1");
         properties.setMaxRows(0);
 
         assertThatThrownBy(properties::afterPropertiesSet)
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("framework.excel.max-rows");
+    }
+
+    @Test
+    void autoConfigurationRejectsInvalidDefaultSheetNameAtStartup() {
+        contextRunner
+                .withPropertyValues("framework.excel.default-sheet-name=bad/name")
+                .run(context -> assertThat(context)
+                        .hasFailed()
+                        .getFailure()
+                        .hasMessageContaining("framework.excel.default-sheet-name"));
     }
 }
