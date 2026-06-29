@@ -70,6 +70,20 @@ class FileAdminServiceTest {
     }
 
     @Test
+    void uploadSucceedsWhenAuditFails() {
+        FileAdminService serviceWithAuditFailure = new FileAdminService(repository, provider(storageService),
+                new ThrowingAuditService());
+        MockMultipartFile file = new MockMultipartFile("file", "hello.txt", "text/plain", "abc".getBytes());
+
+        Result<FileAdminModels.FileRecord> result = serviceWithAuditFailure.upload(file, "system", "user-1", null);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getData().getId()).isEqualTo(9L);
+        assertThat(repository.created.getFileKey()).isEqualTo("file-key");
+        assertThat(storageService.deletedKey).isNull();
+    }
+
+    @Test
     void uploadRejectsEmptyFile() {
         MockMultipartFile file = new MockMultipartFile("file", "empty.txt", "text/plain", new byte[0]);
 
@@ -110,6 +124,23 @@ class FileAdminServiceTest {
         assertThat(repository.deletedId).isEqualTo(9L);
         assertThat(auditService.actions).containsExactly("删除文件");
         assertThat(auditService.params).containsEntry("physicalDeleted", true);
+    }
+
+    @Test
+    void deleteSucceedsWhenAuditFails() {
+        FileAdminService serviceWithAuditFailure = new FileAdminService(repository, provider(storageService),
+                new ThrowingAuditService());
+        repository.record = new FileAdminModels.FileRecord()
+                .setId(9L)
+                .setFileKey("file-key")
+                .setOriginalFilename("hello.txt");
+
+        Result<String> result = serviceWithAuditFailure.delete(9L, null);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getData()).isEqualTo("已删除");
+        assertThat(storageService.deletedKey).isEqualTo("file-key");
+        assertThat(repository.deletedId).isEqualTo(9L);
     }
 
     @Test
@@ -315,6 +346,18 @@ class FileAdminServiceTest {
         public void success(HttpServletRequest request, String module, String action, String operationType, Object params) {
             actions.add(action);
             this.params = (Map<String, Object>) params;
+        }
+    }
+
+    private static class ThrowingAuditService extends AdminAuditService {
+
+        private ThrowingAuditService() {
+            super(null, null);
+        }
+
+        @Override
+        public void success(HttpServletRequest request, String module, String action, String operationType, Object params) {
+            throw new IllegalStateException("audit unavailable");
         }
     }
 

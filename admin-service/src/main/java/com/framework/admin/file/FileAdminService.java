@@ -93,9 +93,9 @@ public class FileAdminService {
                         .setOperatorId(UserContextHolder.getUserId())
                         .setOperatorName(UserContextHolder.getUsername())
                         .setDeleted(false));
-                auditService.success(servletRequest, "文件中心", "上传文件", "CREATE",
-                        auditService.params("fileId", record.getId(), "filename", record.getOriginalFilename(),
-                                "businessType", record.getBusinessType(), "businessKey", record.getBusinessKey()));
+                auditSuccess(servletRequest, "上传文件", "CREATE",
+                        "fileId", record.getId(), "filename", record.getOriginalFilename(),
+                        "businessType", record.getBusinessType(), "businessKey", record.getBusinessKey());
                 return Result.success(record);
             } catch (RuntimeException e) {
                 cleanupStoredFile(storageService, storedFile);
@@ -183,10 +183,21 @@ public class FileAdminService {
             log.warn("[文件中心] 物理文件删除失败 fileId={}, fileKey={}, error={}",
                     id, record.getFileKey(), e.getMessage());
         }
-        auditService.success(servletRequest, "文件中心", "删除文件", "DELETE",
-                auditService.params("fileId", id, "filename", record.getOriginalFilename(),
-                        "fileKey", record.getFileKey(), "physicalDeleted", physicalDeleted));
+        auditSuccess(servletRequest, "删除文件", "DELETE",
+                "fileId", id, "filename", record.getOriginalFilename(),
+                "fileKey", record.getFileKey(), "physicalDeleted", physicalDeleted);
         return Result.success(physicalDeleted ? "已删除" : "已删除，物理文件待清理");
+    }
+
+    private void auditSuccess(HttpServletRequest request, String action, String operationType, Object... params) {
+        if (auditService == null) {
+            return;
+        }
+        try {
+            auditService.success(request, "文件中心", action, operationType, auditService.params(params));
+        } catch (RuntimeException e) {
+            log.warn("[文件中心] 审计日志写入失败 action={}, error={}", action, e.getMessage());
+        }
     }
 
     private <T> T available(ObjectProvider<T> provider) {
