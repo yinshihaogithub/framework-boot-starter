@@ -770,6 +770,32 @@ class RepositoryEngineeringGuardTest {
     }
 
     @Test
+    void adminSystemConfigMasksSensitiveValuesEndToEnd() throws Exception {
+        String repository = read(root.resolve(
+                "admin-service/src/main/java/com/framework/admin/system/AdminSystemRepository.java"));
+        String mapper = read(root.resolve(
+                "admin-service/src/main/java/com/framework/admin/system/AdminSystemMapper.java"));
+        String repositoryTest = read(root.resolve(
+                "admin-service/src/test/java/com/framework/admin/system/AdminSystemRepositoryTest.java"));
+        String app = read(root.resolve("frontend/admin-web/src/App.vue"));
+
+        assertThat(repository)
+                .contains("public List<ConfigItem> listConfigs()")
+                .contains("Boolean.TRUE.equals(config.getSensitive())")
+                .contains("? \"******\"")
+                .contains("isMaskedSensitiveValue(request)");
+        assertThat(mapper)
+                .contains("config_value = CASE WHEN #{preserveValue} = 1 THEN config_value ELSE #{config.configValue} END");
+        assertThat(repositoryTest)
+                .contains("listConfigsMasksSensitiveValues")
+                .contains("updateConfigPreservesExistingSensitiveValueWhenMaskedPlaceholderIsSubmitted")
+                .contains("updateConfigStoresNewSensitiveValueWhenValueChanges");
+        assertThat(app)
+                .contains("row.sensitive ? '是' : '否'")
+                .contains("openEditConfig(row)");
+    }
+
+    @Test
     void adminWriteEndpointsUseActionPermissionsInsteadOfViewPermissions() throws Exception {
         Path adminMain = root.resolve("admin-service/src/main/java/com/framework/admin");
         try (Stream<Path> files = Files.walk(adminMain)) {
