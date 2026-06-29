@@ -2,6 +2,7 @@ package com.framework.admin.log;
 
 import com.framework.admin.system.AdminSystemModels.LoginLog;
 import com.framework.admin.system.AdminSystemRepository;
+import com.framework.admin.support.AdminPageSupport;
 import com.framework.core.result.PageResult;
 import com.framework.log.entity.OperationLogEntity;
 import com.framework.log.mapper.OperationLogMapper;
@@ -59,6 +60,18 @@ class LogAdminServiceTest {
         assertThat(page.getPageSize()).isEqualTo(200);
         assertThat(page.getTotal()).isEqualTo(2);
         assertThat(page.getRecords()).extracting(OperationLogEntity::getId).containsExactly(1L, 2L);
+    }
+
+    @Test
+    void clampsHugePageNumberBeforeQueryingOperationLogs() {
+        LogAdminService service = new LogAdminService(provider(mapper(List.of(
+                operationLog(1L, "system", "OPERATION", true, "trace-a")))), systemRepository(List.of()));
+
+        PageResult<OperationLogEntity> page = service.list("system", null, null, null, null,
+                Integer.MAX_VALUE, Integer.MAX_VALUE);
+
+        assertThat(page.getPageNum()).isEqualTo(AdminPageSupport.MAX_PAGE_NUM);
+        assertThat(page.getPageSize()).isEqualTo(AdminPageSupport.MAX_PAGE_SIZE);
     }
 
     @Test

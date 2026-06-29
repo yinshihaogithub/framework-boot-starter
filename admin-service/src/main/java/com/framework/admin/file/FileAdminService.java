@@ -1,6 +1,7 @@
 package com.framework.admin.file;
 
 import com.framework.admin.audit.AdminAuditService;
+import com.framework.admin.support.AdminPageSupport;
 import com.framework.auth.context.UserContextHolder;
 import com.framework.core.result.PageResult;
 import com.framework.core.result.Result;
@@ -28,10 +29,6 @@ import java.util.Map;
 @Service
 public class FileAdminService {
 
-    private static final int DEFAULT_PAGE_NUM = 1;
-    private static final int DEFAULT_PAGE_SIZE = 20;
-    private static final int MAX_PAGE_SIZE = 200;
-
     private final FileAdminRepository repository;
     private final ObjectProvider<FileStorageService> fileStorageServiceProvider;
     private final AdminAuditService auditService;
@@ -55,8 +52,8 @@ public class FileAdminService {
 
     public PageResult<FileAdminModels.FileRecord> list(String keyword, String businessType, String businessKey,
                                                        String contentType, int pageNum, int pageSize) {
-        int safePageNum = safePageNum(pageNum);
-        int safePageSize = safePageSize(pageSize);
+        int safePageNum = AdminPageSupport.safePageNum(pageNum);
+        int safePageSize = AdminPageSupport.safePageSize(pageSize);
         try {
             return PageResult.of(
                     repository.list(keyword, businessType, businessKey, contentType, safePageNum, safePageSize),
@@ -236,17 +233,6 @@ public class FileAdminService {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), "文件ID必须大于0");
         }
         return null;
-    }
-
-    private int safePageNum(int pageNum) {
-        return pageNum > 0 ? pageNum : DEFAULT_PAGE_NUM;
-    }
-
-    private int safePageSize(int pageSize) {
-        if (pageSize <= 0) {
-            return DEFAULT_PAGE_SIZE;
-        }
-        return Math.min(pageSize, MAX_PAGE_SIZE);
     }
 
     private String text(String value) {

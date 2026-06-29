@@ -1,6 +1,7 @@
 package com.framework.admin.notify;
 
 import com.framework.admin.audit.AdminAuditService;
+import com.framework.admin.support.AdminPageSupport;
 import com.framework.auth.context.UserContextHolder;
 import com.framework.core.result.PageResult;
 import com.framework.core.result.ResultCode;
@@ -24,9 +25,6 @@ import java.util.Set;
 @Service
 public class NotifyAdminService {
 
-    private static final int DEFAULT_PAGE_NUM = 1;
-    private static final int DEFAULT_PAGE_SIZE = 20;
-    private static final int MAX_PAGE_SIZE = 200;
     private static final Set<String> SUPPORTED_STATUSES = Set.of("ENABLED", "DISABLED");
 
     private final NotifyAdminRepository repository;
@@ -57,8 +55,8 @@ public class NotifyAdminService {
 
     public PageResult<NotifyAdminModels.Template> templates(String keyword, String channel, String status,
                                                            int pageNum, int pageSize) {
-        int safePageNum = safePageNum(pageNum);
-        int safePageSize = safePageSize(pageSize);
+        int safePageNum = AdminPageSupport.safePageNum(pageNum);
+        int safePageSize = AdminPageSupport.safePageSize(pageSize);
         try {
             List<NotifyAdminModels.Template> records = repository.listTemplates(
                     keyword, channel, status, safePageNum, safePageSize);
@@ -173,8 +171,8 @@ public class NotifyAdminService {
     }
 
     public PageResult<NotifyAdminModels.Record> records(String channel, Boolean success, int pageNum, int pageSize) {
-        int safePageNum = safePageNum(pageNum);
-        int safePageSize = safePageSize(pageSize);
+        int safePageNum = AdminPageSupport.safePageNum(pageNum);
+        int safePageSize = AdminPageSupport.safePageSize(pageSize);
         try {
             List<NotifyAdminModels.Record> records = repository.listRecords(channel, success, safePageNum, safePageSize);
             long total = repository.countRecords(channel, success);
@@ -269,17 +267,6 @@ public class NotifyAdminService {
                 && !SUPPORTED_STATUSES.contains(request.getStatus().trim().toUpperCase(Locale.ROOT))) {
             throw new IllegalArgumentException("状态只能是 ENABLED 或 DISABLED");
         }
-    }
-
-    private int safePageNum(int pageNum) {
-        return pageNum > 0 ? pageNum : DEFAULT_PAGE_NUM;
-    }
-
-    private int safePageSize(int pageSize) {
-        if (pageSize <= 0) {
-            return DEFAULT_PAGE_SIZE;
-        }
-        return Math.min(pageSize, MAX_PAGE_SIZE);
     }
 
     private boolean hasText(String value) {

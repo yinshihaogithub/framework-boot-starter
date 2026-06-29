@@ -2,6 +2,7 @@ package com.framework.admin.log;
 
 import com.framework.admin.system.AdminSystemModels.LoginLog;
 import com.framework.admin.system.AdminSystemRepository;
+import com.framework.admin.support.AdminPageSupport;
 import com.framework.core.result.PageResult;
 import com.framework.log.entity.OperationLogEntity;
 import com.framework.log.mapper.OperationLogMapper;
@@ -16,10 +17,6 @@ import java.util.Map;
 @Slf4j
 @Service
 public class LogAdminService {
-
-    private static final int DEFAULT_PAGE_NUM = 1;
-    private static final int DEFAULT_PAGE_SIZE = 20;
-    private static final int MAX_PAGE_SIZE = 200;
 
     private final ObjectProvider<OperationLogMapper> mapperProvider;
     private final AdminSystemRepository systemRepository;
@@ -42,8 +39,8 @@ public class LogAdminService {
 
     public PageResult<OperationLogEntity> list(String module, String logType, Long operatorId,
                                                Boolean success, String traceId, int pageNum, int pageSize) {
-        int safePageNum = safePageNum(pageNum);
-        int safePageSize = safePageSize(pageSize);
+        int safePageNum = AdminPageSupport.safePageNum(pageNum);
+        int safePageSize = AdminPageSupport.safePageSize(pageSize);
         OperationLogMapper mapper = availableMapper();
         if (mapper == null) {
             return PageResult.empty(safePageNum, safePageSize);
@@ -64,8 +61,8 @@ public class LogAdminService {
     }
 
     public PageResult<LoginLog> loginLogs(String username, Boolean success, int pageNum, int pageSize) {
-        int safePageNum = safePageNum(pageNum);
-        int safePageSize = safePageSize(pageSize);
+        int safePageNum = AdminPageSupport.safePageNum(pageNum);
+        int safePageSize = AdminPageSupport.safePageSize(pageSize);
         try {
             List<LoginLog> records = systemRepository.listLoginLogs(username, success, safePageNum, safePageSize);
             long total = systemRepository.countLoginLogs(username, success);
@@ -97,14 +94,4 @@ public class LogAdminService {
         }
     }
 
-    private int safePageNum(int pageNum) {
-        return pageNum > 0 ? pageNum : DEFAULT_PAGE_NUM;
-    }
-
-    private int safePageSize(int pageSize) {
-        if (pageSize <= 0) {
-            return DEFAULT_PAGE_SIZE;
-        }
-        return Math.min(pageSize, MAX_PAGE_SIZE);
-    }
 }

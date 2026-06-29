@@ -1,6 +1,7 @@
 package com.framework.admin.mq;
 
 import com.framework.admin.audit.AdminAuditService;
+import com.framework.admin.support.AdminPageSupport;
 import com.framework.auth.context.UserContextHolder;
 import com.framework.core.result.PageResult;
 import com.framework.core.result.ResultCode;
@@ -31,10 +32,6 @@ import java.util.stream.Collectors;
 @Slf4j
 @Service
 public class MqAdminService {
-
-    private static final int DEFAULT_PAGE_NUM = 1;
-    private static final int DEFAULT_PAGE_SIZE = 20;
-    private static final int MAX_PAGE_SIZE = 200;
 
     private final ObjectProvider<DeadLetterHandler> deadLetterHandlerProvider;
     private final ObjectProvider<MqRetryScheduler> retrySchedulerProvider;
@@ -90,8 +87,8 @@ public class MqAdminService {
                                                                        String messageType, int pageNum,
                                                                        int pageSize) {
         DeadLetterHandler handler = available(deadLetterHandlerProvider);
-        int safePageNum = safePageNum(pageNum);
-        int safePageSize = safePageSize(pageSize);
+        int safePageNum = AdminPageSupport.safePageNum(pageNum);
+        int safePageSize = AdminPageSupport.safePageSize(pageSize);
         if (handler == null) {
             return PageResult.empty(safePageNum, safePageSize);
         }
@@ -391,17 +388,6 @@ public class MqAdminService {
                 .setUpdateTime(msg.getUpdateTime())
                 .setOperator(msg.getOperator())
                 .setCompensateRemark(msg.getCompensateRemark());
-    }
-
-    private int safePageNum(int pageNum) {
-        return pageNum > 0 ? pageNum : DEFAULT_PAGE_NUM;
-    }
-
-    private int safePageSize(int pageSize) {
-        if (pageSize <= 0) {
-            return DEFAULT_PAGE_SIZE;
-        }
-        return Math.min(pageSize, MAX_PAGE_SIZE);
     }
 
     private boolean contains(String value, String keyword) {

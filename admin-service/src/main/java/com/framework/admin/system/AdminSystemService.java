@@ -21,6 +21,7 @@ import com.framework.admin.system.AdminSystemModels.TenantRequest;
 import com.framework.admin.system.AdminSystemModels.UserCreateRequest;
 import com.framework.admin.system.AdminSystemModels.UserStatusRequest;
 import com.framework.admin.system.AdminSystemModels.UserUpdateRequest;
+import com.framework.admin.support.AdminPageSupport;
 import com.framework.core.result.PageResult;
 import com.framework.core.result.Result;
 import com.framework.core.result.ResultCode;
@@ -44,9 +45,6 @@ import java.util.List;
 @Service
 public class AdminSystemService {
 
-    private static final int DEFAULT_PAGE_NUM = 1;
-    private static final int DEFAULT_PAGE_SIZE = 20;
-    private static final int MAX_PAGE_SIZE = 200;
     private static final long BUILT_IN_ADMIN_ID = 1L;
     private static final long BUILT_IN_SUPER_ADMIN_ROLE_ID = 1L;
 
@@ -200,8 +198,8 @@ public class AdminSystemService {
     }
 
     public PageResult<AdminUser> users(String keyword, String status, int pageNum, int pageSize) {
-        int safePageNum = safePageNum(pageNum);
-        int safePageSize = safePageSize(pageSize);
+        int safePageNum = AdminPageSupport.safePageNum(pageNum);
+        int safePageSize = AdminPageSupport.safePageSize(pageSize);
         try {
             List<AdminUser> records = repository.listUsers(keyword, status, safePageNum, safePageSize);
             records.forEach(user -> {
@@ -707,17 +705,6 @@ public class AdminSystemService {
     private <T> Result<T> serviceError(String action, String message, RuntimeException exception) {
         log.warn("[系统管理] {}失败 error={}", action, exception.getMessage());
         return Result.fail(ResultCode.SERVICE_ERROR.getCode(), message);
-    }
-
-    private int safePageNum(int pageNum) {
-        return pageNum > 0 ? pageNum : DEFAULT_PAGE_NUM;
-    }
-
-    private int safePageSize(int pageSize) {
-        if (pageSize <= 0) {
-            return DEFAULT_PAGE_SIZE;
-        }
-        return Math.min(pageSize, MAX_PAGE_SIZE);
     }
 
     private boolean isBlank(String value) {

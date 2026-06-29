@@ -1,6 +1,7 @@
 package com.framework.admin.localmessage;
 
 import com.framework.admin.audit.AdminAuditService;
+import com.framework.admin.support.AdminPageSupport;
 import com.framework.core.result.PageResult;
 import com.framework.core.result.ResultCode;
 import com.framework.localmessage.model.LocalMessage;
@@ -21,10 +22,6 @@ import java.util.Map;
 @Slf4j
 @Service
 public class LocalMessageAdminService {
-
-    private static final int DEFAULT_PAGE_NUM = 1;
-    private static final int DEFAULT_PAGE_SIZE = 20;
-    private static final int MAX_PAGE_SIZE = 200;
 
     private final ObjectProvider<LocalMessageService> localMessageServiceProvider;
     private final ObjectProvider<LocalMessageRepository> repositoryProvider;
@@ -62,8 +59,8 @@ public class LocalMessageAdminService {
 
     public PageResult<LocalMessageVO> list(String topic, LocalMessageStatus status, String traceId,
                                            String businessKey, int pageNum, int pageSize) {
-        int safePageNum = safePageNum(pageNum);
-        int safePageSize = safePageSize(pageSize);
+        int safePageNum = AdminPageSupport.safePageNum(pageNum);
+        int safePageSize = AdminPageSupport.safePageSize(pageSize);
         LocalMessageService service = available(localMessageServiceProvider);
         if (service == null) {
             return PageResult.empty(safePageNum, safePageSize);
@@ -221,17 +218,6 @@ public class LocalMessageAdminService {
         } catch (Exception ignored) {
             return ActionResult.fail(ResultCode.SERVICE_ERROR, "本地消息操作失败");
         }
-    }
-
-    private int safePageNum(int pageNum) {
-        return pageNum > 0 ? pageNum : DEFAULT_PAGE_NUM;
-    }
-
-    private int safePageSize(int pageSize) {
-        if (pageSize <= 0) {
-            return DEFAULT_PAGE_SIZE;
-        }
-        return Math.min(pageSize, MAX_PAGE_SIZE);
     }
 
     private boolean contains(String value, String keyword) {

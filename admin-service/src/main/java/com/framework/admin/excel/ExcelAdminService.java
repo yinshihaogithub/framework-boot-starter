@@ -2,6 +2,7 @@ package com.framework.admin.excel;
 
 import com.alibaba.excel.annotation.ExcelProperty;
 import com.framework.admin.audit.AdminAuditService;
+import com.framework.admin.support.AdminPageSupport;
 import com.framework.auth.context.UserContextHolder;
 import com.framework.core.result.PageResult;
 import com.framework.core.result.ResultCode;
@@ -21,10 +22,6 @@ import java.util.Map;
 @Slf4j
 @Service
 public class ExcelAdminService {
-
-    private static final int DEFAULT_PAGE_NUM = 1;
-    private static final int DEFAULT_PAGE_SIZE = 20;
-    private static final int MAX_PAGE_SIZE = 200;
 
     private final ExcelAdminRepository repository;
     private final ObjectProvider<ExcelExportService> exportServiceProvider;
@@ -47,8 +44,8 @@ public class ExcelAdminService {
     }
 
     public PageResult<ExcelAdminModels.Task> tasks(String taskType, String status, int pageNum, int pageSize) {
-        int safePageNum = safePageNum(pageNum);
-        int safePageSize = safePageSize(pageSize);
+        int safePageNum = AdminPageSupport.safePageNum(pageNum);
+        int safePageSize = AdminPageSupport.safePageSize(pageSize);
         String normalizedTaskType = normalize(taskType);
         String normalizedStatus = normalize(status);
         try {
@@ -178,17 +175,6 @@ public class ExcelAdminService {
         } catch (Exception ignored) {
             return List.of();
         }
-    }
-
-    private int safePageNum(int pageNum) {
-        return pageNum > 0 ? pageNum : DEFAULT_PAGE_NUM;
-    }
-
-    private int safePageSize(int pageSize) {
-        if (pageSize <= 0) {
-            return DEFAULT_PAGE_SIZE;
-        }
-        return Math.min(pageSize, MAX_PAGE_SIZE);
     }
 
     private String text(String value, String fallback) {
