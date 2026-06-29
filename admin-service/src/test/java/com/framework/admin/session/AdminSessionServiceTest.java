@@ -69,6 +69,16 @@ class AdminSessionServiceTest {
     }
 
     @Test
+    void kickSessionTrimsDeviceIdBeforeLookupAndForceLogout() {
+        sessionManager.sessions = List.of(new SessionManager.OnlineSession(2L, "bob", "1", "web", 100L, 3600L));
+
+        AdminSessionService.ActionResult<String> result = sessionService.kickSession(2L, " web ", null);
+
+        assertThat(result.success()).isTrue();
+        assertThat(sessionManager.kicked).containsExactly("2:web");
+    }
+
+    @Test
     void kickSessionRejectsCurrentSession() {
         UserContextHolder.set(new LoginUser().setUserId(1L).setDeviceId("admin-web"));
 
@@ -77,6 +87,30 @@ class AdminSessionServiceTest {
         assertThat(result.success()).isFalse();
         assertThat(result.code()).isEqualTo(ResultCode.PARAM_ERROR.getCode());
         assertThat(result.message()).contains("当前会话");
+        assertThat(sessionManager.kicked).isEmpty();
+    }
+
+    @Test
+    void kickSessionRejectsInvalidUserIdBeforeSessionLookup() {
+        sessionManager.listFailure = new RuntimeException("redis down");
+
+        AdminSessionService.ActionResult<String> result = sessionService.kickSession(0L, "web", null);
+
+        assertThat(result.success()).isFalse();
+        assertThat(result.code()).isEqualTo(ResultCode.PARAM_ERROR.getCode());
+        assertThat(result.message()).isEqualTo("用户ID必须大于0");
+        assertThat(sessionManager.kicked).isEmpty();
+    }
+
+    @Test
+    void kickSessionRejectsBlankDeviceIdBeforeSessionLookup() {
+        sessionManager.listFailure = new RuntimeException("redis down");
+
+        AdminSessionService.ActionResult<String> result = sessionService.kickSession(2L, " ", null);
+
+        assertThat(result.success()).isFalse();
+        assertThat(result.code()).isEqualTo(ResultCode.PARAM_ERROR.getCode());
+        assertThat(result.message()).isEqualTo("设备不能为空");
         assertThat(sessionManager.kicked).isEmpty();
     }
 

@@ -815,8 +815,10 @@ class RepositoryEngineeringGuardTest {
                 .contains("@RequirePermission(\"session:kick\")")
                 .contains("@DeleteMapping(\"/{userId}/{deviceId}\")");
         assertThat(service)
-                .contains("sessionManager.forceLogout(userId, deviceId)")
+                .contains("String safeDeviceId = text(deviceId)")
+                .contains("sessionManager.forceLogout(userId, safeDeviceId)")
                 .contains("auditService.success")
+                .contains("用户ID必须大于0")
                 .contains("不能强制下线当前会话");
         assertThat(client)
                 .contains("export interface OnlineSession")

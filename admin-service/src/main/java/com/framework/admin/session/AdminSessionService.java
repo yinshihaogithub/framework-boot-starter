@@ -36,32 +36,36 @@ public class AdminSessionService {
     }
 
     public ActionResult<String> kickSession(Long userId, String deviceId, HttpServletRequest request) {
-        if (userId == null || isBlank(deviceId)) {
-            return ActionResult.failure(ResultCode.PARAM_ERROR.getCode(), "用户和设备不能为空");
+        if (userId == null || userId <= 0) {
+            return ActionResult.failure(ResultCode.PARAM_ERROR.getCode(), "用户ID必须大于0");
         }
-        if (isCurrentSession(userId, deviceId)) {
+        String safeDeviceId = text(deviceId);
+        if (safeDeviceId == null) {
+            return ActionResult.failure(ResultCode.PARAM_ERROR.getCode(), "设备不能为空");
+        }
+        if (isCurrentSession(userId, safeDeviceId)) {
             return ActionResult.failure(ResultCode.PARAM_ERROR.getCode(), "不能强制下线当前会话，请使用退出登录");
         }
         boolean exists;
         try {
             exists = sessionManager.listOnlineSessions().stream()
-                    .anyMatch(session -> userId.equals(session.userId()) && deviceId.equals(session.deviceId()));
+                    .anyMatch(session -> userId.equals(session.userId()) && safeDeviceId.equals(session.deviceId()));
         } catch (RuntimeException e) {
             log.warn("[在线会话] 强制下线前查询会话失败 userId={}, deviceId={}, error={}",
-                    userId, deviceId, e.getMessage());
+                    userId, safeDeviceId, e.getMessage());
             return ActionResult.failure(ResultCode.SERVICE_ERROR.getCode(), "会话查询失败");
         }
         if (!exists) {
             return ActionResult.failure(ResultCode.NOT_FOUND.getCode(), "会话不存在或已失效");
         }
         try {
-            sessionManager.forceLogout(userId, deviceId);
+            sessionManager.forceLogout(userId, safeDeviceId);
         } catch (RuntimeException e) {
             log.warn("[在线会话] 强制下线失败 userId={}, deviceId={}, error={}",
-                    userId, deviceId, e.getMessage());
+                    userId, safeDeviceId, e.getMessage());
             return ActionResult.failure(ResultCode.SERVICE_ERROR.getCode(), "强制下线失败");
         }
-        auditSuccess(request, "强制下线", "DELETE", "userId", userId, "deviceId", deviceId);
+        auditSuccess(request, "强制下线", "DELETE", "userId", userId, "deviceId", safeDeviceId);
         return ActionResult.success("已强制下线");
     }
 
@@ -85,6 +89,10 @@ public class AdminSessionService {
 
     private boolean isBlank(String value) {
         return value == null || value.isBlank();
+    }
+
+    private String text(String value) {
+        return isBlank(value) ? null : value.trim();
     }
 
     public record ActionResult<T>(boolean success, int code, String message, T data) {
