@@ -378,6 +378,10 @@ public class AdminSystemService {
     }
 
     public Result<String> updateRole(Long id, RoleRequest request, HttpServletRequest servletRequest) {
+        Result<String> invalidId = invalidResourceId(id, "角色");
+        if (invalidId != null) {
+            return invalidId;
+        }
         Result<String> validation = validateRole(request);
         if (validation != null) {
             return validation;
@@ -399,6 +403,10 @@ public class AdminSystemService {
     }
 
     public Result<String> deleteRole(Long id, HttpServletRequest servletRequest) {
+        Result<String> invalidId = invalidResourceId(id, "角色");
+        if (invalidId != null) {
+            return invalidId;
+        }
         if (isBuiltInSuperAdminRole(id)) {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), "内置超级管理员角色不能删除");
         }
@@ -415,6 +423,9 @@ public class AdminSystemService {
     }
 
     public List<Long> roleMenuIds(Long id) {
+        if (invalidResourceId(id, "角色") != null) {
+            return List.of();
+        }
         try {
             return repository.listMenuIdsByRoleId(id);
         } catch (RuntimeException e) {
@@ -424,6 +435,10 @@ public class AdminSystemService {
     }
 
     public Result<String> updateRoleMenus(Long id, RoleMenuRequest request, HttpServletRequest servletRequest) {
+        Result<String> invalidId = invalidResourceId(id, "角色");
+        if (invalidId != null) {
+            return invalidId;
+        }
         try {
             List<Long> affectedUserIds = repository.listUserIdsByRoleId(id);
             repository.replaceRoleMenus(id, request == null ? List.of() : request.getMenuIds());
@@ -464,6 +479,10 @@ public class AdminSystemService {
     }
 
     public Result<String> updateMenu(Long id, MenuRequest request, HttpServletRequest servletRequest) {
+        Result<String> invalidId = invalidResourceId(id, "菜单");
+        if (invalidId != null) {
+            return invalidId;
+        }
         Result<String> validation = validateMenu(request);
         if (validation != null) {
             return validation;
@@ -484,6 +503,10 @@ public class AdminSystemService {
     }
 
     public Result<String> deleteMenu(Long id, HttpServletRequest servletRequest) {
+        Result<String> invalidId = invalidResourceId(id, "菜单");
+        if (invalidId != null) {
+            return invalidId;
+        }
         try {
             repository.deleteMenu(id);
             clearPermissionCache();

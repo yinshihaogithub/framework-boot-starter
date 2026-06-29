@@ -392,6 +392,21 @@ class AdminSystemServiceTest {
     }
 
     @Test
+    void roleIdOperationsRejectInvalidIdBeforeRepositoryLookup() {
+        repository.commandFailure = new RuntimeException("database down");
+        repository.queryFailure = new RuntimeException("database down");
+
+        assertInvalidResourceId(service.updateRole(0L, roleRequest(), null), "角色ID必须大于0");
+        assertInvalidResourceId(service.deleteRole(0L, null), "角色ID必须大于0");
+        assertThat(service.roleMenuIds(0L)).isEmpty();
+        assertInvalidResourceId(service.updateRoleMenus(0L, roleMenuRequest(), null), "角色ID必须大于0");
+
+        assertThat(repository.updatedRoleId).isNull();
+        assertThat(repository.deletedRoleId).isNull();
+        assertThat(repository.replacedRoleMenuRoleId).isNull();
+    }
+
+    @Test
     void updateRoleMenusRefreshesAffectedUsersAndClearsMenuBindings() {
         FakePermissionCacheService permissionCacheService = new FakePermissionCacheService();
         FakeSessionManager sessionManager = new FakeSessionManager();
@@ -469,6 +484,17 @@ class AdminSystemServiceTest {
         assertThat(permissionCacheService.clearAllCount).isEqualTo(1);
         assertThat(sessionManager.forceLogoutAllCount).isEqualTo(1);
         assertThat(auditService.actions).containsExactly("更新菜单");
+    }
+
+    @Test
+    void menuIdOperationsRejectInvalidIdBeforeRepositoryLookup() {
+        repository.commandFailure = new RuntimeException("database down");
+
+        assertInvalidResourceId(service.updateMenu(0L, menuRequest(), null), "菜单ID必须大于0");
+        assertInvalidResourceId(service.deleteMenu(0L, null), "菜单ID必须大于0");
+
+        assertThat(repository.updatedMenuId).isNull();
+        assertThat(repository.deletedMenuId).isNull();
     }
 
     @Test
@@ -654,11 +680,13 @@ class AdminSystemServiceTest {
         private List<Long> affectedUserIdsByRole = List.of();
         private Long updatedRoleId;
         private RoleRequest updatedRole;
+        private Long deletedRoleId;
         private Long replacedRoleMenuRoleId;
         private List<Long> replacedRoleMenuIds = List.of();
         private MenuRequest createdMenu;
         private Long updatedMenuId;
         private MenuRequest updatedMenu;
+        private Long deletedMenuId;
         private RuntimeException queryFailure;
         private RuntimeException commandFailure;
 
@@ -804,6 +832,7 @@ class AdminSystemServiceTest {
         @Override
         public void deleteRole(Long roleId) {
             failCommandIfNeeded();
+            this.deletedRoleId = roleId;
         }
 
         @Override
@@ -842,6 +871,7 @@ class AdminSystemServiceTest {
         @Override
         public void deleteMenu(Long menuId) {
             failCommandIfNeeded();
+            this.deletedMenuId = menuId;
         }
 
         @Override
