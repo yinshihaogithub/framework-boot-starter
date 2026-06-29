@@ -91,6 +91,10 @@ public class LocalMessageAdminService {
     }
 
     public ActionResult<LocalMessageVO> detail(Long id) {
+        ActionResult<LocalMessageVO> invalidId = invalidIdResult(id);
+        if (invalidId != null) {
+            return invalidId;
+        }
         LocalMessageService service = available(localMessageServiceProvider);
         if (service == null) {
             return ActionResult.fail(ResultCode.SERVICE_ERROR, "本地消息服务未启用");
@@ -120,6 +124,10 @@ public class LocalMessageAdminService {
     }
 
     public ActionResult<String> retryNow(Long id, HttpServletRequest servletRequest) {
+        ActionResult<String> invalidId = invalidIdResult(id);
+        if (invalidId != null) {
+            return invalidId;
+        }
         LocalMessageRepository repository = available(repositoryProvider);
         if (repository == null) {
             return ActionResult.fail(ResultCode.SERVICE_ERROR, "本地消息仓储未启用");
@@ -144,6 +152,10 @@ public class LocalMessageAdminService {
     }
 
     public ActionResult<String> markSuccess(Long id, HttpServletRequest servletRequest) {
+        ActionResult<String> invalidId = invalidIdResult(id);
+        if (invalidId != null) {
+            return invalidId;
+        }
         LocalMessageRepository repository = available(repositoryProvider);
         if (repository == null) {
             return ActionResult.fail(ResultCode.SERVICE_ERROR, "本地消息仓储未启用");
@@ -166,6 +178,10 @@ public class LocalMessageAdminService {
     }
 
     public ActionResult<String> markFailure(Long id, String reason, HttpServletRequest servletRequest) {
+        ActionResult<String> invalidId = invalidIdResult(id);
+        if (invalidId != null) {
+            return invalidId;
+        }
         LocalMessageRepository repository = available(repositoryProvider);
         if (repository == null) {
             return ActionResult.fail(ResultCode.SERVICE_ERROR, "本地消息仓储未启用");
@@ -190,6 +206,10 @@ public class LocalMessageAdminService {
     }
 
     public ActionResult<String> delete(Long id, HttpServletRequest servletRequest) {
+        ActionResult<String> invalidId = invalidIdResult(id);
+        if (invalidId != null) {
+            return invalidId;
+        }
         LocalMessageRepository repository = available(repositoryProvider);
         if (repository == null) {
             return ActionResult.fail(ResultCode.SERVICE_ERROR, "本地消息仓储未启用");
@@ -225,6 +245,13 @@ public class LocalMessageAdminService {
     private Map<String, Long> zero(Map<String, Long> stats) {
         stats.replaceAll((key, value) -> 0L);
         return stats;
+    }
+
+    private <T> ActionResult<T> invalidIdResult(Long id) {
+        if (id == null || id <= 0) {
+            return ActionResult.fail(ResultCode.PARAM_ERROR, "本地消息ID必须大于0");
+        }
+        return null;
     }
 
     private void auditSuccess(HttpServletRequest servletRequest, String action, String operationType, Object... params) {

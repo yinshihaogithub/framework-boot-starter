@@ -138,6 +138,18 @@ class LocalMessageAdminControllerTest {
     }
 
     @Test
+    void idEndpointsRejectInvalidIdBeforeProviderLookup() {
+        LocalMessageAdminController controller = failingController();
+        LocalMessageAdminController.FailureRequest failureRequest = new LocalMessageAdminController.FailureRequest();
+
+        assertInvalidId(controller.detail(0L));
+        assertInvalidId(controller.retryNow(0L, null));
+        assertInvalidId(controller.markSuccess(0L, null));
+        assertInvalidId(controller.markFailure(0L, failureRequest, null));
+        assertInvalidId(controller.delete(0L, null));
+    }
+
+    @Test
     void detailReportsServiceUnavailableWhenLocalMessageServiceIsMissing() {
         LocalMessageAdminController controller = disabledController();
 
@@ -250,6 +262,12 @@ class LocalMessageAdminControllerTest {
                 .setStatus(LocalMessageStatus.PENDING)
                 .setRetryCount(0)
                 .setMaxRetry(3);
+    }
+
+    private static void assertInvalidId(Result<?> result) {
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getCode()).isEqualTo(ResultCode.PARAM_ERROR.getCode());
+        assertThat(result.getMessage()).isEqualTo("本地消息ID必须大于0");
     }
 
     private static <T> ObjectProvider<T> provider(T value) {
