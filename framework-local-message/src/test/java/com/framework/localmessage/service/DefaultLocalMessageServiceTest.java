@@ -314,6 +314,24 @@ class DefaultLocalMessageServiceTest {
     }
 
     @Test
+    void retryDueMessagesStoresExceptionClassWhenHandlerFailureMessageIsBlank() {
+        InMemoryLocalMessageRepository repository = new InMemoryLocalMessageRepository();
+        DefaultLocalMessageService service = new DefaultLocalMessageService(repository, properties(), List.of(handler(
+                "order.created",
+                message -> {
+                    throw new IllegalStateException();
+                }
+        )));
+        LocalMessage message = service.publish("order.created", "ORD-1", "{}");
+
+        service.retryDueMessages();
+
+        LocalMessage failure = repository.findById(message.getId()).orElseThrow();
+        assertThat(failure.getStatus()).isEqualTo(LocalMessageStatus.PENDING);
+        assertThat(failure.getErrorMessage()).isEqualTo(IllegalStateException.class.getName());
+    }
+
+    @Test
     void retryDueMessagesMarksMissingHandlerAsRetryableFailureThenFailed() {
         InMemoryLocalMessageRepository repository = new InMemoryLocalMessageRepository();
         LocalMessageProperties properties = properties();
