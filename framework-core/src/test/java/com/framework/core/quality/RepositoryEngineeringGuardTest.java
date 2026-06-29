@@ -476,6 +476,29 @@ class RepositoryEngineeringGuardTest {
     }
 
     @Test
+    void smsCodeServiceRedisFailuresFailClosedBeforeSendingSms() throws Exception {
+        String smsCodeService = read(root.resolve(
+                "framework-auth/src/main/java/com/framework/auth/service/SmsCodeService.java"));
+        String test = read(root.resolve(
+                "framework-auth/src/test/java/com/framework/auth/service/SmsCodeServiceTest.java"));
+
+        assertThat(smsCodeService)
+                .as("sms code send/verify depends on Redis persistence and must not leak Redis failures")
+                .contains("SMS_UNAVAILABLE_MESSAGE")
+                .contains("ResultCode.SERVICE_ERROR")
+                .contains("smsUnavailable")
+                .contains("smsSender.send(phone, code, codeExpireSeconds)")
+                .contains("查询验证码发送状态失败")
+                .contains("return false");
+        assertThat(test)
+                .contains("redisFailuresDuringSendCodeFailClosedAndDoNotSendSms")
+                .contains("redisFailuresDuringVerifyCodeFailClosed")
+                .contains("redisFailuresDuringCodeSentQueryFallbackToFalse")
+                .contains("sentPhone).isNull()")
+                .contains("redis unavailable");
+    }
+
+    @Test
     void codegenModuleIsRemovedFromTheScaffold() throws Exception {
         assertThat(modules())
                 .as("codegen is intentionally not part of this scaffold")
