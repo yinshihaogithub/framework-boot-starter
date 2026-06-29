@@ -7,6 +7,7 @@ import com.framework.admin.system.AdminSystemModels.ResetPasswordRequest;
 import com.framework.admin.system.AdminSystemModels.RoleRequest;
 import com.framework.admin.system.AdminSystemModels.TenantRequest;
 import com.framework.admin.system.AdminSystemModels.UserCreateRequest;
+import com.framework.admin.system.AdminSystemModels.UserStatusRequest;
 import com.framework.admin.system.AdminSystemModels.UserUpdateRequest;
 import com.framework.auth.service.LoginSecurityService;
 import com.framework.auth.service.SessionManager;
@@ -124,6 +125,30 @@ class AdminSystemServiceTest {
     }
 
     @Test
+    void updateUserRejectsDisablingBuiltInAdmin() {
+        UserUpdateRequest request = new UserUpdateRequest();
+        request.setStatus("DISABLED");
+
+        Result<String> result = service.updateUser(1L, request, null);
+
+        assertThat(result.getCode()).isEqualTo(ResultCode.PARAM_ERROR.getCode());
+        assertThat(result.getMessage()).isEqualTo("内置管理员不能禁用");
+        assertThat(repository.updatedUserId).isNull();
+    }
+
+    @Test
+    void updateUserStatusRejectsDisablingBuiltInAdmin() {
+        UserStatusRequest request = new UserStatusRequest();
+        request.setStatus("DISABLED");
+
+        Result<String> result = service.updateUserStatus(1L, request, null);
+
+        assertThat(result.getCode()).isEqualTo(ResultCode.PARAM_ERROR.getCode());
+        assertThat(result.getMessage()).isEqualTo("内置管理员不能禁用");
+        assertThat(repository.updatedUserStatusId).isNull();
+    }
+
+    @Test
     void resetPasswordRejectsWeakPassword() {
         ResetPasswordRequest request = new ResetPasswordRequest();
         request.setPassword("12345678");
@@ -200,6 +225,20 @@ class AdminSystemServiceTest {
         assertThat(permissionCacheService.batchRefreshedUserIds).containsExactly(2L, 3L);
         assertThat(sessionManager.forceLogoutUserIds).containsExactly(2L, 3L);
         assertThat(auditService.actions).containsExactly("更新角色");
+    }
+
+    @Test
+    void updateRoleRejectsDisablingBuiltInSuperAdminRole() {
+        RoleRequest request = new RoleRequest();
+        request.setRoleCode("SUPER_ADMIN");
+        request.setRoleName("超级管理员");
+        request.setStatus("DISABLED");
+
+        Result<String> result = service.updateRole(1L, request, null);
+
+        assertThat(result.getCode()).isEqualTo(ResultCode.PARAM_ERROR.getCode());
+        assertThat(result.getMessage()).isEqualTo("内置超级管理员角色不能禁用");
+        assertThat(repository.updatedRoleId).isNull();
     }
 
     @Test
@@ -309,6 +348,8 @@ class AdminSystemServiceTest {
         private AdminUser userById;
         private Long updatedUserId;
         private UserUpdateRequest updatedUser;
+        private Long updatedUserStatusId;
+        private String updatedUserStatus;
         private List<Long> affectedUserIdsByRole = List.of();
         private Long updatedRoleId;
         private RoleRequest updatedRole;
@@ -350,6 +391,12 @@ class AdminSystemServiceTest {
         public void updateUser(Long userId, UserUpdateRequest request) {
             this.updatedUserId = userId;
             this.updatedUser = request;
+        }
+
+        @Override
+        public void updateUserStatus(Long userId, String status) {
+            this.updatedUserStatusId = userId;
+            this.updatedUserStatus = status;
         }
 
         @Override

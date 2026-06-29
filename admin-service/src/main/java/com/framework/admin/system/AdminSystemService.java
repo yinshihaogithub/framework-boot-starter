@@ -47,6 +47,8 @@ public class AdminSystemService {
     private static final int DEFAULT_PAGE_NUM = 1;
     private static final int DEFAULT_PAGE_SIZE = 20;
     private static final int MAX_PAGE_SIZE = 200;
+    private static final long BUILT_IN_ADMIN_ID = 1L;
+    private static final long BUILT_IN_SUPER_ADMIN_ROLE_ID = 1L;
 
     private final AdminSystemRepository repository;
     private final AdminAuditService auditService;
@@ -182,6 +184,9 @@ public class AdminSystemService {
         if (!isValidStatus(request.getStatus())) {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), "状态只能是 ENABLED 或 DISABLED");
         }
+        if (isBuiltInAdmin(id) && "DISABLED".equals(request.getStatus())) {
+            return Result.fail(ResultCode.PARAM_ERROR.getCode(), "内置管理员不能禁用");
+        }
         repository.updateUser(id, request);
         refreshPermissionCache(id);
         forceLogoutUser(id);
@@ -195,6 +200,9 @@ public class AdminSystemService {
         String status = request == null || isBlank(request.getStatus()) ? "DISABLED" : request.getStatus();
         if (!"ENABLED".equals(status) && !"DISABLED".equals(status)) {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), "状态只能是 ENABLED 或 DISABLED");
+        }
+        if (isBuiltInAdmin(id) && "DISABLED".equals(status)) {
+            return Result.fail(ResultCode.PARAM_ERROR.getCode(), "内置管理员不能禁用");
         }
         repository.updateUserStatus(id, status);
         refreshPermissionCache(id);
@@ -220,7 +228,7 @@ public class AdminSystemService {
     }
 
     public Result<String> deleteUser(Long id, HttpServletRequest servletRequest) {
-        if (id == 1L) {
+        if (isBuiltInAdmin(id)) {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), "内置管理员不能删除");
         }
         repository.deleteUser(id);
@@ -269,6 +277,9 @@ public class AdminSystemService {
         if (validation != null) {
             return validation;
         }
+        if (isBuiltInSuperAdminRole(id) && "DISABLED".equals(request.getStatus())) {
+            return Result.fail(ResultCode.PARAM_ERROR.getCode(), "内置超级管理员角色不能禁用");
+        }
         List<Long> affectedUserIds = repository.listUserIdsByRoleId(id);
         repository.updateRole(id, request);
         refreshPermissionCache(affectedUserIds);
@@ -279,7 +290,7 @@ public class AdminSystemService {
     }
 
     public Result<String> deleteRole(Long id, HttpServletRequest servletRequest) {
-        if (id == 1L) {
+        if (isBuiltInSuperAdminRole(id)) {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), "内置超级管理员角色不能删除");
         }
         List<Long> affectedUserIds = repository.listUserIdsByRoleId(id);
@@ -467,6 +478,14 @@ public class AdminSystemService {
 
     private boolean isValidStatus(String status) {
         return isBlank(status) || "ENABLED".equals(status) || "DISABLED".equals(status);
+    }
+
+    private boolean isBuiltInAdmin(Long id) {
+        return id != null && id == BUILT_IN_ADMIN_ID;
+    }
+
+    private boolean isBuiltInSuperAdminRole(Long id) {
+        return id != null && id == BUILT_IN_SUPER_ADMIN_ROLE_ID;
     }
 
     private void refreshPermissionCache(Long userId) {
