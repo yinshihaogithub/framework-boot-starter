@@ -51,18 +51,20 @@ public class DefaultLocalMessageService implements LocalMessageService {
         List<LocalMessage> messages = repository.findDueMessages(LocalDateTime.now(), properties.getBatchSize());
         int handled = 0;
         for (LocalMessage message : messages) {
-            String topic = normalize(message.getTopic());
-            LocalMessageHandler handler = handlers.get(topic);
-            message.setTopic(topic);
-            if (handler == null) {
-                handled++;
-                markFailure(message, new IllegalStateException("No LocalMessageHandler registered for topic: " + topic));
-                continue;
-            }
+            retryMessage(message);
             handled++;
-            dispatch(message, handler);
         }
         return handled;
+    }
+
+    @Override
+    public boolean retryNow(Long id) {
+        Optional<LocalMessage> optionalMessage = repository.findById(id);
+        if (optionalMessage.isEmpty()) {
+            return false;
+        }
+        retryMessage(optionalMessage.get());
+        return true;
     }
 
     @Override
@@ -70,6 +72,7 @@ public class DefaultLocalMessageService implements LocalMessageService {
         repository.findById(id).ifPresent(message -> {
             message.setStatus(LocalMessageStatus.SUCCESS);
             message.setErrorMessage(null);
+            message.setNextRetryTime(null);
             repository.save(message);
         });
     }
@@ -91,6 +94,7 @@ public class DefaultLocalMessageService implements LocalMessageService {
 
     private void dispatch(LocalMessage message, LocalMessageHandler handler) {
         message.setStatus(LocalMessageStatus.PROCESSING);
+        message.setNextRetryTime(null);
         repository.save(message);
         try {
             handler.handle(message);
@@ -98,6 +102,17 @@ public class DefaultLocalMessageService implements LocalMessageService {
         } catch (Exception e) {
             markFailure(message, e);
         }
+    }
+
+    private void retryMessage(LocalMessage message) {
+        String topic = normalize(message.getTopic());
+        LocalMessageHandler handler = handlers.get(topic);
+        message.setTopic(topic);
+        if (handler == null) {
+            markFailure(message, new IllegalStateException("No LocalMessageHandler registered for topic: " + topic));
+            return;
+        }
+        dispatch(message, handler);
     }
 
     private void markFailure(LocalMessage message, Exception exception) {

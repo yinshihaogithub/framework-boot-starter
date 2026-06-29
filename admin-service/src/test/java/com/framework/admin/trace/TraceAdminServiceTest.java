@@ -175,6 +175,11 @@ class TraceAdminServiceTest {
             }
 
             @Override
+            public boolean retryNow(Long id) {
+                return false;
+            }
+
+            @Override
             public void markSuccess(Long id) {
             }
 

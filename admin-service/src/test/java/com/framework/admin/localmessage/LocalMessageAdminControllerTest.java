@@ -66,7 +66,7 @@ class LocalMessageAdminControllerTest {
     }
 
     @Test
-    void manualRetryResetsMessageForImmediateRetry() {
+    void manualRetryTriggersImmediateDispatch() {
         InMemoryLocalMessageRepository repository = new InMemoryLocalMessageRepository();
         repository.save(localMessage(3L)
                 .setStatus(LocalMessageStatus.FAILED)
@@ -79,12 +79,12 @@ class LocalMessageAdminControllerTest {
         Result<String> result = controller.retryNow(3L, null);
 
         assertThat(result.isSuccess()).isTrue();
-        assertThat(result.getData()).isEqualTo("已加入重试队列");
+        assertThat(result.getData()).isEqualTo("已触发立即重试");
         LocalMessage saved = repository.findById(3L).orElseThrow();
-        assertThat(saved.getStatus()).isEqualTo(LocalMessageStatus.PENDING);
-        assertThat(saved.getRetryCount()).isZero();
+        assertThat(saved.getStatus()).isEqualTo(LocalMessageStatus.SUCCESS);
+        assertThat(saved.getRetryCount()).isEqualTo(3);
         assertThat(saved.getErrorMessage()).isNull();
-        assertThat(saved.getNextRetryTime()).isNotNull();
+        assertThat(saved.getNextRetryTime()).isNull();
     }
 
     @Test
@@ -215,6 +215,18 @@ class LocalMessageAdminControllerTest {
             @Override
             public int retryDueMessages() {
                 return repository.findDueMessages(LocalDateTime.now(), Integer.MAX_VALUE).size();
+            }
+
+            @Override
+            public boolean retryNow(Long id) {
+                Optional<LocalMessage> optionalMessage = repository.findById(id);
+                optionalMessage.ifPresent(message -> {
+                    message.setStatus(LocalMessageStatus.SUCCESS);
+                    message.setErrorMessage(null);
+                    message.setNextRetryTime(null);
+                    repository.save(message);
+                });
+                return optionalMessage.isPresent();
             }
 
             @Override

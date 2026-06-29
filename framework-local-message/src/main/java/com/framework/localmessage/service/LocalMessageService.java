@@ -21,6 +21,8 @@ public interface LocalMessageService {
 
     int retryDueMessages();
 
+    boolean retryNow(Long id);
+
     void markSuccess(Long id);
 
     void markFailure(Long id, Exception exception);

@@ -179,6 +179,63 @@ class DefaultLocalMessageServiceTest {
         assertThat(handled).hasValue(1);
         assertThat(repository.findById(message.getId()).orElseThrow().getStatus())
                 .isEqualTo(LocalMessageStatus.SUCCESS);
+        assertThat(repository.findById(message.getId()).orElseThrow().getNextRetryTime()).isNull();
+    }
+
+    @Test
+    void retryNowDispatchesSingleMessageImmediately() {
+        InMemoryLocalMessageRepository repository = new InMemoryLocalMessageRepository();
+        AtomicInteger handled = new AtomicInteger();
+        DefaultLocalMessageService service = new DefaultLocalMessageService(repository, properties(), List.of(handler(
+                "order.created",
+                message -> handled.incrementAndGet()
+        )));
+        LocalMessage message = service.publish("order.created", "ORD-1", "{}");
+        message.setStatus(LocalMessageStatus.FAILED);
+        message.setRetryCount(2);
+        message.setErrorMessage("old error");
+        message.setNextRetryTime(null);
+        repository.save(message);
+
+        boolean result = service.retryNow(message.getId());
+
+        assertThat(result).isTrue();
+        assertThat(handled).hasValue(1);
+        LocalMessage saved = repository.findById(message.getId()).orElseThrow();
+        assertThat(saved.getStatus()).isEqualTo(LocalMessageStatus.SUCCESS);
+        assertThat(saved.getRetryCount()).isEqualTo(2);
+        assertThat(saved.getErrorMessage()).isNull();
+        assertThat(saved.getNextRetryTime()).isNull();
+    }
+
+    @Test
+    void retryNowRecordsMissingHandlerAsManualAttemptFailure() {
+        InMemoryLocalMessageRepository repository = new InMemoryLocalMessageRepository();
+        LocalMessageProperties properties = properties();
+        DefaultLocalMessageService service = new DefaultLocalMessageService(repository, properties, List.of());
+        LocalMessage message = service.publish("order.created", "ORD-1", "{}");
+        message.setStatus(LocalMessageStatus.FAILED);
+        message.setRetryCount(1);
+        message.setNextRetryTime(null);
+        repository.save(message);
+
+        boolean result = service.retryNow(message.getId());
+
+        assertThat(result).isTrue();
+        LocalMessage saved = repository.findById(message.getId()).orElseThrow();
+        assertThat(saved.getStatus()).isEqualTo(LocalMessageStatus.FAILED);
+        assertThat(saved.getRetryCount()).isEqualTo(2);
+        assertThat(saved.getErrorMessage())
+                .isEqualTo("No LocalMessageHandler registered for topic: order.created");
+        assertThat(saved.getNextRetryTime()).isNull();
+    }
+
+    @Test
+    void retryNowReturnsFalseWhenMessageDoesNotExist() {
+        DefaultLocalMessageService service = new DefaultLocalMessageService(
+                new InMemoryLocalMessageRepository(), properties(), List.of());
+
+        assertThat(service.retryNow(404L)).isFalse();
     }
 
     @Test
