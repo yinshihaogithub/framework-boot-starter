@@ -9,8 +9,10 @@ import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
 import org.aspectj.lang.reflect.MethodSignature;
+import org.springframework.aop.support.AopUtils;
 import org.springframework.stereotype.Component;
 import org.springframework.util.ReflectionUtils;
+import org.springframework.util.StringUtils;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -37,8 +39,11 @@ public class CircuitBreakerAspect {
     @Around("@annotation(com.framework.retry.annotation.CircuitBreaker)")
     public Object around(ProceedingJoinPoint joinPoint) throws Throwable {
         MethodSignature signature = (MethodSignature) joinPoint.getSignature();
-        Method method = signature.getMethod();
+        Method method = AopUtils.getMostSpecificMethod(signature.getMethod(), joinPoint.getTarget().getClass());
         CircuitBreaker annotation = method.getAnnotation(CircuitBreaker.class);
+        if (annotation == null) {
+            annotation = signature.getMethod().getAnnotation(CircuitBreaker.class);
+        }
         String breakerName = validate(annotation);
 
         io.github.resilience4j.circuitbreaker.CircuitBreaker breaker = getOrCreateBreaker(breakerName, annotation);
@@ -115,19 +120,20 @@ public class CircuitBreakerAspect {
 
     private Object handleFallback(ProceedingJoinPoint joinPoint, Method method,
                                   CircuitBreaker annotation, Throwable e) {
-        if (annotation.fallback().isEmpty()) {
+        String fallbackName = annotation.fallback().trim();
+        if (!StringUtils.hasText(fallbackName)) {
             throw new BusinessException("服务暂时不可用: " + getFailureMessage(e));
         }
 
         Method fallbackMethod = ReflectionUtils.findMethod(
-                joinPoint.getTarget().getClass(), annotation.fallback(), method.getParameterTypes());
+                joinPoint.getTarget().getClass(), fallbackName, method.getParameterTypes());
 
         if (fallbackMethod == null) {
-            throw new BusinessException("回调方法不存在: " + annotation.fallback());
+            throw new BusinessException("回调方法不存在: " + fallbackName);
         }
 
         try {
-            log.info("[熔断降级] method={}, fallback={}", method.getName(), annotation.fallback());
+            log.info("[熔断降级] method={}, fallback={}", method.getName(), fallbackName);
             ReflectionUtils.makeAccessible(fallbackMethod);
             return fallbackMethod.invoke(joinPoint.getTarget(), joinPoint.getArgs());
         } catch (InvocationTargetException ex) {

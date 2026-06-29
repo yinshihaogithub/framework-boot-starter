@@ -47,6 +47,24 @@ class CircuitBreakerAspectTest {
     }
 
     @Test
+    void blankFallbackIsTreatedAsNoFallback() {
+        CircuitBreakerRegistry registry = CircuitBreakerRegistry.ofDefaults();
+        BlankFallbackService service = proxy(new BlankFallbackService(), registry);
+
+        assertThatThrownBy(service::fail)
+                .isInstanceOf(BusinessException.class)
+                .hasMessage("服务暂时不可用: remote unavailable");
+    }
+
+    @Test
+    void trimsFallbackNameBeforeLookup() {
+        CircuitBreakerRegistry registry = CircuitBreakerRegistry.ofDefaults();
+        TrimmedFallbackService service = proxy(new TrimmedFallbackService(), registry);
+
+        assertThat(service.fail("A-1")).isEqualTo("fallback:A-1");
+    }
+
+    @Test
     void rejectsInvalidAnnotationParametersWithClearMessages() {
         CircuitBreakerRegistry registry = CircuitBreakerRegistry.ofDefaults();
 
@@ -95,6 +113,24 @@ class CircuitBreakerAspectTest {
         @CircuitBreaker(name = "checked-failure")
         public String fail() throws IOException {
             throw new IOException("remote unavailable");
+        }
+    }
+
+    public static class BlankFallbackService {
+        @CircuitBreaker(name = "blank-fallback", fallback = " ")
+        public String fail() throws IOException {
+            throw new IOException("remote unavailable");
+        }
+    }
+
+    public static class TrimmedFallbackService {
+        @CircuitBreaker(name = "trimmed-fallback", fallback = " fallback ")
+        public String fail(String businessKey) {
+            throw new IllegalStateException("remote unavailable");
+        }
+
+        public String fallback(String businessKey) {
+            return "fallback:" + businessKey;
         }
     }
 
