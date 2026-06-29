@@ -44,9 +44,11 @@ final class MqSendSupport {
 
     static <T> void fillTrace(MessageWrapper<T> wrapper) {
         requireWrapper(wrapper);
-        if (!hasText(wrapper.getTraceId())) {
-            wrapper.setTraceId(TraceContext.ensureTraceId());
+        String normalizedTraceId = TraceContext.normalizeTraceId(wrapper.getTraceId());
+        if (!hasText(normalizedTraceId)) {
+            normalizedTraceId = TraceContext.ensureTraceId();
         }
+        wrapper.setTraceId(normalizedTraceId);
     }
 
     private static boolean hasText(String value) {

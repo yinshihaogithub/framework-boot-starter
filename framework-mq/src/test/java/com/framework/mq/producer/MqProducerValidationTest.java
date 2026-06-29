@@ -1,15 +1,23 @@
 package com.framework.mq.producer;
 
+import com.framework.core.trace.TraceContext;
 import com.framework.mq.core.MessageWrapper;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.kafka.core.KafkaOperations;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 
 import java.lang.reflect.Proxy;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class MqProducerValidationTest {
+
+    @AfterEach
+    void tearDown() {
+        TraceContext.clear();
+    }
 
     @Test
     void rabbitProducerRejectsInvalidDestinationBeforeSending() {
@@ -40,6 +48,37 @@ class MqProducerValidationTest {
         assertThatThrownBy(() -> new MqProducer(new RabbitTemplate()).send("", "order.created", wrapper))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("messageId");
+    }
+
+    @Test
+    void senderSupportNormalizesValidTraceIdBeforeSending() {
+        MessageWrapper<String> wrapper = MessageWrapper.of("payload");
+        wrapper.setTraceId(" trace-from-upstream ");
+
+        MqSendSupport.fillTrace(wrapper);
+
+        assertThat(wrapper.getTraceId()).isEqualTo("trace-from-upstream");
+    }
+
+    @Test
+    void senderSupportReplacesUnsafeTraceIdFromCurrentContextBeforeSending() {
+        TraceContext.putTraceId("caller-trace");
+        MessageWrapper<String> wrapper = MessageWrapper.of("payload");
+        wrapper.setTraceId("bad\r\nX-Evil: 1");
+
+        MqSendSupport.fillTrace(wrapper);
+
+        assertThat(wrapper.getTraceId()).isEqualTo("caller-trace");
+    }
+
+    @Test
+    void senderSupportGeneratesTraceIdWhenWrapperTraceIdIsUnsafeAndContextIsEmpty() {
+        MessageWrapper<String> wrapper = MessageWrapper.of("payload");
+        wrapper.setTraceId("bad\r\nX-Evil: 1");
+
+        MqSendSupport.fillTrace(wrapper);
+
+        assertThat(wrapper.getTraceId()).matches("[0-9a-f]{32}");
     }
 
     @Test
