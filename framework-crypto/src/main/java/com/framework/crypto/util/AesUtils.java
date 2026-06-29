@@ -26,8 +26,11 @@ public class AesUtils {
      * 加密
      */
     public static String encrypt(String plainText, String key) {
+        if (plainText == null) {
+            throw new IllegalArgumentException("plainText must not be null");
+        }
+        SecretKeySpec keySpec = getKeySpec(key);
         try {
-            SecretKeySpec keySpec = getKeySpec(key);
             byte[] iv = randomIv();
             IvParameterSpec ivSpec = new IvParameterSpec(iv);
             Cipher cipher = Cipher.getInstance(TRANSFORMATION);
@@ -43,9 +46,9 @@ public class AesUtils {
      * 解密
      */
     public static String decrypt(String cipherText, String key) {
+        SecretKeySpec keySpec = getKeySpec(key);
+        byte[] payload = decodeCipherText(cipherText);
         try {
-            SecretKeySpec keySpec = getKeySpec(key);
-            byte[] payload = Base64.getDecoder().decode(cipherText);
             byte[] iv = legacyIv(keySpec);
             byte[] encrypted = payload;
             if (hasFormatMagic(payload)) {
@@ -77,8 +80,34 @@ public class AesUtils {
     }
 
     private static SecretKeySpec getKeySpec(String key) {
-        byte[] keyBytes = Base64.getDecoder().decode(key);
+        if (key == null || key.isBlank()) {
+            throw new IllegalArgumentException("AES key must not be blank");
+        }
+        byte[] keyBytes;
+        try {
+            keyBytes = Base64.getDecoder().decode(key);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("AES key must be valid Base64", e);
+        }
+        if (!isValidKeyLength(keyBytes.length)) {
+            throw new IllegalArgumentException("AES key must decode to 16, 24 or 32 bytes");
+        }
         return new SecretKeySpec(keyBytes, ALGORITHM);
+    }
+
+    private static byte[] decodeCipherText(String cipherText) {
+        if (cipherText == null || cipherText.isBlank()) {
+            throw new IllegalArgumentException("cipherText must not be blank");
+        }
+        try {
+            return Base64.getDecoder().decode(cipherText);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("cipherText must be valid Base64", e);
+        }
+    }
+
+    private static boolean isValidKeyLength(int length) {
+        return length == 16 || length == 24 || length == 32;
     }
 
     private static byte[] randomIv() {
