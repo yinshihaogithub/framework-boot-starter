@@ -26,6 +26,7 @@ import java.util.concurrent.TimeUnit;
 public class OAuth2LoginService {
 
     private static final String STATE_PREFIX = "framework:oauth:state:";
+    private static final String OAUTH2_STATE_UNAVAILABLE_MESSAGE = "OAuth2登录状态服务暂不可用，请稍后重试";
 
     private final StringRedisTemplate redis;
     private final RestClient restClient;
@@ -49,7 +50,11 @@ public class OAuth2LoginService {
     public String getAuthorizationUrl() {
         String state = UUID.randomUUID().toString().replace("-", "");
         // state 存 Redis，10 分钟有效
-        redis.opsForValue().set(STATE_PREFIX + state, "1", 10, TimeUnit.MINUTES);
+        try {
+            redis.opsForValue().set(STATE_PREFIX + state, "1", 10, TimeUnit.MINUTES);
+        } catch (RuntimeException e) {
+            throw oauth2StateUnavailable("保存state", state, e);
+        }
 
         return String.format("%s?response_type=code&client_id=%s&redirect_uri=%s&scope=%s&state=%s",
                 properties.getAuthorizationUri(), properties.getClientId(),
@@ -65,10 +70,16 @@ public class OAuth2LoginService {
      */
     public Map<String, Object> handleCallback(String code, String state) {
         // 1. 校验 state
-        if (!Boolean.TRUE.equals(redis.hasKey(STATE_PREFIX + state))) {
-            throw new BusinessException(ResultCode.BUSINESS_ERROR, "无效的state参数，请重新授权");
+        try {
+            if (!Boolean.TRUE.equals(redis.hasKey(STATE_PREFIX + state))) {
+                throw new BusinessException(ResultCode.BUSINESS_ERROR, "无效的state参数，请重新授权");
+            }
+            redis.delete(STATE_PREFIX + state);
+        } catch (BusinessException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            throw oauth2StateUnavailable("校验state", state, e);
         }
-        redis.delete(STATE_PREFIX + state);
 
         // 2. code 换 accessToken
         String accessToken = exchangeToken(code);
@@ -78,6 +89,11 @@ public class OAuth2LoginService {
 
         log.info("[OAuth2登录] 获取用户信息成功: {}", userInfo.get("login"));
         return userInfo;
+    }
+
+    private BusinessException oauth2StateUnavailable(String action, String state, RuntimeException e) {
+        log.error("[OAuth2登录] {}失败 state={} error={}", action, state, e.getMessage());
+        return new BusinessException(ResultCode.SERVICE_ERROR, OAUTH2_STATE_UNAVAILABLE_MESSAGE);
     }
 
     /**

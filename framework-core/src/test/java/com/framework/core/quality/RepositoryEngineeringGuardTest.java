@@ -520,6 +520,28 @@ class RepositoryEngineeringGuardTest {
     }
 
     @Test
+    void oauth2LoginStateRedisFailuresFailClosedBeforeRemoteCalls() throws Exception {
+        String oauth2LoginService = read(root.resolve(
+                "framework-auth/src/main/java/com/framework/auth/service/OAuth2LoginService.java"));
+        String test = read(root.resolve(
+                "framework-auth/src/test/java/com/framework/auth/service/OAuth2LoginServiceTest.java"));
+
+        assertThat(oauth2LoginService)
+                .as("OAuth2 state is a CSRF guard and must fail closed when Redis is unavailable")
+                .contains("OAUTH2_STATE_UNAVAILABLE_MESSAGE")
+                .contains("ResultCode.SERVICE_ERROR")
+                .contains("oauth2StateUnavailable")
+                .contains("保存state")
+                .contains("校验state");
+        assertThat(test)
+                .contains("redisFailuresDuringAuthorizationUrlFailClosed")
+                .contains("redisFailuresDuringStateCheckFailClosedBeforeTokenExchange")
+                .contains("redisFailuresDuringStateDeleteFailClosedBeforeTokenExchange")
+                .contains("invalidStateIsRejectedBeforeTokenExchange")
+                .contains("redis unavailable");
+    }
+
+    @Test
     void codegenModuleIsRemovedFromTheScaffold() throws Exception {
         assertThat(modules())
                 .as("codegen is intentionally not part of this scaffold")
