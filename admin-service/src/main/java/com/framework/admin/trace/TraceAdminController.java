@@ -3,6 +3,7 @@ package com.framework.admin.trace;
 import com.framework.admin.trace.TraceAdminModels.TraceDetail;
 import com.framework.core.result.Result;
 import com.framework.core.result.ResultCode;
+import com.framework.core.trace.TraceContext;
 import com.framework.security.annotation.RequirePermission;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -29,6 +30,10 @@ public class TraceAdminController {
         if (traceId == null || traceId.isBlank()) {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), "traceId 不能为空");
         }
-        return Result.success(traceAdminService.detail(traceId.trim()));
+        String normalizedTraceId = TraceContext.normalizeTraceId(traceId);
+        if (normalizedTraceId == null) {
+            return Result.fail(ResultCode.PARAM_ERROR.getCode(), "traceId 不合法");
+        }
+        return Result.success(traceAdminService.detail(normalizedTraceId));
     }
 }

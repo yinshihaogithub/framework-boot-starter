@@ -27,6 +27,19 @@ class LogAdminControllerTest {
     }
 
     @Test
+    void traceRejectsUnsafeTraceIdBeforeQueryingLogs() {
+        RecordingLogAdminService service = new RecordingLogAdminService();
+        LogAdminController controller = new LogAdminController(service);
+
+        Result<PageResult<OperationLogEntity>> result = controller.trace("bad\ntrace", 1, 50);
+
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getCode()).isEqualTo(ResultCode.PARAM_ERROR.getCode());
+        assertThat(result.getMessage()).isEqualTo("traceId 不合法");
+        assertThat(service.traceId).isNull();
+    }
+
+    @Test
     void traceTrimsTraceIdBeforeQueryingLogs() {
         RecordingLogAdminService service = new RecordingLogAdminService();
         LogAdminController controller = new LogAdminController(service);

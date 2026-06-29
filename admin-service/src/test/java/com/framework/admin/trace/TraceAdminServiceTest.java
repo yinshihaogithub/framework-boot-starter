@@ -40,6 +40,27 @@ class TraceAdminServiceTest {
     }
 
     @Test
+    void controllerRejectsUnsafeTraceId() {
+        TraceAdminController controller = new TraceAdminController(service(List.of(), List.of(), List.of()));
+
+        Result<TraceDetail> result = controller.detail("bad\ntrace");
+
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getCode()).isEqualTo(ResultCode.PARAM_ERROR.getCode());
+        assertThat(result.getMessage()).isEqualTo("traceId 不合法");
+    }
+
+    @Test
+    void controllerNormalizesTraceIdBeforeQueryingDetail() {
+        TraceAdminController controller = new TraceAdminController(service(List.of(), List.of(), List.of()));
+
+        Result<TraceDetail> result = controller.detail(" trace-a ");
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getData().getTraceId()).isEqualTo("trace-a");
+    }
+
+    @Test
     void aggregatesLogsMqAndLocalMessagesByTraceId() {
         Date logTime = new Date(1_000);
         Date mqTime = new Date(3_000);

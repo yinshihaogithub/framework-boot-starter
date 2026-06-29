@@ -4,6 +4,7 @@ import com.framework.admin.system.AdminSystemModels.LoginLog;
 import com.framework.core.result.PageResult;
 import com.framework.core.result.Result;
 import com.framework.core.result.ResultCode;
+import com.framework.core.trace.TraceContext;
 import com.framework.log.entity.OperationLogEntity;
 import com.framework.security.annotation.RequirePermission;
 import io.swagger.v3.oas.annotations.Operation;
@@ -59,7 +60,11 @@ public class LogAdminController {
         if (traceId == null || traceId.isBlank()) {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), "traceId 不能为空");
         }
-        return Result.success(logAdminService.trace(traceId.trim(), pageNum, pageSize));
+        String normalizedTraceId = TraceContext.normalizeTraceId(traceId);
+        if (normalizedTraceId == null) {
+            return Result.fail(ResultCode.PARAM_ERROR.getCode(), "traceId 不合法");
+        }
+        return Result.success(logAdminService.trace(normalizedTraceId, pageNum, pageSize));
     }
 
     @Operation(summary = "登录日志列表")
