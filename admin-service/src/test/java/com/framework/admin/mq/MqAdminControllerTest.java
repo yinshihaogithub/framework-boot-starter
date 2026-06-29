@@ -52,7 +52,7 @@ class MqAdminControllerTest {
         MqAdminController controller = controller(handler, new MqProperties(), null);
 
         Result<PageResult<MqAdminDTO.MqFailedMessageVO>> result = controller.listFailedMessages(
-                null, MqFailedMessage.STATUS_PENDING, "trace-a", null, null, 1, 50);
+                null, " pending ", "trace-a", null, "ordercreated", 1, 50);
 
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getData().getTotal()).isEqualTo(1);

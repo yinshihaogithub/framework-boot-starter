@@ -23,6 +23,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -90,13 +91,19 @@ public class MqAdminService {
         if (handler == null) {
             return PageResult.empty(safePageNum, safePageSize);
         }
+        String normalizedQueueName = text(queueName);
+        String normalizedStatus = upper(status);
+        String normalizedTraceId = text(traceId);
+        String normalizedBusinessKey = text(businessKey);
+        String normalizedMessageType = text(messageType);
 
         List<MqFailedMessage> filtered = handler.getFailedMessageStore().values().stream()
-                .filter(m -> isBlank(queueName) || queueName.equals(m.getQueueName()))
-                .filter(m -> isBlank(status) || status.equals(m.getStatus()))
-                .filter(m -> isBlank(traceId) || contains(m.getTraceId(), traceId))
-                .filter(m -> isBlank(businessKey) || contains(m.getBusinessKey(), businessKey))
-                .filter(m -> isBlank(messageType) || messageType.equals(m.getMessageType()))
+                .filter(m -> isBlank(normalizedQueueName) || normalizedQueueName.equals(m.getQueueName()))
+                .filter(m -> isBlank(normalizedStatus) || normalizedStatus.equals(m.getStatus()))
+                .filter(m -> isBlank(normalizedTraceId) || contains(m.getTraceId(), normalizedTraceId))
+                .filter(m -> isBlank(normalizedBusinessKey) || contains(m.getBusinessKey(), normalizedBusinessKey))
+                .filter(m -> isBlank(normalizedMessageType)
+                        || normalizedMessageType.equalsIgnoreCase(m.getMessageType()))
                 .sorted(Comparator.comparing(MqFailedMessage::getCreateTime,
                         Comparator.nullsLast(Comparator.naturalOrder())).reversed())
                 .collect(Collectors.toList());
@@ -323,6 +330,15 @@ public class MqAdminService {
 
     private boolean isBlank(String value) {
         return value == null || value.isBlank();
+    }
+
+    private String text(String value) {
+        return isBlank(value) ? null : value.trim();
+    }
+
+    private String upper(String value) {
+        String text = text(value);
+        return text == null ? null : text.toUpperCase(Locale.ROOT);
     }
 
     private String operator(String operator) {
