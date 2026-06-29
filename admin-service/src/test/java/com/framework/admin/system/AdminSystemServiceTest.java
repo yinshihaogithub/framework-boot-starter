@@ -7,11 +7,14 @@ import com.framework.admin.system.AdminSystemModels.ResetPasswordRequest;
 import com.framework.admin.system.AdminSystemModels.RoleRequest;
 import com.framework.admin.system.AdminSystemModels.TenantRequest;
 import com.framework.admin.system.AdminSystemModels.UserCreateRequest;
+import com.framework.admin.system.AdminSystemModels.UserUpdateRequest;
 import com.framework.auth.service.LoginSecurityService;
+import com.framework.auth.service.SessionManager;
 import com.framework.core.result.PageResult;
 import com.framework.core.result.Result;
 import com.framework.core.result.ResultCode;
 import com.framework.crypto.util.PasswordUtils;
+import com.framework.security.service.PermissionCacheService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.ObjectProvider;
 import org.junit.jupiter.api.Test;
@@ -100,6 +103,27 @@ class AdminSystemServiceTest {
     }
 
     @Test
+    void updateUserRefreshesPermissionCacheAndForcesLogout() {
+        FakePermissionCacheService permissionCacheService = new FakePermissionCacheService();
+        FakeSessionManager sessionManager = new FakeSessionManager();
+        AdminSystemService serviceWithSecurity = new AdminSystemService(
+                repository, auditService, provider(permissionCacheService), provider(sessionManager), null);
+        UserUpdateRequest request = new UserUpdateRequest();
+        request.setNickname("Alice");
+        request.setStatus("ENABLED");
+        request.setRoleIds(List.of(1L, 2L));
+
+        Result<String> result = serviceWithSecurity.updateUser(9L, request, null);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(repository.updatedUserId).isEqualTo(9L);
+        assertThat(repository.updatedUser).isSameAs(request);
+        assertThat(permissionCacheService.refreshedUserIds).containsExactly(9L);
+        assertThat(sessionManager.forceLogoutUserIds).containsExactly(9L);
+        assertThat(auditService.actions).containsExactly("更新用户");
+    }
+
+    @Test
     void resetPasswordRejectsWeakPassword() {
         ResetPasswordRequest request = new ResetPasswordRequest();
         request.setPassword("12345678");
@@ -156,6 +180,47 @@ class AdminSystemServiceTest {
     }
 
     @Test
+    void updateRoleRefreshesAffectedUsersAndForcesLogout() {
+        FakePermissionCacheService permissionCacheService = new FakePermissionCacheService();
+        FakeSessionManager sessionManager = new FakeSessionManager();
+        AdminSystemService serviceWithSecurity = new AdminSystemService(
+                repository, auditService, provider(permissionCacheService), provider(sessionManager), null);
+        repository.affectedUserIdsByRole = new ArrayList<>(List.of(2L, 2L, 3L));
+        repository.affectedUserIdsByRole.add(null);
+        RoleRequest request = new RoleRequest();
+        request.setRoleCode("OPS");
+        request.setRoleName("运维");
+        request.setStatus("ENABLED");
+
+        Result<String> result = serviceWithSecurity.updateRole(7L, request, null);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(repository.updatedRoleId).isEqualTo(7L);
+        assertThat(repository.updatedRole).isSameAs(request);
+        assertThat(permissionCacheService.batchRefreshedUserIds).containsExactly(2L, 3L);
+        assertThat(sessionManager.forceLogoutUserIds).containsExactly(2L, 3L);
+        assertThat(auditService.actions).containsExactly("更新角色");
+    }
+
+    @Test
+    void updateRoleMenusRefreshesAffectedUsersAndClearsMenuBindings() {
+        FakePermissionCacheService permissionCacheService = new FakePermissionCacheService();
+        FakeSessionManager sessionManager = new FakeSessionManager();
+        AdminSystemService serviceWithSecurity = new AdminSystemService(
+                repository, auditService, provider(permissionCacheService), provider(sessionManager), null);
+        repository.affectedUserIdsByRole = List.of(5L, 6L);
+
+        Result<String> result = serviceWithSecurity.updateRoleMenus(8L, null, null);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(repository.replacedRoleMenuRoleId).isEqualTo(8L);
+        assertThat(repository.replacedRoleMenuIds).isEmpty();
+        assertThat(permissionCacheService.batchRefreshedUserIds).containsExactly(5L, 6L);
+        assertThat(sessionManager.forceLogoutUserIds).containsExactly(5L, 6L);
+        assertThat(auditService.actions).containsExactly("角色菜单授权");
+    }
+
+    @Test
     void menuValidationRejectsInvalidTypeAndSelfParent() {
         MenuRequest invalidType = new MenuRequest();
         invalidType.setMenuType("PAGE");
@@ -173,6 +238,27 @@ class AdminSystemServiceTest {
         assertThat(invalidTypeResult.getMessage()).isEqualTo("菜单类型只能是 MENU 或 BUTTON");
         assertThat(selfParentResult.getCode()).isEqualTo(ResultCode.PARAM_ERROR.getCode());
         assertThat(selfParentResult.getMessage()).isEqualTo("上级菜单不能选择自己");
+    }
+
+    @Test
+    void updateMenuClearsAllPermissionCacheAndForcesAllSessionsOffline() {
+        FakePermissionCacheService permissionCacheService = new FakePermissionCacheService();
+        FakeSessionManager sessionManager = new FakeSessionManager();
+        AdminSystemService serviceWithSecurity = new AdminSystemService(
+                repository, auditService, provider(permissionCacheService), provider(sessionManager), null);
+        MenuRequest request = new MenuRequest();
+        request.setMenuType("MENU");
+        request.setMenuName("日志中心");
+        request.setParentId(0L);
+
+        Result<String> result = serviceWithSecurity.updateMenu(11L, request, null);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(repository.updatedMenuId).isEqualTo(11L);
+        assertThat(repository.updatedMenu).isSameAs(request);
+        assertThat(permissionCacheService.clearAllCount).isEqualTo(1);
+        assertThat(sessionManager.forceLogoutAllCount).isEqualTo(1);
+        assertThat(auditService.actions).containsExactly("更新菜单");
     }
 
     @Test
@@ -200,6 +286,15 @@ class AdminSystemServiceTest {
         private Long resetPasswordUserId;
         private String resetPasswordHash;
         private AdminUser userById;
+        private Long updatedUserId;
+        private UserUpdateRequest updatedUser;
+        private List<Long> affectedUserIdsByRole = List.of();
+        private Long updatedRoleId;
+        private RoleRequest updatedRole;
+        private Long replacedRoleMenuRoleId;
+        private List<Long> replacedRoleMenuIds = List.of();
+        private Long updatedMenuId;
+        private MenuRequest updatedMenu;
 
         private FakeRepository() {
             super(null);
@@ -230,6 +325,12 @@ class AdminSystemServiceTest {
         }
 
         @Override
+        public void updateUser(Long userId, UserUpdateRequest request) {
+            this.updatedUserId = userId;
+            this.updatedUser = request;
+        }
+
+        @Override
         public long countUsersByTenant(Long tenantId) {
             return tenantUserCount;
         }
@@ -250,6 +351,29 @@ class AdminSystemServiceTest {
             this.createdRole = request;
             return 3L;
         }
+
+        @Override
+        public void updateRole(Long roleId, RoleRequest request) {
+            this.updatedRoleId = roleId;
+            this.updatedRole = request;
+        }
+
+        @Override
+        public List<Long> listUserIdsByRoleId(Long roleId) {
+            return affectedUserIdsByRole;
+        }
+
+        @Override
+        public void replaceRoleMenus(Long roleId, List<Long> menuIds) {
+            this.replacedRoleMenuRoleId = roleId;
+            this.replacedRoleMenuIds = menuIds == null ? List.of() : List.copyOf(menuIds);
+        }
+
+        @Override
+        public void updateMenu(Long menuId, MenuRequest request) {
+            this.updatedMenuId = menuId;
+            this.updatedMenu = request;
+        }
     }
 
     private static class FakeLoginSecurityService extends LoginSecurityService {
@@ -268,6 +392,50 @@ class AdminSystemServiceTest {
         @Override
         public void unlock(String username) {
             unlockedUsername = username;
+        }
+    }
+
+    private static class FakePermissionCacheService extends PermissionCacheService {
+        private final List<Long> refreshedUserIds = new ArrayList<>();
+        private final List<Long> batchRefreshedUserIds = new ArrayList<>();
+        private int clearAllCount;
+
+        private FakePermissionCacheService() {
+            super(null);
+        }
+
+        @Override
+        public void refresh(Long userId) {
+            refreshedUserIds.add(userId);
+        }
+
+        @Override
+        public void refreshBatch(List<Long> userIds) {
+            batchRefreshedUserIds.addAll(userIds);
+        }
+
+        @Override
+        public void clearAll() {
+            clearAllCount++;
+        }
+    }
+
+    private static class FakeSessionManager extends SessionManager {
+        private final List<Long> forceLogoutUserIds = new ArrayList<>();
+        private int forceLogoutAllCount;
+
+        private FakeSessionManager() {
+            super(null, null, 0);
+        }
+
+        @Override
+        public void forceLogoutAll(Long userId) {
+            forceLogoutUserIds.add(userId);
+        }
+
+        @Override
+        public void forceLogoutAll() {
+            forceLogoutAllCount++;
         }
     }
 
