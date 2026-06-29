@@ -75,6 +75,21 @@ class LocalFileStorageServiceTest {
     }
 
     @Test
+    void normalizesAllowedExtensionsAtConstruction() throws Exception {
+        FileProperties properties = properties();
+        properties.setAllowedExtensions(List.of(" .JPG ", "PNG"));
+        LocalFileStorageService storageService = new LocalFileStorageService(properties);
+
+        StoredFile storedFile = storageService.store(
+                "avatar.jpg",
+                new ByteArrayInputStream("hello".getBytes(StandardCharsets.UTF_8))
+        );
+
+        assertThat(properties.getAllowedExtensions()).containsExactly("jpg", "png");
+        assertThat(storedFile.getOriginalFilename()).isEqualTo("avatar.jpg");
+    }
+
+    @Test
     void rejectsNullInputStreamWithClearMessage() {
         LocalFileStorageService storageService = new LocalFileStorageService(properties());
 
@@ -107,6 +122,8 @@ class LocalFileStorageServiceTest {
         zeroMaxSize.setMaxSize(0);
         FileProperties blankAllowedExtension = properties();
         blankAllowedExtension.setAllowedExtensions(List.of("jpg", " "));
+        FileProperties invalidAllowedExtension = properties();
+        invalidAllowedExtension.setAllowedExtensions(List.of("j/pg"));
 
         assertThatThrownBy(() -> new LocalFileStorageService(blankBasePath))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -118,6 +135,9 @@ class LocalFileStorageServiceTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("max-size");
         assertThatThrownBy(() -> new LocalFileStorageService(blankAllowedExtension))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("allowed-extensions");
+        assertThatThrownBy(() -> new LocalFileStorageService(invalidAllowedExtension))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("allowed-extensions");
     }

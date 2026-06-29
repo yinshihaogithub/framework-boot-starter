@@ -6,6 +6,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * File module configuration properties.
@@ -35,10 +36,25 @@ public class FileProperties implements InitializingBean {
         if (allowedExtensions == null) {
             throw new IllegalArgumentException("framework.file.allowed-extensions must not be null");
         }
-        for (String extension : allowedExtensions) {
-            if (extension == null || extension.isBlank()) {
-                throw new IllegalArgumentException("framework.file.allowed-extensions must not contain blank values");
-            }
+        allowedExtensions = allowedExtensions.stream()
+                .map(FileProperties::normalizeExtension)
+                .toList();
+    }
+
+    private static String normalizeExtension(String extension) {
+        if (extension == null || extension.isBlank()) {
+            throw new IllegalArgumentException("framework.file.allowed-extensions must not contain blank values");
         }
+        String normalized = extension.trim().toLowerCase(Locale.ROOT);
+        if (normalized.startsWith(".")) {
+            normalized = normalized.substring(1);
+        }
+        if (normalized.isBlank()) {
+            throw new IllegalArgumentException("framework.file.allowed-extensions must not contain blank values");
+        }
+        if (!normalized.matches("[a-z0-9]+")) {
+            throw new IllegalArgumentException("framework.file.allowed-extensions must contain simple extensions");
+        }
+        return normalized;
     }
 }

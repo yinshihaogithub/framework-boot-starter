@@ -22,10 +22,21 @@ class FileAutoConfigurationTest {
     }
 
     @Test
+    void autoConfigurationNormalizesAllowedExtensionsAtStartup() {
+        contextRunner
+                .withPropertyValues(
+                        "framework.file.allowed-extensions[0]= .JPG ",
+                        "framework.file.allowed-extensions[1]=PNG")
+                .run(context -> assertThat(context.getBean(FileProperties.class).getAllowedExtensions())
+                        .containsExactly("jpg", "png"));
+    }
+
+    @Test
     void autoConfigurationRejectsInvalidFilePropertiesAtStartup() {
         assertInvalidProperty("framework.file.base-path= ", "framework.file.base-path");
         assertInvalidProperty("framework.file.max-size=0", "framework.file.max-size");
         assertInvalidProperty("framework.file.allowed-extensions[0]= ", "framework.file.allowed-extensions");
+        assertInvalidProperty("framework.file.allowed-extensions[0]=j/pg", "framework.file.allowed-extensions");
     }
 
     private void assertInvalidProperty(String property, String message) {
