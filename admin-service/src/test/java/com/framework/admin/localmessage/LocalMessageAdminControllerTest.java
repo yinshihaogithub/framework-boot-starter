@@ -66,6 +66,28 @@ class LocalMessageAdminControllerTest {
     }
 
     @Test
+    void manualRetryResetsMessageForImmediateRetry() {
+        InMemoryLocalMessageRepository repository = new InMemoryLocalMessageRepository();
+        repository.save(localMessage(3L)
+                .setStatus(LocalMessageStatus.FAILED)
+                .setRetryCount(3)
+                .setMaxRetry(3)
+                .setErrorMessage("handler missing")
+                .setNextRetryTime(null));
+        LocalMessageAdminController controller = controller(repository);
+
+        Result<String> result = controller.retryNow(3L, null);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getData()).isEqualTo("已加入重试队列");
+        LocalMessage saved = repository.findById(3L).orElseThrow();
+        assertThat(saved.getStatus()).isEqualTo(LocalMessageStatus.PENDING);
+        assertThat(saved.getRetryCount()).isZero();
+        assertThat(saved.getErrorMessage()).isNull();
+        assertThat(saved.getNextRetryTime()).isNotNull();
+    }
+
+    @Test
     void manualUpdateFailsWhenMessageDoesNotExist() {
         LocalMessageAdminController controller = controller(new InMemoryLocalMessageRepository());
 

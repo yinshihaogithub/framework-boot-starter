@@ -569,8 +569,9 @@
               <el-table-column prop="traceId" label="Trace ID" min-width="190" show-overflow-tooltip />
               <el-table-column prop="retryCount" label="重试" width="82" />
               <el-table-column prop="errorMessage" label="错误" min-width="220" show-overflow-tooltip />
-              <el-table-column label="操作" width="166" fixed="right">
+              <el-table-column label="操作" width="206" fixed="right">
                 <template #default="{ row }">
+                  <el-button v-if="can('local-message:retry')" :icon="RefreshRight" circle size="small" @click="retryLocalMessage(row)" />
                   <el-button v-if="can('local-message:retry')" :icon="Check" circle size="small" @click="markLocalSuccess(row)" />
                   <el-button v-if="can('local-message:retry')" :icon="Close" circle size="small" @click="markLocalFailure(row)" />
                   <el-button v-if="can('local-message:retry')" :icon="Delete" circle size="small" @click="deleteLocal(row)" />
@@ -2227,6 +2228,13 @@ async function cleanMq() {
 async function retryLocal() {
   const count = await api.retryDueLocalMessages()
   ElMessage.success(`已处理 ${count} 条`)
+  await loadLocal()
+}
+
+async function retryLocalMessage(row: LocalMessage) {
+  await confirmAction(`立即重试本地消息 ${row.messageId || row.id}？`, '确认重试')
+  const message = await api.retryLocalMessage(row.id)
+  ElMessage.success(message)
   await loadLocal()
 }
 

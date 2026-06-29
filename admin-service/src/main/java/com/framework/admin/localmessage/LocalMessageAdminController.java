@@ -64,6 +64,13 @@ public class LocalMessageAdminController {
         return toResult(localMessageAdminService.retryDueMessages(servletRequest));
     }
 
+    @Operation(summary = "立即重试本地消息")
+    @PostMapping("/{id}/retry")
+    @RequirePermission("local-message:retry")
+    public Result<String> retryNow(@PathVariable Long id, HttpServletRequest servletRequest) {
+        return toResult(localMessageAdminService.retryNow(id, servletRequest));
+    }
+
     @Operation(summary = "标记成功")
     @PostMapping("/{id}/success")
     @RequirePermission("local-message:retry")

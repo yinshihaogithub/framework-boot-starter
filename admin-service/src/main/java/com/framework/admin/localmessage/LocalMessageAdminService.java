@@ -11,6 +11,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -99,6 +100,25 @@ public class LocalMessageAdminService {
         auditService.success(servletRequest, "本地消息", "扫描并重试到期本地消息", "UPDATE",
                 auditService.params("count", count));
         return ActionResult.success(count);
+    }
+
+    public ActionResult<String> retryNow(Long id, HttpServletRequest servletRequest) {
+        LocalMessageRepository repository = repositoryProvider.getIfAvailable();
+        if (repository == null) {
+            return ActionResult.fail(ResultCode.SERVICE_ERROR, "本地消息仓储未启用");
+        }
+        LocalMessage message = repository.findById(id).orElse(null);
+        if (message == null) {
+            return ActionResult.fail(ResultCode.NOT_FOUND, "消息不存在");
+        }
+        message.setStatus(LocalMessageStatus.PENDING);
+        message.setRetryCount(0);
+        message.setErrorMessage(null);
+        message.setNextRetryTime(LocalDateTime.now());
+        repository.save(message);
+        auditService.success(servletRequest, "本地消息", "人工立即重试本地消息", "UPDATE",
+                auditService.params("id", id, "messageId", message.getMessageId(), "traceId", message.getTraceId()));
+        return ActionResult.success("已加入重试队列");
     }
 
     public ActionResult<String> markSuccess(Long id, HttpServletRequest servletRequest) {

@@ -489,6 +489,7 @@ export const api = {
   localMessages: (params: Record<string, unknown>) =>
     getData<PageResult<LocalMessage>>('/admin/local-messages', params),
   retryDueLocalMessages: () => postData<number>('/admin/local-messages/retry-due'),
+  retryLocalMessage: (id: number) => postData<string>(`/admin/local-messages/${id}/retry`),
   markLocalMessageSuccess: (id: number) => postData<string>(`/admin/local-messages/${id}/success`),
   markLocalMessageFailure: (id: number, reason: string) =>
     postData<string>(`/admin/local-messages/${id}/failure`, { reason }),

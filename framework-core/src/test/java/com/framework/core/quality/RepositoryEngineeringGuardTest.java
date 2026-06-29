@@ -271,6 +271,36 @@ class RepositoryEngineeringGuardTest {
     }
 
     @Test
+    void localMessageAdminExposesSingleMessageManualRetry() throws Exception {
+        String controller = read(root.resolve(
+                "admin-service/src/main/java/com/framework/admin/localmessage/LocalMessageAdminController.java"));
+        String service = read(root.resolve(
+                "admin-service/src/main/java/com/framework/admin/localmessage/LocalMessageAdminService.java"));
+        String test = read(root.resolve(
+                "admin-service/src/test/java/com/framework/admin/localmessage/LocalMessageAdminControllerTest.java"));
+        String client = read(root.resolve("frontend/admin-web/src/api/client.ts"));
+        String app = read(root.resolve("frontend/admin-web/src/App.vue"));
+
+        assertThat(controller)
+                .contains("@PostMapping(\"/{id}/retry\")")
+                .contains("localMessageAdminService.retryNow");
+        assertThat(service)
+                .contains("public ActionResult<String> retryNow")
+                .contains("setStatus(LocalMessageStatus.PENDING)")
+                .contains("setRetryCount(0)")
+                .contains("setNextRetryTime(LocalDateTime.now())")
+                .contains("人工立即重试本地消息");
+        assertThat(test)
+                .contains("manualRetryResetsMessageForImmediateRetry")
+                .contains("已加入重试队列");
+        assertThat(client)
+                .contains("retryLocalMessage:");
+        assertThat(app)
+                .contains("retryLocalMessage(row)")
+                .contains("api.retryLocalMessage(row.id)");
+    }
+
+    @Test
     void jobModuleShipsOptionalXxlJobAdminMysqlScript() throws Exception {
         Path script = root.resolve("framework-job/src/main/resources/db/mysql/xxl_job_admin.sql");
 
