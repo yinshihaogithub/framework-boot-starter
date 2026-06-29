@@ -44,6 +44,9 @@ public class RedisKeyBuilder {
         if (normalized == null || normalized.isEmpty()) {
             throw new IllegalArgumentException(fieldName + " must not be blank");
         }
+        if (normalized.chars().anyMatch(Character::isISOControl)) {
+            throw new IllegalArgumentException(fieldName + " must not contain control characters");
+        }
         return normalized;
     }
 }

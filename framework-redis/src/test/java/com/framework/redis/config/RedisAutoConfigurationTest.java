@@ -11,6 +11,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import java.lang.reflect.Proxy;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class RedisAutoConfigurationTest {
 
@@ -53,9 +54,26 @@ class RedisAutoConfigurationTest {
     }
 
     @Test
+    void propertiesRejectControlCharactersInKeyPrefix() {
+        RedisProperties properties = new RedisProperties();
+        properties.setKeyPrefix("tenant\nadmin");
+
+        assertThatThrownBy(properties::afterPropertiesSet)
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("framework.redis.key-prefix");
+    }
+
+    @Test
     void autoConfigurationRejectsInvalidRedisPropertiesAtStartup() {
         contextRunner
                 .withPropertyValues("framework.redis.key-prefix= ")
+                .run(context -> assertThat(context)
+                        .hasFailed()
+                        .getFailure()
+                        .hasMessageContaining("framework.redis.key-prefix"));
+
+        contextRunner
+                .withPropertyValues("framework.redis.key-prefix=tenant:")
                 .run(context -> assertThat(context)
                         .hasFailed()
                         .getFailure()

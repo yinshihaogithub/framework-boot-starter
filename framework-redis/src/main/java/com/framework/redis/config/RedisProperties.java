@@ -24,11 +24,18 @@ public class RedisProperties implements InitializingBean {
             throw new IllegalArgumentException("framework.redis.key-prefix must not be blank");
         }
         keyPrefix = keyPrefix.trim();
+        if (keyPrefix.indexOf(':') >= 0 || containsControlCharacter(keyPrefix)) {
+            throw new IllegalArgumentException("framework.redis.key-prefix must not contain ':' or control characters");
+        }
         if (defaultTtl == null || defaultTtl.isZero() || defaultTtl.isNegative()) {
             throw new IllegalArgumentException("framework.redis.default-ttl must be greater than 0");
         }
         if (lockTtl == null || lockTtl.isZero() || lockTtl.isNegative()) {
             throw new IllegalArgumentException("framework.redis.lock-ttl must be greater than 0");
         }
+    }
+
+    private static boolean containsControlCharacter(String value) {
+        return value.chars().anyMatch(Character::isISOControl);
     }
 }

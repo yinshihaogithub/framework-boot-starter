@@ -53,4 +53,18 @@ class RedisKeyBuilderTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("part");
     }
+
+    @Test
+    void rejectsControlCharactersBeforeBuildingKeys() {
+        RedisProperties properties = new RedisProperties();
+        properties.setKeyPrefix("tenant-a");
+        RedisKeyBuilder keyBuilder = new RedisKeyBuilder(properties);
+
+        assertThatThrownBy(() -> keyBuilder.build("order\nadmin", 1001))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("namespace");
+        assertThatThrownBy(() -> keyBuilder.build("order", "1001\tstatus"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("part");
+    }
 }
