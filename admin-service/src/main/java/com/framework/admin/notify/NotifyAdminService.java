@@ -123,8 +123,8 @@ public class NotifyAdminService {
     private NotifyResult send(NotifyAdminModels.Template template,
                               NotifyAdminModels.SendRequest request,
                               String renderedContent) {
-        NotifyService notifyService = notifyServiceProvider.getIfAvailable();
         NotifyChannelType channel = channel(template.getChannel());
+        NotifyService notifyService = available(notifyServiceProvider);
         if (notifyService == null) {
             return NotifyResult.failure(channel, "notify service is not enabled");
         }
@@ -137,7 +137,11 @@ public class NotifyAdminService {
         if (request != null && request.getTemplateParams() != null) {
             message.setTemplateParams(request.getTemplateParams());
         }
-        return notifyService.send(message);
+        try {
+            return notifyService.send(message);
+        } catch (Exception e) {
+            return NotifyResult.failure(channel, "通知发送失败: " + e.getMessage());
+        }
     }
 
     private String render(String content, NotifyAdminModels.SendRequest request) {
@@ -215,5 +219,16 @@ public class NotifyAdminService {
 
     private boolean hasText(String value) {
         return value != null && !value.isBlank();
+    }
+
+    private <T> T available(ObjectProvider<T> provider) {
+        if (provider == null) {
+            return null;
+        }
+        try {
+            return provider.getIfAvailable();
+        } catch (RuntimeException ignored) {
+            return null;
+        }
     }
 }

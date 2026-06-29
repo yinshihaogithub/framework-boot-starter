@@ -123,6 +123,36 @@ class NotifyAdminServiceTest {
     }
 
     @Test
+    void sendTestRecordsFailureWhenNotifyProviderFails() {
+        InMemoryNotifyAdminRepository repository = new InMemoryNotifyAdminRepository();
+        Long templateId = repository.createTemplate(templateRequest());
+        NotifyAdminService service = new NotifyAdminService(repository, failingProvider(), auditService());
+
+        Optional<NotifyAdminModels.Record> record = service.sendTest(templateId, null, null);
+
+        assertThat(record).isPresent();
+        assertThat(record.get().getSuccess()).isFalse();
+        assertThat(record.get().getResultMessage()).isEqualTo("notify service is not enabled");
+        assertThat(repository.countRecordsBySuccess(false)).isEqualTo(1);
+    }
+
+    @Test
+    void sendTestRecordsFailureWhenNotifySendThrows() {
+        InMemoryNotifyAdminRepository repository = new InMemoryNotifyAdminRepository();
+        Long templateId = repository.createTemplate(templateRequest());
+        NotifyAdminService service = service(repository, message -> {
+            throw new IllegalStateException("webhook unavailable");
+        });
+
+        Optional<NotifyAdminModels.Record> record = service.sendTest(templateId, null, null);
+
+        assertThat(record).isPresent();
+        assertThat(record.get().getSuccess()).isFalse();
+        assertThat(record.get().getResultMessage()).isEqualTo("通知发送失败: webhook unavailable");
+        assertThat(repository.countRecordsBySuccess(false)).isEqualTo(1);
+    }
+
+    @Test
     void sendTestDoesNotDispatchDisabledTemplateAndPersistsFailureRecord() {
         InMemoryNotifyAdminRepository repository = new InMemoryNotifyAdminRepository();
         NotifyAdminModels.TemplateRequest templateRequest = templateRequest();
@@ -191,6 +221,35 @@ class NotifyAdminServiceTest {
             @Override
             public Stream<T> stream() {
                 return value == null ? Stream.empty() : Stream.of(value);
+            }
+        };
+    }
+
+    private static <T> ObjectProvider<T> failingProvider() {
+        return new ObjectProvider<>() {
+            @Override
+            public T getObject(Object... args) {
+                throw new IllegalStateException("notify provider unavailable");
+            }
+
+            @Override
+            public T getIfAvailable() {
+                throw new IllegalStateException("notify provider unavailable");
+            }
+
+            @Override
+            public T getIfUnique() {
+                throw new IllegalStateException("notify provider unavailable");
+            }
+
+            @Override
+            public T getObject() {
+                throw new IllegalStateException("notify provider unavailable");
+            }
+
+            @Override
+            public Stream<T> stream() {
+                return Stream.empty();
             }
         };
     }
