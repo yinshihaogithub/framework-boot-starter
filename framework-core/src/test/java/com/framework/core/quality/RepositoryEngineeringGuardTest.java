@@ -329,6 +329,31 @@ class RepositoryEngineeringGuardTest {
     }
 
     @Test
+    void adminServiceUsesManualLocalTransactionsOnly() throws Exception {
+        Path adminMain = root.resolve("admin-service/src/main/java");
+        try (Stream<Path> files = Files.walk(adminMain)) {
+            List<Path> javaFiles = files
+                    .filter(Files::isRegularFile)
+                    .filter(path -> path.toString().endsWith(".java"))
+                    .toList();
+
+            assertThat(javaFiles).isNotEmpty();
+            for (Path javaFile : javaFiles) {
+                String content = read(javaFile);
+                assertThat(content)
+                        .as(javaFile + " must use manual local transactions instead of declarative transactions")
+                        .doesNotContain("@Transactional")
+                        .doesNotContain("org.springframework.transaction.annotation.Transactional");
+            }
+        }
+
+        assertThat(read(root.resolve("admin-service/src/main/java/com/framework/admin/system/AdminSystemRepository.java")))
+                .as("multi-table admin writes must keep an explicit local transaction boundary")
+                .contains("TransactionTemplate")
+                .contains("inTransaction(");
+    }
+
+    @Test
     void mqProvidersAreLimitedToRabbitKafkaAndRocket() throws Exception {
         String source = read(root.resolve("framework-mq/src/main/java/com/framework/mq/config/MqProperties.java"));
         Matcher matcher = MQ_PROVIDER_ENUM_PATTERN.matcher(source);

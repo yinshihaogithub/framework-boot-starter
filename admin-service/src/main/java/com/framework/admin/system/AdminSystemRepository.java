@@ -18,14 +18,16 @@ import com.framework.admin.system.AdminSystemModels.RoleRequest;
 import com.framework.admin.system.AdminSystemModels.Tenant;
 import com.framework.admin.system.AdminSystemModels.TenantRequest;
 import com.framework.admin.system.AdminSystemModels.UserUpdateRequest;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Repository;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Supplier;
 
 @Repository
 public class AdminSystemRepository {
@@ -35,9 +37,16 @@ public class AdminSystemRepository {
     private static final Long DEFAULT_ROLE_ID = 1L;
 
     private final AdminSystemMapper mapper;
+    private final TransactionTemplate transactionTemplate;
+
+    @Autowired
+    public AdminSystemRepository(AdminSystemMapper mapper, TransactionTemplate transactionTemplate) {
+        this.mapper = mapper;
+        this.transactionTemplate = transactionTemplate;
+    }
 
     public AdminSystemRepository(AdminSystemMapper mapper) {
-        this.mapper = mapper;
+        this(mapper, null);
     }
 
     public Optional<AdminUser> findUserByUsername(String username) {
@@ -62,32 +71,34 @@ public class AdminSystemRepository {
         return mapper.countUsers(like(keyword), text(status));
     }
 
-    @Transactional
     public Long createUser(AdminSystemModels.UserCreateRequest request, String passwordHash) {
-        AdminUser user = new AdminUser()
-                .setTenantId(DEFAULT_TENANT_ID)
-                .setDeptId(request.getDeptId())
-                .setUsername(request.getUsername())
-                .setNickname(request.getNickname())
-                .setMobile(request.getMobile())
-                .setEmail(request.getEmail())
-                .setPasswordHash(passwordHash)
-                .setStatus("ENABLED");
-        mapper.insertUser(user);
-        replaceUserRoles(user.getId(), request.getRoleIds());
-        return user.getId();
+        return inTransaction(() -> {
+            AdminUser user = new AdminUser()
+                    .setTenantId(DEFAULT_TENANT_ID)
+                    .setDeptId(request.getDeptId())
+                    .setUsername(request.getUsername())
+                    .setNickname(request.getNickname())
+                    .setMobile(request.getMobile())
+                    .setEmail(request.getEmail())
+                    .setPasswordHash(passwordHash)
+                    .setStatus("ENABLED");
+            mapper.insertUser(user);
+            replaceUserRoles(user.getId(), request.getRoleIds());
+            return user.getId();
+        });
     }
 
-    @Transactional
     public void updateUser(Long userId, UserUpdateRequest request) {
-        mapper.updateUser(new AdminUser()
-                .setId(userId)
-                .setDeptId(request.getDeptId())
-                .setNickname(request.getNickname())
-                .setMobile(request.getMobile())
-                .setEmail(request.getEmail())
-                .setStatus(enabledStatus(request.getStatus())));
-        replaceUserRoles(userId, request.getRoleIds());
+        inTransaction(() -> {
+            mapper.updateUser(new AdminUser()
+                    .setId(userId)
+                    .setDeptId(request.getDeptId())
+                    .setNickname(request.getNickname())
+                    .setMobile(request.getMobile())
+                    .setEmail(request.getEmail())
+                    .setStatus(enabledStatus(request.getStatus())));
+            replaceUserRoles(userId, request.getRoleIds());
+        });
     }
 
     public void updateUserStatus(Long userId, String status) {
@@ -98,10 +109,11 @@ public class AdminSystemRepository {
         mapper.resetPassword(userId, passwordHash);
     }
 
-    @Transactional
     public void deleteUser(Long userId) {
-        mapper.deleteUserRoles(userId);
-        mapper.deleteUser(userId);
+        inTransaction(() -> {
+            mapper.deleteUserRoles(userId);
+            mapper.deleteUser(userId);
+        });
     }
 
     public void updateLastLogin(Long userId) {
@@ -150,10 +162,11 @@ public class AdminSystemRepository {
         return mapper.countUsersByTenant(tenantId);
     }
 
-    @Transactional
     public void deleteTenant(Long id) {
-        mapper.deleteDeptsByTenantId(id);
-        mapper.deleteTenant(id);
+        inTransaction(() -> {
+            mapper.deleteDeptsByTenantId(id);
+            mapper.deleteTenant(id);
+        });
     }
 
     public List<Dept> listDeptTree(Long tenantId) {
@@ -182,14 +195,15 @@ public class AdminSystemRepository {
                 .setStatus(enabledStatus(request.getStatus())));
     }
 
-    @Transactional
     public void deleteDept(Long id) {
-        List<Long> ids = collectDeptSubtreeIds(id);
-        if (ids.isEmpty()) {
-            return;
-        }
-        mapper.clearUserDeptIds(ids);
-        mapper.deleteDeptIds(ids);
+        inTransaction(() -> {
+            List<Long> ids = collectDeptSubtreeIds(id);
+            if (ids.isEmpty()) {
+                return;
+            }
+            mapper.clearUserDeptIds(ids);
+            mapper.deleteDeptIds(ids);
+        });
     }
 
     public List<Role> listRoles() {
@@ -216,26 +230,28 @@ public class AdminSystemRepository {
                 .setStatus(enabledStatus(request.getStatus())));
     }
 
-    @Transactional
     public void deleteRole(Long roleId) {
-        mapper.deleteRoleMenus(roleId);
-        mapper.deleteUserRolesByRoleId(roleId);
-        mapper.deleteRole(roleId);
+        inTransaction(() -> {
+            mapper.deleteRoleMenus(roleId);
+            mapper.deleteUserRolesByRoleId(roleId);
+            mapper.deleteRole(roleId);
+        });
     }
 
     public List<Long> listMenuIdsByRoleId(Long roleId) {
         return mapper.listMenuIdsByRoleId(roleId);
     }
 
-    @Transactional
     public void replaceRoleMenus(Long roleId, List<Long> menuIds) {
-        mapper.deleteRoleMenus(roleId);
-        if (menuIds == null || menuIds.isEmpty()) {
-            return;
-        }
-        for (Long menuId : menuIds) {
-            mapper.insertRoleMenu(roleId, menuId);
-        }
+        inTransaction(() -> {
+            mapper.deleteRoleMenus(roleId);
+            if (menuIds == null || menuIds.isEmpty()) {
+                return;
+            }
+            for (Long menuId : menuIds) {
+                mapper.insertRoleMenu(roleId, menuId);
+            }
+        });
     }
 
     public List<Menu> listMenuTree() {
@@ -252,14 +268,15 @@ public class AdminSystemRepository {
         mapper.updateMenu(toMenu(menuId, request));
     }
 
-    @Transactional
     public void deleteMenu(Long menuId) {
-        List<Long> ids = collectMenuSubtreeIds(menuId);
-        if (ids.isEmpty()) {
-            return;
-        }
-        mapper.deleteRoleMenusByMenuIds(ids);
-        mapper.deleteMenuIds(ids);
+        inTransaction(() -> {
+            List<Long> ids = collectMenuSubtreeIds(menuId);
+            if (ids.isEmpty()) {
+                return;
+            }
+            mapper.deleteRoleMenusByMenuIds(ids);
+            mapper.deleteMenuIds(ids);
+        });
     }
 
     public List<Menu> listMenusByUserId(Long userId) {
@@ -299,13 +316,14 @@ public class AdminSystemRepository {
                 .setStatus(enabledStatus(request.getStatus())));
     }
 
-    @Transactional
     public void deleteDictType(Long id) {
-        String dictCode = mapper.findDictCodeById(id);
-        if (dictCode != null) {
-            mapper.deleteDictItemsByCode(dictCode);
-        }
-        mapper.deleteDictType(id);
+        inTransaction(() -> {
+            String dictCode = mapper.findDictCodeById(id);
+            if (dictCode != null) {
+                mapper.deleteDictItemsByCode(dictCode);
+            }
+            mapper.deleteDictType(id);
+        });
     }
 
     public List<DictItem> listDictItems(String dictCode) {
@@ -380,6 +398,20 @@ public class AdminSystemRepository {
         for (Long roleId : roleIds) {
             mapper.insertUserRole(userId, roleId);
         }
+    }
+
+    private <T> T inTransaction(Supplier<T> action) {
+        if (transactionTemplate == null) {
+            return action.get();
+        }
+        return transactionTemplate.execute(status -> action.get());
+    }
+
+    private void inTransaction(Runnable action) {
+        inTransaction(() -> {
+            action.run();
+            return null;
+        });
     }
 
     private void enrichUser(AdminUser user) {

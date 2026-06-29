@@ -31,6 +31,10 @@
 `framework-mq`、`framework-log`、`framework-local-message` 等模块继续只提供基础能力；
 后台查询、重试、补偿和页面入口统一放在 `admin-service`。
 
+数据访问保持 MVC 三层边界：Controller 只做 HTTP 入参出参，Service 负责校验、编排和审计，
+Repository 通过注解 Mapper 访问 MySQL。多表写操作只使用本地手动事务边界，不使用声明式
+`@Transactional`。
+
 ## 启动
 
 ```bash
