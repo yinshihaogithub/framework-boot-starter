@@ -316,6 +316,7 @@ public class AdminSystemService {
         }
         Long menuId = repository.createMenu(request);
         clearPermissionCache();
+        forceLogoutAllUsers();
         auditService.success(servletRequest, "系统管理", "新增菜单", "INSERT",
                 auditService.params("menuId", menuId, "menuName", request.getMenuName(), "permission", request.getPermission()));
         return Result.success(menuId);

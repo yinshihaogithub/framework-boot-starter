@@ -241,6 +241,27 @@ class AdminSystemServiceTest {
     }
 
     @Test
+    void createMenuClearsAllPermissionCacheAndForcesAllSessionsOffline() {
+        FakePermissionCacheService permissionCacheService = new FakePermissionCacheService();
+        FakeSessionManager sessionManager = new FakeSessionManager();
+        AdminSystemService serviceWithSecurity = new AdminSystemService(
+                repository, auditService, provider(permissionCacheService), provider(sessionManager), null);
+        MenuRequest request = new MenuRequest();
+        request.setMenuType("MENU");
+        request.setMenuName("通知中心");
+        request.setParentId(0L);
+
+        Result<Long> result = serviceWithSecurity.createMenu(request, null);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getData()).isEqualTo(12L);
+        assertThat(repository.createdMenu).isSameAs(request);
+        assertThat(permissionCacheService.clearAllCount).isEqualTo(1);
+        assertThat(sessionManager.forceLogoutAllCount).isEqualTo(1);
+        assertThat(auditService.actions).containsExactly("新增菜单");
+    }
+
+    @Test
     void updateMenuClearsAllPermissionCacheAndForcesAllSessionsOffline() {
         FakePermissionCacheService permissionCacheService = new FakePermissionCacheService();
         FakeSessionManager sessionManager = new FakeSessionManager();
@@ -293,6 +314,7 @@ class AdminSystemServiceTest {
         private RoleRequest updatedRole;
         private Long replacedRoleMenuRoleId;
         private List<Long> replacedRoleMenuIds = List.of();
+        private MenuRequest createdMenu;
         private Long updatedMenuId;
         private MenuRequest updatedMenu;
 
@@ -367,6 +389,12 @@ class AdminSystemServiceTest {
         public void replaceRoleMenus(Long roleId, List<Long> menuIds) {
             this.replacedRoleMenuRoleId = roleId;
             this.replacedRoleMenuIds = menuIds == null ? List.of() : List.copyOf(menuIds);
+        }
+
+        @Override
+        public Long createMenu(MenuRequest request) {
+            this.createdMenu = request;
+            return 12L;
         }
 
         @Override
