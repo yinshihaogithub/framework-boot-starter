@@ -14,6 +14,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
@@ -34,8 +35,8 @@ public class DeadLetterHandler {
     private final ConcurrentMap<Long, MqFailedMessage> failedMessageStore = new ConcurrentHashMap<>();
 
     public DeadLetterHandler(MqFailedMessageRepository repository, MqProperties properties) {
-        this.repository = repository;
-        this.properties = properties;
+        this.repository = Objects.requireNonNull(repository, "repository must not be null");
+        this.properties = Objects.requireNonNull(properties, "properties must not be null");
         this.objectMapper = new ObjectMapper();
         loadFromRepository();
     }
@@ -50,7 +51,7 @@ public class DeadLetterHandler {
             }
             log.info("[死信处理器] 从 MySQL 恢复 {} 条失败消息记录", failedMessageStore.size());
         } catch (Exception e) {
-            log.warn("[死信处理器] 从 MySQL 加载失败消息异常: {}", e.getMessage());
+            log.warn("[死信处理器] 从 MySQL 加载失败消息异常: {}", failureMessage(e));
         }
     }
 
@@ -125,7 +126,7 @@ public class DeadLetterHandler {
         record.setRoutingKey(routingKey);
         record.setQueueName(queueName);
         record.setPayload(payload);
-        record.setErrorMessage(e.getMessage());
+        record.setErrorMessage(failureMessage(e));
         record.setErrorStack(getStackTrace(e));
         record.setRetryCount(retryCount);
         record.setMaxRetry(maxRetry);
@@ -223,7 +224,7 @@ public class DeadLetterHandler {
             repository.save(record);
             failedMessageStore.put(record.getId(), record);
         } catch (Exception e) {
-            log.warn("持久化失败消息到MySQL失败: {}", e.getMessage());
+            log.warn("持久化失败消息到MySQL失败: {}", failureMessage(e));
         }
     }
 
@@ -263,9 +264,24 @@ public class DeadLetterHandler {
     }
 
     private String getStackTrace(Throwable e) {
+        if (e == null) {
+            return null;
+        }
         java.io.StringWriter sw = new java.io.StringWriter();
         e.printStackTrace(new java.io.PrintWriter(sw));
         return sw.toString();
+    }
+
+    private String failureMessage(Throwable exception) {
+        if (exception == null) {
+            return "unknown error";
+        }
+        String message = exception.getMessage();
+        if (message != null && !message.isBlank()) {
+            return message;
+        }
+        String simpleName = exception.getClass().getSimpleName();
+        return simpleName.isBlank() ? exception.getClass().getName() : simpleName;
     }
 
     // ===== 查询方法（供管理接口调用） =====

@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class DeadLetterHandlerTest {
 
@@ -26,6 +27,19 @@ class DeadLetterHandlerTest {
     @AfterEach
     void tearDown() {
         TraceContext.clear();
+    }
+
+    @Test
+    void constructorRejectsNullDependencies() {
+        InMemoryRepository repository = new InMemoryRepository();
+        MqProperties properties = new MqProperties();
+
+        assertThatThrownBy(() -> new DeadLetterHandler(null, properties))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessageContaining("repository");
+        assertThatThrownBy(() -> new DeadLetterHandler(repository, null))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessageContaining("properties");
     }
 
     @Test
@@ -61,6 +75,31 @@ class DeadLetterHandlerTest {
         assertThat(record.getMessageType()).isEqualTo("OrderCreated");
         assertThat(record.getQueueName()).isEqualTo("order.dead.queue");
         assertThat(record.getPayload()).contains("订单创建");
+    }
+
+    @Test
+    void recordConsumeFailureUsesExceptionClassWhenMessageIsBlank() {
+        InMemoryRepository repository = new InMemoryRepository();
+        DeadLetterHandler handler = new DeadLetterHandler(repository, new MqProperties());
+        TraceContext.putTraceId("consume-trace");
+
+        handler.recordConsumeFailure(
+                "msg-2",
+                "order.exchange",
+                "order.created",
+                "order.queue",
+                "{\"id\":2}",
+                new IllegalStateException(),
+                1,
+                3
+        );
+
+        assertThat(repository.saved()).hasSize(1);
+        MqFailedMessage record = repository.saved().get(0);
+        assertThat(record.getTraceId()).isEqualTo("consume-trace");
+        assertThat(record.getErrorMessage()).isEqualTo("IllegalStateException");
+        assertThat(record.getErrorStack()).contains("IllegalStateException");
+        assertThat(record.getStatus()).isEqualTo(MqFailedMessage.STATUS_PENDING);
     }
 
     private static class InMemoryRepository implements MqFailedMessageRepository {
