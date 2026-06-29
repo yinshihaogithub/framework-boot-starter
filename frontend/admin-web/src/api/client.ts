@@ -422,10 +422,10 @@ export const api = {
     getData<PageResult<NotifyRecord>>('/admin/notify/records', params),
   excelStats: () => getData<Record<string, number>>('/admin/excel/stats'),
   excelTasks: (params: Record<string, unknown>) => getData<PageResult<ExcelTask>>('/admin/excel/tasks', params),
-  createDemoExportTask: (data: Record<string, unknown>) =>
-    postData<ExcelTaskResult>('/admin/excel/tasks/demo-export', data),
-  createDemoFailureTask: (data: Record<string, unknown>) =>
-    postData<ExcelTaskResult>('/admin/excel/tasks/demo-failure', data),
+  createExportTask: (data: Record<string, unknown>) =>
+    postData<ExcelTaskResult>('/admin/excel/tasks/export', data),
+  createImportFailureTask: (data: Record<string, unknown>) =>
+    postData<ExcelTaskResult>('/admin/excel/tasks/import-failure', data),
   excelErrors: (taskId: number) => getData<ExcelErrorRecord[]>(`/admin/excel/tasks/${taskId}/errors`),
   users: (params: Record<string, unknown>) => getData<PageResult<AdminUser>>('/admin/system/users', params),
   tenants: () => getData<Tenant[]>('/admin/system/tenants'),

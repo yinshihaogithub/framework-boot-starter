@@ -42,20 +42,20 @@ public class ExcelAdminController {
         return Result.success(excelAdminService.tasks(taskType, status, pageNum, pageSize));
     }
 
-    @Operation(summary = "创建示例导出任务")
-    @PostMapping("/tasks/demo-export")
-    public Result<ExcelAdminModels.TaskResult> demoExport(@RequestBody(required = false) ExcelAdminModels.ExportRequest request,
-                                                         HttpServletRequest servletRequest) {
-        return excelAdminService.demoExport(request, servletRequest)
+    @Operation(summary = "创建导出任务")
+    @PostMapping("/tasks/export")
+    public Result<ExcelAdminModels.TaskResult> createExportTask(@RequestBody(required = false) ExcelAdminModels.ExportRequest request,
+                                                               HttpServletRequest servletRequest) {
+        return excelAdminService.createExportTask(request, servletRequest)
                 .map(Result::success)
                 .orElseGet(() -> Result.fail("Excel导出服务未启用"));
     }
 
-    @Operation(summary = "创建示例失败任务")
-    @PostMapping("/tasks/demo-failure")
-    public Result<ExcelAdminModels.TaskResult> demoFailure(@RequestBody(required = false) ExcelAdminModels.FailureRequest request,
-                                                          HttpServletRequest servletRequest) {
-        return Result.success(excelAdminService.demoFailure(request, servletRequest));
+    @Operation(summary = "登记导入失败任务")
+    @PostMapping("/tasks/import-failure")
+    public Result<ExcelAdminModels.TaskResult> createImportFailureTask(@RequestBody(required = false) ExcelAdminModels.FailureRequest request,
+                                                                      HttpServletRequest servletRequest) {
+        return Result.success(excelAdminService.createImportFailureTask(request, servletRequest));
     }
 
     @Operation(summary = "Excel错误明细")

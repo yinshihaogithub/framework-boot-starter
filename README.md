@@ -170,7 +170,7 @@ MQ 治理第一版已经按工程级后台闭环实现：`framework-mq` 保留 R
 
 通知和 Excel 已按“framework 提供能力、admin-service 提供管理面”的边界接入：`framework-notify`
 继续提供 LOG/Webhook/短信/邮件通道抽象，后台提供通知模板、发送测试和发送记录；`framework-excel`
-继续提供 EasyExcel 导入导出服务，后台提供导入导出任务、错误明细和示例导出任务。相关管理数据统一落 MySQL，
+继续提供 EasyExcel 导入导出服务，后台提供导出任务、导入失败登记和错误明细。相关管理数据统一落 MySQL，
 初始化脚本包含 `framework_notify_template`、`framework_notify_record`、`framework_excel_task` 和
 `framework_excel_error`。
 

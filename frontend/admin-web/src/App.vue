@@ -623,8 +623,8 @@
                     <el-option label="PROCESSING" value="PROCESSING" />
                   </el-select>
                   <el-button :icon="Search" circle type="primary" @click="loadExcel" />
-                  <el-button :icon="Files" circle @click="createDemoExport" />
-                  <el-button :icon="Close" circle @click="createDemoFailure" />
+                  <el-button :icon="Files" circle @click="createExportTask" />
+                  <el-button :icon="Close" circle @click="createImportFailureTask" />
                 </div>
               </div>
             </template>
@@ -1966,16 +1966,16 @@ function splitText(value: string) {
     .filter(Boolean)
 }
 
-async function createDemoExport() {
-  const result = await api.createDemoExportTask({ taskName: '前端示例导出任务', bizType: 'admin-web' })
+async function createExportTask() {
+  const result = await api.createExportTask({ taskName: '用户清单导出任务', bizType: 'system-user' })
   ElMessage.success(`已生成 ${result.filename}`)
   await loadExcel()
 }
 
-async function createDemoFailure() {
-  const result = await api.createDemoFailureTask({
-    taskName: '前端示例导入失败任务',
-    bizType: 'admin-web',
+async function createImportFailureTask() {
+  const result = await api.createImportFailureTask({
+    taskName: '用户导入失败任务',
+    bizType: 'system-user',
     errorMessage: '模板表头不匹配'
   })
   ElMessage.warning(`已创建失败任务 ${result.taskId}`)

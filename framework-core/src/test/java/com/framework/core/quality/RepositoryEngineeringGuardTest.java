@@ -344,6 +344,33 @@ class RepositoryEngineeringGuardTest {
     }
 
     @Test
+    void adminExcelManagementDoesNotExposeDemoRoutes() throws Exception {
+        List<Path> guardedFiles = List.of(
+                root.resolve("admin-service/src/main/java/com/framework/admin/excel/ExcelAdminController.java"),
+                root.resolve("admin-service/src/main/java/com/framework/admin/excel/ExcelAdminService.java"),
+                root.resolve("frontend/admin-web/src/api/client.ts"),
+                root.resolve("frontend/admin-web/src/App.vue"),
+                root.resolve("admin-service/README.md"));
+        List<String> forbiddenTerms = List.of(
+                "demo-export",
+                "demo-failure",
+                "demoExport",
+                "demoFailure",
+                "createDemoExport",
+                "createDemoFailure",
+                "DemoExcel");
+
+        for (Path file : guardedFiles) {
+            String content = read(file);
+            for (String forbiddenTerm : forbiddenTerms) {
+                assertThat(content)
+                        .as(file + " must expose engineering-grade Excel management routes")
+                        .doesNotContain(forbiddenTerm);
+            }
+        }
+    }
+
+    @Test
     void sourceConfigurationDoesNotUseH2AsDefaultDatabase() throws Exception {
         try (Stream<Path> files = Files.walk(root)) {
             List<Path> sourceFiles = files

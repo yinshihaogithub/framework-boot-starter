@@ -20,16 +20,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ExcelAdminServiceTest {
 
     @Test
-    void demoExportReturnsEmptyWhenExportServiceIsMissing() {
+    void exportTaskReturnsEmptyWhenExportServiceIsMissing() {
         ExcelAdminService service = service(new InMemoryExcelAdminRepository(), null);
 
-        Optional<ExcelAdminModels.TaskResult> result = service.demoExport(null, null);
+        Optional<ExcelAdminModels.TaskResult> result = service.createExportTask(null, null);
 
         assertThat(result).isEmpty();
     }
 
     @Test
-    void demoExportCreatesSuccessTask() {
+    void exportTaskCreatesSuccessTask() {
         InMemoryExcelAdminRepository repository = new InMemoryExcelAdminRepository();
         CapturingExcelExportService exportService = new CapturingExcelExportService();
         ExcelAdminModels.ExportRequest request = new ExcelAdminModels.ExportRequest();
@@ -37,14 +37,14 @@ class ExcelAdminServiceTest {
         request.setBizType(" user ");
         ExcelAdminService service = service(repository, exportService);
 
-        Optional<ExcelAdminModels.TaskResult> result = service.demoExport(request, null);
+        Optional<ExcelAdminModels.TaskResult> result = service.createExportTask(request, null);
 
         assertThat(result).isPresent();
         assertThat(result.get().getStatus()).isEqualTo("SUCCESS");
         assertThat(result.get().getTotalRows()).isEqualTo(2);
         assertThat(result.get().getSuccessRows()).isEqualTo(2);
         assertThat(result.get().getFileSize()).isEqualTo(5L);
-        assertThat(exportService.sheetName).isEqualTo("用户示例");
+        assertThat(exportService.sheetName).isEqualTo("用户清单");
         assertThat(exportService.rowCount).isEqualTo(2);
         assertThat(repository.tasks)
                 .extracting(ExcelAdminModels.Task::getTaskName, ExcelAdminModels.Task::getBizType,
@@ -53,13 +53,13 @@ class ExcelAdminServiceTest {
     }
 
     @Test
-    void demoFailureCreatesFailedTaskAndErrors() {
+    void importFailureTaskCreatesFailedTaskAndErrors() {
         InMemoryExcelAdminRepository repository = new InMemoryExcelAdminRepository();
         ExcelAdminModels.FailureRequest request = new ExcelAdminModels.FailureRequest();
         request.setErrorMessage("手机号格式错误");
         ExcelAdminService service = service(repository, null);
 
-        ExcelAdminModels.TaskResult result = service.demoFailure(request, null);
+        ExcelAdminModels.TaskResult result = service.createImportFailureTask(request, null);
 
         assertThat(result.getStatus()).isEqualTo("FAILED");
         assertThat(result.getTotalRows()).isEqualTo(3);

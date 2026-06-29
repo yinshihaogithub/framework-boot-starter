@@ -47,21 +47,21 @@ public class ExcelAdminService {
         return PageResult.of(records, total, safePageNum, safePageSize);
     }
 
-    public Optional<ExcelAdminModels.TaskResult> demoExport(ExcelAdminModels.ExportRequest request,
-                                                           HttpServletRequest servletRequest) {
+    public Optional<ExcelAdminModels.TaskResult> createExportTask(ExcelAdminModels.ExportRequest request,
+                                                                  HttpServletRequest servletRequest) {
         ExcelExportService exportService = exportServiceProvider.getIfAvailable();
         if (exportService == null) {
             return Optional.empty();
         }
-        List<DemoExcelRow> rows = List.of(
-                new DemoExcelRow("admin", "系统管理员", "ENABLED"),
-                new DemoExcelRow("ops", "运维人员", "ENABLED"));
-        byte[] bytes = exportService.export("用户示例", DemoExcelRow.class, rows);
-        String filename = "demo-export-" + System.currentTimeMillis() + ".xlsx";
+        List<ExportUserRow> rows = List.of(
+                new ExportUserRow("admin", "系统管理员", "ENABLED"),
+                new ExportUserRow("ops", "运维人员", "ENABLED"));
+        byte[] bytes = exportService.export("用户清单", ExportUserRow.class, rows);
+        String filename = "user-export-" + System.currentTimeMillis() + ".xlsx";
         ExcelAdminModels.Task task = new ExcelAdminModels.Task()
-                .setTaskName(text(request == null ? null : request.getTaskName(), "示例导出任务"))
+                .setTaskName(text(request == null ? null : request.getTaskName(), "用户清单导出任务"))
                 .setTaskType("EXPORT")
-                .setBizType(text(request == null ? null : request.getBizType(), "demo-user"))
+                .setBizType(text(request == null ? null : request.getBizType(), "system-user"))
                 .setStatus("SUCCESS")
                 .setFilename(filename)
                 .setTotalRows(rows.size())
@@ -69,7 +69,7 @@ public class ExcelAdminService {
                 .setFailureRows(0)
                 .setOperatorName(UserContextHolder.getUsername());
         Long taskId = repository.createTask(task);
-        auditService.success(servletRequest, "Excel中心", "创建示例导出任务", "CREATE",
+        auditService.success(servletRequest, "Excel中心", "创建导出任务", "CREATE",
                 auditService.params("taskId", taskId, "filename", filename, "rows", rows.size()));
         return Optional.of(new ExcelAdminModels.TaskResult()
                 .setTaskId(taskId)
@@ -81,15 +81,15 @@ public class ExcelAdminService {
                 .setFileSize((long) bytes.length));
     }
 
-    public ExcelAdminModels.TaskResult demoFailure(ExcelAdminModels.FailureRequest request,
-                                                  HttpServletRequest servletRequest) {
+    public ExcelAdminModels.TaskResult createImportFailureTask(ExcelAdminModels.FailureRequest request,
+                                                              HttpServletRequest servletRequest) {
         String errorMessage = text(request == null ? null : request.getErrorMessage(), "模板表头不匹配");
         ExcelAdminModels.Task task = new ExcelAdminModels.Task()
-                .setTaskName(text(request == null ? null : request.getTaskName(), "示例导入失败任务"))
+                .setTaskName(text(request == null ? null : request.getTaskName(), "用户导入失败任务"))
                 .setTaskType("IMPORT")
-                .setBizType(text(request == null ? null : request.getBizType(), "demo-user"))
+                .setBizType(text(request == null ? null : request.getBizType(), "system-user"))
                 .setStatus("FAILED")
-                .setFilename("demo-import-" + System.currentTimeMillis() + ".xlsx")
+                .setFilename("user-import-" + System.currentTimeMillis() + ".xlsx")
                 .setTotalRows(3)
                 .setSuccessRows(1)
                 .setFailureRows(2)
@@ -97,8 +97,8 @@ public class ExcelAdminService {
                 .setErrorMessage(errorMessage);
         Long taskId = repository.createTask(task);
         repository.createError(taskId, 2, errorMessage, "{\"username\":\"\",\"nickname\":\"空用户名\"}");
-        repository.createError(taskId, 3, "手机号格式错误", "{\"username\":\"demo\",\"mobile\":\"123\"}");
-        auditService.success(servletRequest, "Excel中心", "创建示例失败任务", "CREATE",
+        repository.createError(taskId, 3, "手机号格式错误", "{\"username\":\"ops\",\"mobile\":\"123\"}");
+        auditService.success(servletRequest, "Excel中心", "登记导入失败任务", "CREATE",
                 auditService.params("taskId", taskId, "errorMessage", errorMessage));
         return new ExcelAdminModels.TaskResult()
                 .setTaskId(taskId)
@@ -132,7 +132,7 @@ public class ExcelAdminService {
     @Data
     @NoArgsConstructor
     @AllArgsConstructor
-    public static class DemoExcelRow {
+    public static class ExportUserRow {
         @ExcelProperty("用户名")
         private String username;
 
