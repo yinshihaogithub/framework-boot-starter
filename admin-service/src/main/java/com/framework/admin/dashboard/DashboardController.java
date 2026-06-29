@@ -1,6 +1,7 @@
 package com.framework.admin.dashboard;
 
 import com.framework.core.result.Result;
+import com.framework.security.annotation.RequirePermission;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -16,6 +17,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/admin/dashboard")
 @Tag(name = "Dashboard", description = "管理后台首页")
+@RequirePermission("dashboard:view")
 public class DashboardController {
 
     private final DashboardService dashboardService;

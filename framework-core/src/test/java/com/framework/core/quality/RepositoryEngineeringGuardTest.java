@@ -450,6 +450,25 @@ class RepositoryEngineeringGuardTest {
     }
 
     @Test
+    void adminManagementControllersDeclareBackendPermissions() throws Exception {
+        Path adminMain = root.resolve("admin-service/src/main/java/com/framework/admin");
+        try (Stream<Path> files = Files.walk(adminMain)) {
+            List<Path> controllerFiles = files
+                    .filter(Files::isRegularFile)
+                    .filter(path -> path.getFileName().toString().endsWith("Controller.java"))
+                    .filter(path -> !path.toString().contains("/auth/"))
+                    .toList();
+
+            assertThat(controllerFiles).isNotEmpty();
+            for (Path file : controllerFiles) {
+                assertThat(read(file))
+                        .as(file + " must enforce backend permissions instead of relying on frontend menus")
+                        .contains("RequirePermission");
+            }
+        }
+    }
+
+    @Test
     void sourceConfigurationDoesNotUseH2AsDefaultDatabase() throws Exception {
         try (Stream<Path> files = Files.walk(root)) {
             List<Path> sourceFiles = files

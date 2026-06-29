@@ -3,6 +3,7 @@ package com.framework.admin.notify;
 import com.framework.core.result.PageResult;
 import com.framework.core.result.Result;
 import com.framework.core.result.ResultCode;
+import com.framework.security.annotation.RequirePermission;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
@@ -21,6 +22,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/admin/notify")
 @Tag(name = "通知中心", description = "通知模板、发送测试和发送记录")
+@RequirePermission("notify:view")
 public class NotifyAdminController {
 
     private final NotifyAdminService notifyAdminService;
@@ -71,6 +73,7 @@ public class NotifyAdminController {
 
     @Operation(summary = "发送测试通知")
     @PostMapping("/templates/{id}/send-test")
+    @RequirePermission("notify:send-test")
     public Result<NotifyAdminModels.Record> sendTest(@PathVariable Long id,
                                                      @RequestBody(required = false) NotifyAdminModels.SendRequest request,
                                                      HttpServletRequest servletRequest) {

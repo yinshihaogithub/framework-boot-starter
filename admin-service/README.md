@@ -35,6 +35,9 @@
 Repository 通过注解 Mapper 访问 MySQL。多表写操作只使用本地手动事务边界，不使用声明式
 `@Transactional`。
 
+后台权限不是只靠前端菜单隐藏：除登录/当前用户/退出外，管理接口必须在 Controller 上声明
+`@RequirePermission`，后端根据登录会话里的权限点做硬校验。
+
 ## 启动
 
 ```bash

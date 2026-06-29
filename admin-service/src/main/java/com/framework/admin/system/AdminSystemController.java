@@ -22,6 +22,7 @@ import com.framework.admin.system.AdminSystemModels.UserStatusRequest;
 import com.framework.admin.system.AdminSystemModels.UserUpdateRequest;
 import com.framework.core.result.PageResult;
 import com.framework.core.result.Result;
+import com.framework.security.annotation.RequirePermission;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
@@ -50,18 +51,21 @@ public class AdminSystemController {
 
     @Operation(summary = "租户列表")
     @GetMapping("/tenants")
+    @RequirePermission("system:tenant:view")
     public Result<List<Tenant>> tenants() {
         return Result.success(systemService.tenants());
     }
 
     @Operation(summary = "新增租户")
     @PostMapping("/tenants")
+    @RequirePermission("system:tenant:create")
     public Result<Long> createTenant(@RequestBody TenantRequest request, HttpServletRequest servletRequest) {
         return systemService.createTenant(request, servletRequest);
     }
 
     @Operation(summary = "更新租户")
     @PutMapping("/tenants/{id}")
+    @RequirePermission("system:tenant:view")
     public Result<String> updateTenant(@PathVariable Long id, @RequestBody TenantRequest request,
                                        HttpServletRequest servletRequest) {
         return systemService.updateTenant(id, request, servletRequest);
@@ -69,24 +73,28 @@ public class AdminSystemController {
 
     @Operation(summary = "删除租户")
     @DeleteMapping("/tenants/{id}")
+    @RequirePermission("system:tenant:view")
     public Result<String> deleteTenant(@PathVariable Long id, HttpServletRequest servletRequest) {
         return systemService.deleteTenant(id, servletRequest);
     }
 
     @Operation(summary = "部门树")
     @GetMapping("/depts")
+    @RequirePermission("system:dept:view")
     public Result<List<Dept>> depts(@RequestParam(required = false) Long tenantId) {
         return Result.success(systemService.depts(tenantId));
     }
 
     @Operation(summary = "新增部门")
     @PostMapping("/depts")
+    @RequirePermission("system:dept:create")
     public Result<Long> createDept(@RequestBody DeptRequest request, HttpServletRequest servletRequest) {
         return systemService.createDept(request, servletRequest);
     }
 
     @Operation(summary = "更新部门")
     @PutMapping("/depts/{id}")
+    @RequirePermission("system:dept:view")
     public Result<String> updateDept(@PathVariable Long id, @RequestBody DeptRequest request,
                                      HttpServletRequest servletRequest) {
         return systemService.updateDept(id, request, servletRequest);
@@ -94,12 +102,14 @@ public class AdminSystemController {
 
     @Operation(summary = "删除部门")
     @DeleteMapping("/depts/{id}")
+    @RequirePermission("system:dept:view")
     public Result<String> deleteDept(@PathVariable Long id, HttpServletRequest servletRequest) {
         return systemService.deleteDept(id, servletRequest);
     }
 
     @Operation(summary = "用户列表")
     @GetMapping("/users")
+    @RequirePermission("system:user:view")
     public Result<PageResult<AdminUser>> users(@RequestParam(required = false) String keyword,
                                                @RequestParam(required = false) String status,
                                                @RequestParam(defaultValue = "1") int pageNum,
@@ -109,12 +119,14 @@ public class AdminSystemController {
 
     @Operation(summary = "新增用户")
     @PostMapping("/users")
+    @RequirePermission("system:user:create")
     public Result<Long> createUser(@RequestBody UserCreateRequest request, HttpServletRequest servletRequest) {
         return systemService.createUser(request, servletRequest);
     }
 
     @Operation(summary = "更新用户")
     @PutMapping("/users/{id}")
+    @RequirePermission("system:user:view")
     public Result<String> updateUser(@PathVariable Long id, @RequestBody UserUpdateRequest request,
                                      HttpServletRequest servletRequest) {
         return systemService.updateUser(id, request, servletRequest);
@@ -122,6 +134,7 @@ public class AdminSystemController {
 
     @Operation(summary = "更新用户状态")
     @PutMapping("/users/{id}/status")
+    @RequirePermission("system:user:view")
     public Result<String> updateUserStatus(@PathVariable Long id, @RequestBody UserStatusRequest request,
                                            HttpServletRequest servletRequest) {
         return systemService.updateUserStatus(id, request, servletRequest);
@@ -129,6 +142,7 @@ public class AdminSystemController {
 
     @Operation(summary = "重置密码")
     @PutMapping("/users/{id}/password")
+    @RequirePermission("system:user:reset-password")
     public Result<String> resetPassword(@PathVariable Long id, @RequestBody ResetPasswordRequest request,
                                         HttpServletRequest servletRequest) {
         return systemService.resetPassword(id, request, servletRequest);
@@ -136,24 +150,28 @@ public class AdminSystemController {
 
     @Operation(summary = "删除用户")
     @DeleteMapping("/users/{id}")
+    @RequirePermission("system:user:view")
     public Result<String> deleteUser(@PathVariable Long id, HttpServletRequest servletRequest) {
         return systemService.deleteUser(id, servletRequest);
     }
 
     @Operation(summary = "角色列表")
     @GetMapping("/roles")
+    @RequirePermission("system:role:view")
     public Result<List<Role>> roles() {
         return Result.success(systemService.roles());
     }
 
     @Operation(summary = "新增角色")
     @PostMapping("/roles")
+    @RequirePermission("system:role:view")
     public Result<Long> createRole(@RequestBody RoleRequest request, HttpServletRequest servletRequest) {
         return systemService.createRole(request, servletRequest);
     }
 
     @Operation(summary = "更新角色")
     @PutMapping("/roles/{id}")
+    @RequirePermission("system:role:view")
     public Result<String> updateRole(@PathVariable Long id, @RequestBody RoleRequest request,
                                      HttpServletRequest servletRequest) {
         return systemService.updateRole(id, request, servletRequest);
@@ -161,18 +179,21 @@ public class AdminSystemController {
 
     @Operation(summary = "删除角色")
     @DeleteMapping("/roles/{id}")
+    @RequirePermission("system:role:view")
     public Result<String> deleteRole(@PathVariable Long id, HttpServletRequest servletRequest) {
         return systemService.deleteRole(id, servletRequest);
     }
 
     @Operation(summary = "角色已授权菜单ID")
     @GetMapping("/roles/{id}/menu-ids")
+    @RequirePermission("system:role:view")
     public Result<List<Long>> roleMenuIds(@PathVariable Long id) {
         return Result.success(systemService.roleMenuIds(id));
     }
 
     @Operation(summary = "角色菜单授权")
     @PutMapping("/roles/{id}/menus")
+    @RequirePermission("system:role:view")
     public Result<String> updateRoleMenus(@PathVariable Long id, @RequestBody RoleMenuRequest request,
                                           HttpServletRequest servletRequest) {
         return systemService.updateRoleMenus(id, request, servletRequest);
@@ -180,18 +201,21 @@ public class AdminSystemController {
 
     @Operation(summary = "菜单树")
     @GetMapping("/menus")
+    @RequirePermission("system:menu:view")
     public Result<List<Menu>> menus() {
         return Result.success(systemService.menus());
     }
 
     @Operation(summary = "新增菜单")
     @PostMapping("/menus")
+    @RequirePermission("system:menu:view")
     public Result<Long> createMenu(@RequestBody MenuRequest request, HttpServletRequest servletRequest) {
         return systemService.createMenu(request, servletRequest);
     }
 
     @Operation(summary = "更新菜单")
     @PutMapping("/menus/{id}")
+    @RequirePermission("system:menu:view")
     public Result<String> updateMenu(@PathVariable Long id, @RequestBody MenuRequest request,
                                      HttpServletRequest servletRequest) {
         return systemService.updateMenu(id, request, servletRequest);
@@ -199,24 +223,28 @@ public class AdminSystemController {
 
     @Operation(summary = "删除菜单")
     @DeleteMapping("/menus/{id}")
+    @RequirePermission("system:menu:view")
     public Result<String> deleteMenu(@PathVariable Long id, HttpServletRequest servletRequest) {
         return systemService.deleteMenu(id, servletRequest);
     }
 
     @Operation(summary = "字典类型")
     @GetMapping("/dict-types")
+    @RequirePermission("system:dict:view")
     public Result<List<DictType>> dictTypes() {
         return Result.success(systemService.dictTypes());
     }
 
     @Operation(summary = "新增字典类型")
     @PostMapping("/dict-types")
+    @RequirePermission("system:dict:view")
     public Result<Long> createDictType(@RequestBody DictTypeRequest request, HttpServletRequest servletRequest) {
         return systemService.createDictType(request, servletRequest);
     }
 
     @Operation(summary = "更新字典类型")
     @PutMapping("/dict-types/{id}")
+    @RequirePermission("system:dict:view")
     public Result<String> updateDictType(@PathVariable Long id, @RequestBody DictTypeRequest request,
                                          HttpServletRequest servletRequest) {
         return systemService.updateDictType(id, request, servletRequest);
@@ -224,24 +252,28 @@ public class AdminSystemController {
 
     @Operation(summary = "删除字典类型")
     @DeleteMapping("/dict-types/{id}")
+    @RequirePermission("system:dict:view")
     public Result<String> deleteDictType(@PathVariable Long id, HttpServletRequest servletRequest) {
         return systemService.deleteDictType(id, servletRequest);
     }
 
     @Operation(summary = "字典项")
     @GetMapping("/dict-items")
+    @RequirePermission("system:dict:view")
     public Result<List<DictItem>> dictItems(@RequestParam(required = false) String dictCode) {
         return Result.success(systemService.dictItems(dictCode));
     }
 
     @Operation(summary = "新增字典项")
     @PostMapping("/dict-items")
+    @RequirePermission("system:dict:view")
     public Result<Long> createDictItem(@RequestBody DictItemRequest request, HttpServletRequest servletRequest) {
         return systemService.createDictItem(request, servletRequest);
     }
 
     @Operation(summary = "更新字典项")
     @PutMapping("/dict-items/{id}")
+    @RequirePermission("system:dict:view")
     public Result<String> updateDictItem(@PathVariable Long id, @RequestBody DictItemRequest request,
                                          HttpServletRequest servletRequest) {
         return systemService.updateDictItem(id, request, servletRequest);
@@ -249,24 +281,28 @@ public class AdminSystemController {
 
     @Operation(summary = "删除字典项")
     @DeleteMapping("/dict-items/{id}")
+    @RequirePermission("system:dict:view")
     public Result<String> deleteDictItem(@PathVariable Long id, HttpServletRequest servletRequest) {
         return systemService.deleteDictItem(id, servletRequest);
     }
 
     @Operation(summary = "系统参数")
     @GetMapping("/configs")
+    @RequirePermission("system:config:view")
     public Result<List<ConfigItem>> configs() {
         return Result.success(systemService.configs());
     }
 
     @Operation(summary = "新增系统参数")
     @PostMapping("/configs")
+    @RequirePermission("system:config:view")
     public Result<Long> createConfig(@RequestBody ConfigRequest request, HttpServletRequest servletRequest) {
         return systemService.createConfig(request, servletRequest);
     }
 
     @Operation(summary = "更新系统参数")
     @PutMapping("/configs/{id}")
+    @RequirePermission("system:config:view")
     public Result<String> updateConfig(@PathVariable Long id, @RequestBody ConfigRequest request,
                                        HttpServletRequest servletRequest) {
         return systemService.updateConfig(id, request, servletRequest);
@@ -274,6 +310,7 @@ public class AdminSystemController {
 
     @Operation(summary = "删除系统参数")
     @DeleteMapping("/configs/{id}")
+    @RequirePermission("system:config:view")
     public Result<String> deleteConfig(@PathVariable Long id, HttpServletRequest servletRequest) {
         return systemService.deleteConfig(id, servletRequest);
     }

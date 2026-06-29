@@ -1,6 +1,7 @@
 package com.framework.admin.monitor;
 
 import com.framework.core.result.Result;
+import com.framework.security.annotation.RequirePermission;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -15,6 +16,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/admin/monitor")
 @Tag(name = "监控中心", description = "健康检查和运行时指标")
+@RequirePermission("monitor:view")
 public class MonitorAdminController {
 
     private final MonitorAdminService monitorAdminService;

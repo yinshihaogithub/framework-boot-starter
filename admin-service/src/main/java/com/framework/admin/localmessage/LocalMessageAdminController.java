@@ -3,6 +3,7 @@ package com.framework.admin.localmessage;
 import com.framework.core.result.PageResult;
 import com.framework.core.result.Result;
 import com.framework.localmessage.model.LocalMessageStatus;
+import com.framework.security.annotation.RequirePermission;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
@@ -24,6 +25,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/admin/local-messages")
 @Tag(name = "本地消息管理", description = "本地消息表与人工补偿")
+@RequirePermission("local-message:view")
 public class LocalMessageAdminController {
 
     private final LocalMessageAdminService localMessageAdminService;
@@ -57,18 +59,21 @@ public class LocalMessageAdminController {
 
     @Operation(summary = "扫描并重试到期消息")
     @PostMapping("/retry-due")
+    @RequirePermission("local-message:retry")
     public Result<Integer> retryDueMessages(HttpServletRequest servletRequest) {
         return toResult(localMessageAdminService.retryDueMessages(servletRequest));
     }
 
     @Operation(summary = "标记成功")
     @PostMapping("/{id}/success")
+    @RequirePermission("local-message:retry")
     public Result<String> markSuccess(@PathVariable Long id, HttpServletRequest servletRequest) {
         return toResult(localMessageAdminService.markSuccess(id, servletRequest));
     }
 
     @Operation(summary = "标记失败")
     @PostMapping("/{id}/failure")
+    @RequirePermission("local-message:retry")
     public Result<String> markFailure(@PathVariable Long id,
                                       @RequestBody(required = false) FailureRequest request,
                                       HttpServletRequest servletRequest) {
@@ -78,6 +83,7 @@ public class LocalMessageAdminController {
 
     @Operation(summary = "删除本地消息")
     @DeleteMapping("/{id}")
+    @RequirePermission("local-message:retry")
     public Result<String> delete(@PathVariable Long id, HttpServletRequest servletRequest) {
         return toResult(localMessageAdminService.delete(id, servletRequest));
     }

@@ -4,6 +4,7 @@ import com.framework.admin.system.AdminSystemModels.LoginLog;
 import com.framework.core.result.PageResult;
 import com.framework.core.result.Result;
 import com.framework.log.entity.OperationLogEntity;
+import com.framework.security.annotation.RequirePermission;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -30,12 +31,14 @@ public class LogAdminController {
 
     @Operation(summary = "日志统计")
     @GetMapping("/stats")
+    @RequirePermission("log:view")
     public Result<Map<String, Long>> stats() {
         return Result.success(logAdminService.stats());
     }
 
     @Operation(summary = "日志列表")
     @GetMapping
+    @RequirePermission("log:view")
     public Result<PageResult<OperationLogEntity>> list(@RequestParam(required = false) String module,
                                                        @RequestParam(required = false) String logType,
                                                        @RequestParam(required = false) Long operatorId,
@@ -48,6 +51,7 @@ public class LogAdminController {
 
     @Operation(summary = "按 traceId 查询链路日志")
     @GetMapping("/traces/{traceId}")
+    @RequirePermission("trace:view")
     public Result<PageResult<OperationLogEntity>> trace(@PathVariable String traceId,
                                                         @RequestParam(defaultValue = "1") int pageNum,
                                                         @RequestParam(defaultValue = "50") int pageSize) {
@@ -56,6 +60,7 @@ public class LogAdminController {
 
     @Operation(summary = "登录日志列表")
     @GetMapping("/login")
+    @RequirePermission("log:login:view")
     public Result<PageResult<LoginLog>> loginLogs(@RequestParam(required = false) String username,
                                                   @RequestParam(required = false) Boolean success,
                                                   @RequestParam(defaultValue = "1") int pageNum,

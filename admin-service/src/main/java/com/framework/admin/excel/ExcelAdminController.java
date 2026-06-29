@@ -3,6 +3,7 @@ package com.framework.admin.excel;
 import com.framework.core.result.PageResult;
 import com.framework.core.result.Result;
 import com.framework.core.result.ResultCode;
+import com.framework.security.annotation.RequirePermission;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
@@ -20,6 +21,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/admin/excel")
 @Tag(name = "Excel中心", description = "Excel 导入导出任务和错误明细")
+@RequirePermission("excel:view")
 public class ExcelAdminController {
 
     private final ExcelAdminService excelAdminService;
@@ -45,6 +47,7 @@ public class ExcelAdminController {
 
     @Operation(summary = "创建导出任务")
     @PostMapping("/tasks/export")
+    @RequirePermission("excel:task:create")
     public Result<ExcelAdminModels.TaskResult> createExportTask(@RequestBody(required = false) ExcelAdminModels.ExportRequest request,
                                                                HttpServletRequest servletRequest) {
         return excelAdminService.createExportTask(request, servletRequest)
@@ -54,6 +57,7 @@ public class ExcelAdminController {
 
     @Operation(summary = "登记导入失败任务")
     @PostMapping("/tasks/import-failure")
+    @RequirePermission("excel:task:create")
     public Result<ExcelAdminModels.TaskResult> createImportFailureTask(@RequestBody(required = false) ExcelAdminModels.FailureRequest request,
                                                                       HttpServletRequest servletRequest) {
         return Result.success(excelAdminService.createImportFailureTask(request, servletRequest));
