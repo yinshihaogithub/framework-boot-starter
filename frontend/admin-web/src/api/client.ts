@@ -1,6 +1,7 @@
 import axios from 'axios'
 
 export const AUTH_EXPIRED_EVENT = 'admin-auth-expired'
+const TRACE_ID_HEADER = 'X-Trace-Id'
 
 export class ApiError extends Error {
   code?: number
@@ -404,10 +405,20 @@ function notifyAuthExpired(error: ApiError) {
   window.dispatchEvent(new CustomEvent<ApiError>(AUTH_EXPIRED_EVENT, { detail: error }))
 }
 
+function createTraceId() {
+  if (globalThis.crypto?.randomUUID) {
+    return globalThis.crypto.randomUUID().replace(/-/g, '')
+  }
+  return `web-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+}
+
 http.interceptors.request.use((config) => {
   const token = getToken()
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
+  }
+  if (!config.headers[TRACE_ID_HEADER]) {
+    config.headers[TRACE_ID_HEADER] = createTraceId()
   }
   return config
 })
