@@ -219,6 +219,10 @@ public class AdminSystemService {
     }
 
     public Result<String> updateUser(Long id, UserUpdateRequest request, HttpServletRequest servletRequest) {
+        Result<String> invalidId = invalidUserId(id);
+        if (invalidId != null) {
+            return invalidId;
+        }
         if (request == null) {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), "用户信息不能为空");
         }
@@ -242,6 +246,10 @@ public class AdminSystemService {
     }
 
     public Result<String> updateUserStatus(Long id, UserStatusRequest request, HttpServletRequest servletRequest) {
+        Result<String> invalidId = invalidUserId(id);
+        if (invalidId != null) {
+            return invalidId;
+        }
         String status = request == null || isBlank(request.getStatus()) ? "DISABLED" : request.getStatus();
         if (!"ENABLED".equals(status) && !"DISABLED".equals(status)) {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), "状态只能是 ENABLED 或 DISABLED");
@@ -261,6 +269,10 @@ public class AdminSystemService {
     }
 
     public Result<String> resetPassword(Long id, ResetPasswordRequest request, HttpServletRequest servletRequest) {
+        Result<String> invalidId = invalidUserId(id);
+        if (invalidId != null) {
+            return invalidId;
+        }
         if (request == null || isBlank(request.getPassword())) {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), "密码不能为空");
         }
@@ -279,6 +291,10 @@ public class AdminSystemService {
     }
 
     public Result<String> deleteUser(Long id, HttpServletRequest servletRequest) {
+        Result<String> invalidId = invalidUserId(id);
+        if (invalidId != null) {
+            return invalidId;
+        }
         if (isBuiltInAdmin(id)) {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), "内置管理员不能删除");
         }
@@ -294,8 +310,9 @@ public class AdminSystemService {
     }
 
     public Result<String> unlockUser(Long id, HttpServletRequest servletRequest) {
-        if (id == null) {
-            return Result.fail(ResultCode.PARAM_ERROR.getCode(), "用户ID不能为空");
+        Result<String> invalidId = invalidUserId(id);
+        if (invalidId != null) {
+            return invalidId;
         }
         AdminUser user;
         try {
@@ -642,6 +659,13 @@ public class AdminSystemService {
 
     private boolean isBlank(String value) {
         return value == null || value.isBlank();
+    }
+
+    private Result<String> invalidUserId(Long id) {
+        if (id == null || id <= 0) {
+            return Result.fail(ResultCode.PARAM_ERROR.getCode(), "用户ID必须大于0");
+        }
+        return null;
     }
 
     private boolean isValidStatus(String status) {

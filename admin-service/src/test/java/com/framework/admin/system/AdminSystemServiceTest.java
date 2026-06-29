@@ -246,6 +246,22 @@ class AdminSystemServiceTest {
     }
 
     @Test
+    void userIdOperationsRejectInvalidIdBeforeRepositoryLookup() {
+        repository.commandFailure = new RuntimeException("database down");
+
+        assertInvalidUserId(service.updateUser(0L, userUpdateRequest(), null));
+        assertInvalidUserId(service.updateUserStatus(0L, userStatusRequest(), null));
+        assertInvalidUserId(service.resetPassword(0L, resetPasswordRequest(), null));
+        assertInvalidUserId(service.deleteUser(0L, null));
+        assertInvalidUserId(service.unlockUser(0L, null));
+
+        assertThat(repository.updatedUserId).isNull();
+        assertThat(repository.updatedUserStatusId).isNull();
+        assertThat(repository.resetPasswordUserId).isNull();
+        assertThat(repository.deletedUserId).isNull();
+    }
+
+    @Test
     void resetPasswordRejectsWeakPassword() {
         ResetPasswordRequest request = new ResetPasswordRequest();
         request.setPassword("12345678");
@@ -532,6 +548,12 @@ class AdminSystemServiceTest {
         return request;
     }
 
+    private static void assertInvalidUserId(Result<?> result) {
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getCode()).isEqualTo(ResultCode.PARAM_ERROR.getCode());
+        assertThat(result.getMessage()).isEqualTo("用户ID必须大于0");
+    }
+
     private static RoleRequest roleRequest() {
         RoleRequest request = new RoleRequest();
         request.setRoleCode("OPS");
@@ -597,6 +619,7 @@ class AdminSystemServiceTest {
         private UserUpdateRequest updatedUser;
         private Long updatedUserStatusId;
         private String updatedUserStatus;
+        private Long deletedUserId;
         private List<Long> affectedUserIdsByRole = List.of();
         private Long updatedRoleId;
         private RoleRequest updatedRole;
@@ -715,6 +738,7 @@ class AdminSystemServiceTest {
         @Override
         public void deleteUser(Long userId) {
             failCommandIfNeeded();
+            this.deletedUserId = userId;
         }
 
         @Override
