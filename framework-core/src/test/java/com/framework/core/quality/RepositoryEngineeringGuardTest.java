@@ -409,6 +409,27 @@ class RepositoryEngineeringGuardTest {
     }
 
     @Test
+    void idempotentRedisFailuresFailClosedWithoutLeakingInfrastructureExceptions() throws Exception {
+        String aspect = read(root.resolve(
+                "framework-idempotent/src/main/java/com/framework/idempotent/aspect/IdempotentAspect.java"));
+        String test = read(root.resolve(
+                "framework-idempotent/src/test/java/com/framework/idempotent/aspect/IdempotentAspectTest.java"));
+
+        assertThat(aspect)
+                .as("idempotent writes must fail closed when Redis cannot guarantee duplicate protection")
+                .contains("Redis抢占失败")
+                .contains("Redis释放失败")
+                .contains("幂等服务暂不可用，请稍后重试")
+                .contains("幂等校验失败，请稍后重试")
+                .contains("BusinessException(ResultCode.IDEMPOTENT_FAIL");
+        assertThat(test)
+                .contains("redisAcquireFailureFailsClosedWithoutLeakingInfrastructureException")
+                .contains("redisNullAcquireResultFailsClosedBeforeProceeding")
+                .contains("redisReleaseFailureDoesNotMaskBusinessException")
+                .contains("redis unavailable");
+    }
+
+    @Test
     void codegenModuleIsRemovedFromTheScaffold() throws Exception {
         assertThat(modules())
                 .as("codegen is intentionally not part of this scaffold")

@@ -59,13 +59,14 @@ public class IdempotentAspect {
         String idempotentKey = buildKey(annotation, signature, method, joinPoint.getArgs());
         String redisKey = FrameworkConstants.IDEMPOTENT_PREFIX + idempotentKey;
 
-        // SETNX 抢占
-        Boolean acquired = redisTemplate.opsForValue().setIfAbsent(
-                redisKey, "1", annotation.expire(), TimeUnit.SECONDS);
+        Boolean acquired = acquireLock(redisKey, annotation.expire(), idempotentKey);
 
         if (Boolean.FALSE.equals(acquired)) {
             log.warn("[幂等拦截] key={}, 重复请求", idempotentKey);
             throw new BusinessException(ResultCode.IDEMPOTENT_FAIL, annotation.message());
+        } else if (!Boolean.TRUE.equals(acquired)) {
+            log.warn("[幂等拦截] key={}, Redis返回空结果", idempotentKey);
+            throw new BusinessException(ResultCode.IDEMPOTENT_FAIL, "幂等校验失败，请稍后重试");
         }
 
         try {
@@ -73,8 +74,25 @@ public class IdempotentAspect {
             return result;
         } catch (Throwable e) {
             // 业务异常时释放幂等锁，允许重试
-            redisTemplate.delete(redisKey);
+            releaseLock(redisKey, idempotentKey);
             throw e;
+        }
+    }
+
+    private Boolean acquireLock(String redisKey, long expireSeconds, String idempotentKey) {
+        try {
+            return redisTemplate.opsForValue().setIfAbsent(redisKey, "1", expireSeconds, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            log.warn("[幂等拦截] key={}, Redis抢占失败 error={}", idempotentKey, e.getMessage());
+            throw new BusinessException(ResultCode.IDEMPOTENT_FAIL, "幂等服务暂不可用，请稍后重试");
+        }
+    }
+
+    private void releaseLock(String redisKey, String idempotentKey) {
+        try {
+            redisTemplate.delete(redisKey);
+        } catch (Exception e) {
+            log.warn("[幂等拦截] key={}, Redis释放失败 error={}", idempotentKey, e.getMessage());
         }
     }
 

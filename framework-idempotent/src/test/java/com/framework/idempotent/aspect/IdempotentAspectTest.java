@@ -79,6 +79,30 @@ class IdempotentAspectTest {
     }
 
     @Test
+    void redisAcquireFailureFailsClosedWithoutLeakingInfrastructureException() {
+        PaymentService service = proxy(new PaymentService(), new ThrowingRedis(true, false));
+
+        assertThatThrownBy(() -> service.pay(new PayRequest("O-101"), "tenant-a"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessage("幂等服务暂不可用，请稍后重试")
+                .extracting("code")
+                .isEqualTo(ResultCode.IDEMPOTENT_FAIL.getCode());
+        assertThat(service.invocations).isZero();
+    }
+
+    @Test
+    void redisNullAcquireResultFailsClosedBeforeProceeding() {
+        PaymentService service = proxy(new PaymentService(), new NullAcquireRedis());
+
+        assertThatThrownBy(() -> service.pay(new PayRequest("O-102"), "tenant-a"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessage("幂等校验失败，请稍后重试")
+                .extracting("code")
+                .isEqualTo(ResultCode.IDEMPOTENT_FAIL.getCode());
+        assertThat(service.invocations).isZero();
+    }
+
+    @Test
     void businessExceptionReleasesIdempotentKey() {
         RecordingRedis redis = new RecordingRedis(true);
         PaymentService service = proxy(new PaymentService(), redis);
@@ -89,6 +113,15 @@ class IdempotentAspectTest {
 
         assertThat(redis.deletedKeys)
                 .containsExactly(FrameworkConstants.IDEMPOTENT_PREFIX + "pay:O-200");
+    }
+
+    @Test
+    void redisReleaseFailureDoesNotMaskBusinessException() {
+        PaymentService service = proxy(new PaymentService(), new ThrowingRedis(false, true));
+
+        assertThatThrownBy(() -> service.fail(new PayRequest("O-201")))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("payment failed");
     }
 
     @Test
@@ -208,6 +241,57 @@ class IdempotentAspectTest {
         public Boolean delete(String key) {
             deletedKeys.add(key);
             return true;
+        }
+    }
+
+    private static final class NullAcquireRedis extends StringRedisTemplate {
+
+        @Override
+        @SuppressWarnings("unchecked")
+        public ValueOperations<String, String> opsForValue() {
+            return (ValueOperations<String, String>) Proxy.newProxyInstance(
+                    ValueOperations.class.getClassLoader(),
+                    new Class<?>[]{ValueOperations.class},
+                    (proxy, method, args) -> defaultValue(method.getReturnType()));
+        }
+    }
+
+    private static final class ThrowingRedis extends StringRedisTemplate {
+        private final boolean throwOnAcquire;
+        private final boolean throwOnDelete;
+
+        private ThrowingRedis(boolean throwOnAcquire, boolean throwOnDelete) {
+            this.throwOnAcquire = throwOnAcquire;
+            this.throwOnDelete = throwOnDelete;
+        }
+
+        @Override
+        @SuppressWarnings("unchecked")
+        public ValueOperations<String, String> opsForValue() {
+            return (ValueOperations<String, String>) Proxy.newProxyInstance(
+                    ValueOperations.class.getClassLoader(),
+                    new Class<?>[]{ValueOperations.class},
+                    (proxy, method, args) -> {
+                        if ("setIfAbsent".equals(method.getName())) {
+                            if (throwOnAcquire) {
+                                throw unavailable();
+                            }
+                            return true;
+                        }
+                        return defaultValue(method.getReturnType());
+                    });
+        }
+
+        @Override
+        public Boolean delete(String key) {
+            if (throwOnDelete) {
+                throw unavailable();
+            }
+            return true;
+        }
+
+        private static IllegalStateException unavailable() {
+            return new IllegalStateException("redis unavailable");
         }
     }
 
