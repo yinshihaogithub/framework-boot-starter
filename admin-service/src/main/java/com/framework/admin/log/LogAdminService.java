@@ -5,6 +5,7 @@ import com.framework.admin.system.AdminSystemRepository;
 import com.framework.core.result.PageResult;
 import com.framework.log.entity.OperationLogEntity;
 import com.framework.log.mapper.OperationLogMapper;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
@@ -12,6 +13,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+@Slf4j
 @Service
 public class LogAdminService {
 
@@ -30,7 +32,7 @@ public class LogAdminService {
 
     public Map<String, Long> stats() {
         Map<String, Long> stats = new LinkedHashMap<>();
-        OperationLogMapper mapper = mapperProvider.getIfAvailable();
+        OperationLogMapper mapper = availableMapper();
         stats.put("total", count(mapper, null, null, null, null, null));
         stats.put("operation", count(mapper, null, "OPERATION", null, null, null));
         stats.put("api", count(mapper, null, "API", null, null, null));
@@ -42,7 +44,7 @@ public class LogAdminService {
                                                Boolean success, String traceId, int pageNum, int pageSize) {
         int safePageNum = safePageNum(pageNum);
         int safePageSize = safePageSize(pageSize);
-        OperationLogMapper mapper = mapperProvider.getIfAvailable();
+        OperationLogMapper mapper = availableMapper();
         if (mapper == null) {
             return PageResult.empty(safePageNum, safePageSize);
         }
@@ -64,9 +66,23 @@ public class LogAdminService {
     public PageResult<LoginLog> loginLogs(String username, Boolean success, int pageNum, int pageSize) {
         int safePageNum = safePageNum(pageNum);
         int safePageSize = safePageSize(pageSize);
-        List<LoginLog> records = systemRepository.listLoginLogs(username, success, safePageNum, safePageSize);
-        long total = systemRepository.countLoginLogs(username, success);
-        return PageResult.of(records, total, safePageNum, safePageSize);
+        try {
+            List<LoginLog> records = systemRepository.listLoginLogs(username, success, safePageNum, safePageSize);
+            long total = systemRepository.countLoginLogs(username, success);
+            return PageResult.of(records, total, safePageNum, safePageSize);
+        } catch (RuntimeException e) {
+            log.warn("[日志中心] 登录日志查询失败 error={}", e.getMessage());
+            return PageResult.empty(safePageNum, safePageSize);
+        }
+    }
+
+    private OperationLogMapper availableMapper() {
+        try {
+            return mapperProvider.getIfAvailable();
+        } catch (RuntimeException e) {
+            log.warn("[日志中心] 操作日志存储不可用 error={}", e.getMessage());
+            return null;
+        }
     }
 
     private long count(OperationLogMapper mapper, String module, String logType,

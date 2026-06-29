@@ -14,6 +14,7 @@ import com.framework.core.result.Result;
 import com.framework.core.result.ResultCode;
 import com.framework.crypto.util.PasswordUtils;
 import jakarta.servlet.http.HttpServletRequest;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -21,6 +22,7 @@ import org.springframework.stereotype.Service;
 /**
  * 后台认证服务。
  */
+@Slf4j
 @Service
 public class AdminAuthService {
 
@@ -51,7 +53,7 @@ public class AdminAuthService {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), "用户名和密码不能为空");
         }
         String username = request.getUsername().trim();
-        LoginSecurityService loginSecurity = loginSecurityServiceProvider.getIfAvailable();
+        LoginSecurityService loginSecurity = loginSecurityService();
         try {
             if (loginSecurity != null) {
                 loginSecurity.checkAccountLocked(username);
@@ -62,7 +64,7 @@ public class AdminAuthService {
                 if (loginSecurity != null) {
                     loginSecurity.recordLoginFailure(username);
                 }
-                systemRepository.insertLoginLog(username, user == null ? null : user.getId(),
+                insertLoginLog(username, user == null ? null : user.getId(),
                         clientIp, false, "账号或密码错误");
                 return Result.fail(ResultCode.LOGIN_FAIL);
             }
@@ -78,16 +80,16 @@ public class AdminAuthService {
                     user.getRoles().toArray(String[]::new),
                     user.getPermissions().toArray(String[]::new));
             systemRepository.updateLastLogin(user.getId());
-            systemRepository.insertLoginLog(username, user.getId(), clientIp, true, "登录成功");
+            insertLoginLog(username, user.getId(), clientIp, true, "登录成功");
             return Result.success(new AdminAuthController.LoginResponse()
                     .setAccessToken(loginUser.getAccessToken())
                     .setUser(toCurrentUser(user))
                     .setMenus(systemRepository.listMenusByUserId(user.getId())));
         } catch (BusinessException e) {
-            systemRepository.insertLoginLog(username, null, clientIp, false, e.getMessage());
+            insertLoginLog(username, null, clientIp, false, e.getMessage());
             return Result.fail(e.getCode(), e.getMessage());
         } catch (Exception e) {
-            systemRepository.insertLoginLog(username, null, clientIp, false, e.getMessage());
+            insertLoginLog(username, null, clientIp, false, e.getMessage());
             return Result.fail(ResultCode.LOGIN_FAIL.getCode(), e.getMessage());
         }
     }
@@ -142,6 +144,27 @@ public class AdminAuthService {
                     auditService.params("userId", user.getId(), "username", user.getUsername()));
         }
         return Result.success("密码已修改，请重新登录");
+    }
+
+    private LoginSecurityService loginSecurityService() {
+        if (loginSecurityServiceProvider == null) {
+            return null;
+        }
+        try {
+            return loginSecurityServiceProvider.getIfAvailable();
+        } catch (RuntimeException e) {
+            log.warn("[后台认证] 登录安全服务不可用 error={}", e.getMessage());
+            return null;
+        }
+    }
+
+    private void insertLoginLog(String username, Long userId, String clientIp, boolean success, String message) {
+        try {
+            systemRepository.insertLoginLog(username, userId, clientIp, success, message);
+        } catch (RuntimeException e) {
+            log.warn("[后台认证] 登录日志写入失败 username={}, success={}, error={}",
+                    username, success, e.getMessage());
+        }
     }
 
     private AdminAuthController.CurrentUser toCurrentUser(AdminUser user) {

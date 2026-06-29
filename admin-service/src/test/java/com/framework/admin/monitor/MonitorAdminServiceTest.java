@@ -21,6 +21,15 @@ class MonitorAdminServiceTest {
     }
 
     @Test
+    void healthReturnsUnknownWhenProviderFails() {
+        MonitorAdminService service = new MonitorAdminService(failingProvider());
+
+        Object health = service.health();
+
+        assertThat(health).isEqualTo(Map.of("status", "UNKNOWN"));
+    }
+
+    @Test
     void jvmReturnsRuntimeOverview() {
         MonitorAdminService service = new MonitorAdminService(provider(null));
 
@@ -57,6 +66,35 @@ class MonitorAdminServiceTest {
             @Override
             public Stream<HealthEndpoint> stream() {
                 return value == null ? Stream.empty() : Stream.of(value);
+            }
+        };
+    }
+
+    private static ObjectProvider<HealthEndpoint> failingProvider() {
+        return new ObjectProvider<>() {
+            @Override
+            public HealthEndpoint getObject(Object... args) {
+                throw new IllegalStateException("provider failed");
+            }
+
+            @Override
+            public HealthEndpoint getIfAvailable() {
+                throw new IllegalStateException("provider failed");
+            }
+
+            @Override
+            public HealthEndpoint getIfUnique() {
+                throw new IllegalStateException("provider failed");
+            }
+
+            @Override
+            public HealthEndpoint getObject() {
+                throw new IllegalStateException("provider failed");
+            }
+
+            @Override
+            public Stream<HealthEndpoint> stream() {
+                throw new IllegalStateException("provider failed");
             }
         };
     }

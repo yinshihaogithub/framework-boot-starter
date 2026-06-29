@@ -31,6 +31,23 @@ class LogAdminServiceTest {
     }
 
     @Test
+    void returnsZeroStatsAndEmptyPageWhenMapperProviderFails() {
+        LogAdminService service = new LogAdminService(failingProvider(), systemRepository(List.of()));
+
+        Map<String, Long> stats = service.stats();
+        PageResult<OperationLogEntity> page = service.list(null, null, null, null, null, 0, 0);
+
+        assertThat(stats)
+                .containsEntry("total", 0L)
+                .containsEntry("operation", 0L)
+                .containsEntry("api", 0L)
+                .containsEntry("exception", 0L);
+        assertThat(page.getPageNum()).isEqualTo(1);
+        assertThat(page.getPageSize()).isEqualTo(20);
+        assertThat(page.getRecords()).isEmpty();
+    }
+
+    @Test
     void listsOperationLogsWithSafePaging() {
         LogAdminService service = new LogAdminService(provider(mapper(List.of(
                 operationLog(1L, "system", "OPERATION", true, "trace-a"),
@@ -79,6 +96,18 @@ class LogAdminServiceTest {
         assertThat(page.getPageSize()).isEqualTo(20);
         assertThat(page.getTotal()).isEqualTo(1);
         assertThat(page.getRecords()).extracting(LoginLog::getUsername).containsExactly("admin");
+    }
+
+    @Test
+    void loginLogsReturnEmptyPageWhenSystemRepositoryFails() {
+        LogAdminService service = new LogAdminService(provider(null), failingSystemRepository());
+
+        PageResult<LoginLog> page = service.loginLogs("admin", true, 0, 0);
+
+        assertThat(page.getPageNum()).isEqualTo(1);
+        assertThat(page.getPageSize()).isEqualTo(20);
+        assertThat(page.getTotal()).isZero();
+        assertThat(page.getRecords()).isEmpty();
     }
 
     private static OperationLogEntity operationLog(Long id, String module, String logType, boolean success, String traceId) {
@@ -170,6 +199,15 @@ class LogAdminServiceTest {
         };
     }
 
+    private static AdminSystemRepository failingSystemRepository() {
+        return new AdminSystemRepository(null) {
+            @Override
+            public List<LoginLog> listLoginLogs(String username, Boolean success, int pageNum, int pageSize) {
+                throw new IllegalStateException("login log table unavailable");
+            }
+        };
+    }
+
     private static <T> ObjectProvider<T> provider(T value) {
         return new ObjectProvider<>() {
             @Override
@@ -195,6 +233,35 @@ class LogAdminServiceTest {
             @Override
             public Stream<T> stream() {
                 return value == null ? Stream.empty() : Stream.of(value);
+            }
+        };
+    }
+
+    private static <T> ObjectProvider<T> failingProvider() {
+        return new ObjectProvider<>() {
+            @Override
+            public T getObject(Object... args) {
+                throw new IllegalStateException("provider failed");
+            }
+
+            @Override
+            public T getIfAvailable() {
+                throw new IllegalStateException("provider failed");
+            }
+
+            @Override
+            public T getIfUnique() {
+                throw new IllegalStateException("provider failed");
+            }
+
+            @Override
+            public T getObject() {
+                throw new IllegalStateException("provider failed");
+            }
+
+            @Override
+            public Stream<T> stream() {
+                throw new IllegalStateException("provider failed");
             }
         };
     }

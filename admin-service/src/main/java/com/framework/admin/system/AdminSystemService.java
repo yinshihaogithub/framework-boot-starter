@@ -615,15 +615,39 @@ public class AdminSystemService {
     }
 
     private PermissionCacheService permissionCacheService() {
-        return permissionCacheServiceProvider == null ? null : permissionCacheServiceProvider.getIfAvailable();
+        if (permissionCacheServiceProvider == null) {
+            return null;
+        }
+        try {
+            return permissionCacheServiceProvider.getIfAvailable();
+        } catch (RuntimeException e) {
+            log.warn("[权限缓存] 获取缓存服务失败 error={}", e.getMessage());
+            return null;
+        }
     }
 
     private SessionManager sessionManager() {
-        return sessionManagerProvider == null ? null : sessionManagerProvider.getIfAvailable();
+        if (sessionManagerProvider == null) {
+            return null;
+        }
+        try {
+            return sessionManagerProvider.getIfAvailable();
+        } catch (RuntimeException e) {
+            log.warn("[权限会话] 获取会话服务失败 error={}", e.getMessage());
+            return null;
+        }
     }
 
     private LoginSecurityService loginSecurityService() {
-        return loginSecurityServiceProvider == null ? null : loginSecurityServiceProvider.getIfAvailable();
+        if (loginSecurityServiceProvider == null) {
+            return null;
+        }
+        try {
+            return loginSecurityServiceProvider.getIfAvailable();
+        } catch (RuntimeException e) {
+            log.warn("[登录安全] 获取登录安全服务失败 error={}", e.getMessage());
+            return null;
+        }
     }
 
     private void enrichLoginSecurity(AdminUser user) {

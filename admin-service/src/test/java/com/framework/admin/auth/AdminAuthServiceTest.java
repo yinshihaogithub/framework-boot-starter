@@ -107,6 +107,40 @@ class AdminAuthServiceTest {
     }
 
     @Test
+    void loginContinuesWhenLoginSecurityProviderFails() {
+        repository.user = enabledUser();
+        AdminAuthService serviceWithFailingProvider = new AdminAuthService(
+                repository, sessionManager, failingProvider());
+        AdminAuthController.LoginRequest request = new AdminAuthController.LoginRequest();
+        request.setUsername("admin");
+        request.setPassword("Admin@123");
+
+        Result<AdminAuthController.LoginResponse> result = serviceWithFailingProvider.login(request, "10.0.0.8");
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getData().getAccessToken()).isEqualTo("access-token");
+        assertThat(repository.loginLogs)
+                .extracting(LoginLogRecord::username, LoginLogRecord::success, LoginLogRecord::message)
+                .containsExactly(tuple("admin", true, "登录成功"));
+    }
+
+    @Test
+    void loginContinuesWhenLoginLogWriteFails() {
+        repository.user = enabledUser();
+        repository.loginLogFailure = new RuntimeException("database down");
+        AdminAuthController.LoginRequest request = new AdminAuthController.LoginRequest();
+        request.setUsername("admin");
+        request.setPassword("Admin@123");
+
+        Result<AdminAuthController.LoginResponse> result = service.login(request, "10.0.0.8");
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getData().getAccessToken()).isEqualTo("access-token");
+        assertThat(repository.lastLoginUserId).isEqualTo(1L);
+        assertThat(repository.loginLogs).isEmpty();
+    }
+
+    @Test
     void meReturnsCurrentUserMenus() {
         repository.user = enabledUser();
         repository.menus = List.of(menu(1L, "dashboard"));
@@ -227,6 +261,35 @@ class AdminAuthServiceTest {
         };
     }
 
+    private static <T> ObjectProvider<T> failingProvider() {
+        return new ObjectProvider<>() {
+            @Override
+            public T getObject(Object... args) {
+                throw new IllegalStateException("provider failed");
+            }
+
+            @Override
+            public T getIfAvailable() {
+                throw new IllegalStateException("provider failed");
+            }
+
+            @Override
+            public T getIfUnique() {
+                throw new IllegalStateException("provider failed");
+            }
+
+            @Override
+            public T getObject() {
+                throw new IllegalStateException("provider failed");
+            }
+
+            @Override
+            public Stream<T> stream() {
+                throw new IllegalStateException("provider failed");
+            }
+        };
+    }
+
     private static class FakeRepository extends AdminSystemRepository {
         private AdminUser user;
         private List<Menu> menus = List.of();
@@ -235,6 +298,7 @@ class AdminAuthServiceTest {
         private Long resetPasswordUserId;
         private String resetPasswordHash;
         private final List<ConfigUpdate> configUpdates = new ArrayList<>();
+        private RuntimeException loginLogFailure;
 
         private FakeRepository() {
             super(null);
@@ -257,6 +321,9 @@ class AdminAuthServiceTest {
 
         @Override
         public void insertLoginLog(String username, Long userId, String clientIp, boolean success, String message) {
+            if (loginLogFailure != null) {
+                throw loginLogFailure;
+            }
             loginLogs.add(new LoginLogRecord(username, userId, clientIp, success, message));
         }
 

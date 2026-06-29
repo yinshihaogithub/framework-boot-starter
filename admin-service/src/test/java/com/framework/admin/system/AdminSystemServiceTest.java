@@ -152,6 +152,21 @@ class AdminSystemServiceTest {
     }
 
     @Test
+    void updateUserContinuesWhenOptionalSecurityProvidersFail() {
+        AdminSystemService serviceWithFailingProviders = new AdminSystemService(
+                repository, auditService, failingProvider(), failingProvider(), null);
+        UserUpdateRequest request = new UserUpdateRequest();
+        request.setNickname("Alice");
+        request.setStatus("ENABLED");
+
+        Result<String> result = serviceWithFailingProviders.updateUser(9L, request, null);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(repository.updatedUserId).isEqualTo(9L);
+        assertThat(auditService.actions).containsExactly("更新用户");
+    }
+
+    @Test
     void updateUserRejectsDisablingBuiltInAdmin() {
         UserUpdateRequest request = new UserUpdateRequest();
         request.setStatus("DISABLED");
@@ -202,6 +217,21 @@ class AdminSystemServiceTest {
         assertThat(result.getData()).isEqualTo("已解锁");
         assertThat(loginSecurityService.unlockedUsername).isEqualTo("alice");
         assertThat(auditService.actions).containsExactly("解锁用户");
+    }
+
+    @Test
+    void unlockUserReportsUnavailableWhenLoginSecurityProviderFails() {
+        AdminSystemService serviceWithFailingLoginSecurity = new AdminSystemService(
+                repository, auditService, null, null, failingProvider());
+        repository.userById = new AdminUser()
+                .setId(9L)
+                .setUsername("alice");
+
+        Result<String> result = serviceWithFailingLoginSecurity.unlockUser(9L, null);
+
+        assertThat(result.getCode()).isEqualTo(ResultCode.SERVICE_ERROR.getCode());
+        assertThat(result.getMessage()).isEqualTo("登录安全服务不可用");
+        assertThat(auditService.actions).isEmpty();
     }
 
     @Test
@@ -636,6 +666,35 @@ class AdminSystemServiceTest {
             @Override
             public Stream<T> stream() {
                 return value == null ? Stream.empty() : Stream.of(value);
+            }
+        };
+    }
+
+    private static <T> ObjectProvider<T> failingProvider() {
+        return new ObjectProvider<>() {
+            @Override
+            public T getObject(Object... args) {
+                throw new IllegalStateException("provider failed");
+            }
+
+            @Override
+            public T getIfAvailable() {
+                throw new IllegalStateException("provider failed");
+            }
+
+            @Override
+            public T getIfUnique() {
+                throw new IllegalStateException("provider failed");
+            }
+
+            @Override
+            public T getObject() {
+                throw new IllegalStateException("provider failed");
+            }
+
+            @Override
+            public Stream<T> stream() {
+                throw new IllegalStateException("provider failed");
             }
         };
     }
