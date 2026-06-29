@@ -35,6 +35,24 @@ class RedisAutoConfigurationTest {
     }
 
     @Test
+    void autoConfigurationNormalizesKeyPrefixAtStartup() {
+        contextRunner
+                .withPropertyValues("framework.redis.key-prefix= tenant-a ")
+                .run(context -> assertThat(context.getBean(RedisProperties.class).getKeyPrefix())
+                        .isEqualTo("tenant-a"));
+    }
+
+    @Test
+    void propertiesNormalizeKeyPrefixAtStartup() {
+        RedisProperties properties = new RedisProperties();
+        properties.setKeyPrefix(" tenant-a ");
+
+        properties.afterPropertiesSet();
+
+        assertThat(properties.getKeyPrefix()).isEqualTo("tenant-a");
+    }
+
+    @Test
     void autoConfigurationRejectsInvalidRedisPropertiesAtStartup() {
         contextRunner
                 .withPropertyValues("framework.redis.key-prefix= ")

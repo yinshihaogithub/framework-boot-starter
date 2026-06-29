@@ -23,6 +23,7 @@ public class RedisProperties implements InitializingBean {
         if (keyPrefix == null || keyPrefix.isBlank()) {
             throw new IllegalArgumentException("framework.redis.key-prefix must not be blank");
         }
+        keyPrefix = keyPrefix.trim();
         if (defaultTtl == null || defaultTtl.isZero() || defaultTtl.isNegative()) {
             throw new IllegalArgumentException("framework.redis.default-ttl must be greater than 0");
         }
