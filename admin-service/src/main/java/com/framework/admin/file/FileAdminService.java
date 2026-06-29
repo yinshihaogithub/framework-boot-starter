@@ -8,6 +8,7 @@ import com.framework.core.result.ResultCode;
 import com.framework.file.model.StoredFile;
 import com.framework.file.service.FileStorageService;
 import jakarta.servlet.http.HttpServletRequest;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.core.io.Resource;
@@ -23,6 +24,7 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
+@Slf4j
 @Service
 public class FileAdminService {
 
@@ -127,16 +129,19 @@ public class FileAdminService {
         if (storageService == null) {
             return Result.fail(ResultCode.SERVICE_ERROR.getCode(), "文件存储服务未启用");
         }
+        repository.markDeleted(id);
+        boolean physicalDeleted = true;
         try {
             storageService.delete(record.getFileKey());
-            repository.markDeleted(id);
-            auditService.success(servletRequest, "文件中心", "删除文件", "DELETE",
-                    auditService.params("fileId", id, "filename", record.getOriginalFilename(),
-                            "fileKey", record.getFileKey()));
-            return Result.success("已删除");
         } catch (IOException e) {
-            return Result.fail(ResultCode.SERVICE_ERROR.getCode(), "文件删除失败");
+            physicalDeleted = false;
+            log.warn("[文件中心] 物理文件删除失败 fileId={}, fileKey={}, error={}",
+                    id, record.getFileKey(), e.getMessage());
         }
+        auditService.success(servletRequest, "文件中心", "删除文件", "DELETE",
+                auditService.params("fileId", id, "filename", record.getOriginalFilename(),
+                        "fileKey", record.getFileKey(), "physicalDeleted", physicalDeleted));
+        return Result.success(physicalDeleted ? "已删除" : "已删除，物理文件待清理");
     }
 
     private int safePageNum(int pageNum) {

@@ -109,6 +109,24 @@ class FileAdminServiceTest {
         assertThat(storageService.deletedKey).isEqualTo("file-key");
         assertThat(repository.deletedId).isEqualTo(9L);
         assertThat(auditService.actions).containsExactly("删除文件");
+        assertThat(auditService.params).containsEntry("physicalDeleted", true);
+    }
+
+    @Test
+    void deleteKeepsMetadataDeletedWhenPhysicalCleanupFails() {
+        repository.record = new FileAdminModels.FileRecord()
+                .setId(10L)
+                .setFileKey("missing-file-key")
+                .setOriginalFilename("stale.txt");
+        storageService.deleteFailure = new IOException("disk unavailable");
+
+        Result<String> result = service.delete(10L, null);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getData()).isEqualTo("已删除，物理文件待清理");
+        assertThat(repository.deletedId).isEqualTo(10L);
+        assertThat(storageService.deletedKey).isEqualTo("missing-file-key");
+        assertThat(auditService.params).containsEntry("physicalDeleted", false);
     }
 
     private static class FakeRepository extends FileAdminRepository {
@@ -172,6 +190,7 @@ class FileAdminServiceTest {
         private String storedFilename;
         private byte[] bytes = new byte[0];
         private String deletedKey;
+        private IOException deleteFailure;
 
         @Override
         public StoredFile store(String originalFilename, InputStream inputStream) throws IOException {
@@ -186,21 +205,27 @@ class FileAdminServiceTest {
         }
 
         @Override
-        public void delete(String key) {
+        public void delete(String key) throws IOException {
             this.deletedKey = key;
+            if (deleteFailure != null) {
+                throw deleteFailure;
+            }
         }
     }
 
     private static class FakeAuditService extends AdminAuditService {
         private final List<String> actions = new ArrayList<>();
+        private Map<String, Object> params;
 
         private FakeAuditService() {
             super(null, null);
         }
 
         @Override
+        @SuppressWarnings("unchecked")
         public void success(HttpServletRequest request, String module, String action, String operationType, Object params) {
             actions.add(action);
+            this.params = (Map<String, Object>) params;
         }
     }
 
