@@ -3,12 +3,14 @@ package com.framework.admin.notify;
 import com.framework.admin.audit.AdminAuditService;
 import com.framework.auth.context.UserContextHolder;
 import com.framework.core.result.PageResult;
+import com.framework.core.result.ResultCode;
 import com.framework.core.trace.TraceContext;
 import com.framework.notify.model.NotifyChannelType;
 import com.framework.notify.model.NotifyMessage;
 import com.framework.notify.model.NotifyResult;
 import com.framework.notify.service.NotifyService;
 import jakarta.servlet.http.HttpServletRequest;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
@@ -16,9 +18,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 
+@Slf4j
 @Service
 public class NotifyAdminService {
 
@@ -40,84 +42,133 @@ public class NotifyAdminService {
     }
 
     public Map<String, Long> stats() {
-        Map<String, Long> stats = new LinkedHashMap<>();
-        stats.put("enabledTemplates", repository.countTemplatesByStatus("ENABLED"));
-        stats.put("disabledTemplates", repository.countTemplatesByStatus("DISABLED"));
-        stats.put("successRecords", repository.countRecordsBySuccess(true));
-        stats.put("failedRecords", repository.countRecordsBySuccess(false));
-        return stats;
+        try {
+            Map<String, Long> stats = new LinkedHashMap<>();
+            stats.put("enabledTemplates", repository.countTemplatesByStatus("ENABLED"));
+            stats.put("disabledTemplates", repository.countTemplatesByStatus("DISABLED"));
+            stats.put("successRecords", repository.countRecordsBySuccess(true));
+            stats.put("failedRecords", repository.countRecordsBySuccess(false));
+            return stats;
+        } catch (RuntimeException e) {
+            log.warn("[通知中心] 统计查询失败 error={}", e.getMessage());
+            return emptyStats();
+        }
     }
 
     public PageResult<NotifyAdminModels.Template> templates(String keyword, String channel, String status,
                                                            int pageNum, int pageSize) {
         int safePageNum = safePageNum(pageNum);
         int safePageSize = safePageSize(pageSize);
-        List<NotifyAdminModels.Template> records = repository.listTemplates(
-                keyword, channel, status, safePageNum, safePageSize);
-        long total = repository.countTemplates(keyword, channel, status);
-        return PageResult.of(records, total, safePageNum, safePageSize);
-    }
-
-    public Long createTemplate(NotifyAdminModels.TemplateRequest request, HttpServletRequest servletRequest) {
-        validateTemplate(request);
-        Long id = repository.createTemplate(request);
-        auditService.success(servletRequest, "通知中心", "新增通知模板", "CREATE",
-                auditService.params("id", id, "templateCode", request.getTemplateCode(), "channel", request.getChannel()));
-        return id;
-    }
-
-    public boolean updateTemplate(Long id, NotifyAdminModels.TemplateRequest request, HttpServletRequest servletRequest) {
-        validateTemplate(request);
-        if (repository.findTemplate(id).isEmpty()) {
-            return false;
+        try {
+            List<NotifyAdminModels.Template> records = repository.listTemplates(
+                    keyword, channel, status, safePageNum, safePageSize);
+            long total = repository.countTemplates(keyword, channel, status);
+            return PageResult.of(records, total, safePageNum, safePageSize);
+        } catch (RuntimeException e) {
+            log.warn("[通知中心] 模板列表查询失败 error={}", e.getMessage());
+            return PageResult.empty(safePageNum, safePageSize);
         }
-        repository.updateTemplate(id, request);
-        auditService.success(servletRequest, "通知中心", "更新通知模板", "UPDATE",
-                auditService.params("id", id, "templateCode", request.getTemplateCode(), "channel", request.getChannel()));
-        return true;
     }
 
-    public void deleteTemplate(Long id, HttpServletRequest servletRequest) {
-        repository.deleteTemplate(id);
-        auditService.success(servletRequest, "通知中心", "删除通知模板", "DELETE",
-                auditService.params("id", id));
+    public ActionResult<Long> createTemplate(NotifyAdminModels.TemplateRequest request, HttpServletRequest servletRequest) {
+        try {
+            validateTemplate(request);
+            Long id = repository.createTemplate(request);
+            auditService.success(servletRequest, "通知中心", "新增通知模板", "CREATE",
+                    auditService.params("id", id, "templateCode", request.getTemplateCode(), "channel", request.getChannel()));
+            return ActionResult.success(id);
+        } catch (IllegalArgumentException e) {
+            return ActionResult.fail(ResultCode.PARAM_ERROR, e.getMessage());
+        } catch (RuntimeException e) {
+            log.warn("[通知中心] 新增通知模板失败 error={}", e.getMessage());
+            return ActionResult.fail(ResultCode.SERVICE_ERROR, "通知模板保存失败");
+        }
     }
 
-    public Optional<NotifyAdminModels.Record> sendTest(Long id,
-                                                       NotifyAdminModels.SendRequest request,
-                                                       HttpServletRequest servletRequest) {
-        NotifyAdminModels.Template template = repository.findTemplate(id).orElse(null);
+    public ActionResult<String> updateTemplate(Long id, NotifyAdminModels.TemplateRequest request,
+                                               HttpServletRequest servletRequest) {
+        try {
+            validateTemplate(request);
+            if (repository.findTemplate(id).isEmpty()) {
+                return ActionResult.fail(ResultCode.NOT_FOUND, "模板不存在");
+            }
+            repository.updateTemplate(id, request);
+            auditService.success(servletRequest, "通知中心", "更新通知模板", "UPDATE",
+                    auditService.params("id", id, "templateCode", request.getTemplateCode(), "channel", request.getChannel()));
+            return ActionResult.success("已更新");
+        } catch (IllegalArgumentException e) {
+            return ActionResult.fail(ResultCode.PARAM_ERROR, e.getMessage());
+        } catch (RuntimeException e) {
+            log.warn("[通知中心] 更新通知模板失败 id={}, error={}", id, e.getMessage());
+            return ActionResult.fail(ResultCode.SERVICE_ERROR, "通知模板更新失败");
+        }
+    }
+
+    public ActionResult<String> deleteTemplate(Long id, HttpServletRequest servletRequest) {
+        try {
+            repository.deleteTemplate(id);
+            auditService.success(servletRequest, "通知中心", "删除通知模板", "DELETE",
+                    auditService.params("id", id));
+            return ActionResult.success("已删除");
+        } catch (RuntimeException e) {
+            log.warn("[通知中心] 删除通知模板失败 id={}, error={}", id, e.getMessage());
+            return ActionResult.fail(ResultCode.SERVICE_ERROR, "通知模板删除失败");
+        }
+    }
+
+    public ActionResult<NotifyAdminModels.Record> sendTest(Long id,
+                                                           NotifyAdminModels.SendRequest request,
+                                                           HttpServletRequest servletRequest) {
+        NotifyAdminModels.Template template;
+        try {
+            template = repository.findTemplate(id).orElse(null);
+        } catch (RuntimeException e) {
+            log.warn("[通知中心] 测试发送查询模板失败 id={}, error={}", id, e.getMessage());
+            return ActionResult.fail(ResultCode.SERVICE_ERROR, "通知模板查询失败");
+        }
         if (template == null) {
-            return Optional.empty();
+            return ActionResult.fail(ResultCode.NOT_FOUND, "模板不存在");
         }
-        String renderedContent = render(template.getContent(), request);
-        NotifyResult result = "ENABLED".equalsIgnoreCase(template.getStatus())
-                ? send(template, request, renderedContent)
-                : NotifyResult.failure(channel(template.getChannel()), "模板已禁用");
-        NotifyAdminModels.Record record = new NotifyAdminModels.Record()
-                .setTemplateCode(template.getTemplateCode())
-                .setChannel(template.getChannel())
-                .setTitle(template.getTitle())
-                .setContent(renderedContent)
-                .setReceivers(resolveReceivers(template, request))
-                .setWebhookUrl(resolveWebhookUrl(template, request))
-                .setSuccess(result.isSuccess())
-                .setResultMessage(result.getMessage())
-                .setTraceId(TraceContext.ensureTraceId())
-                .setOperatorName(UserContextHolder.getUsername());
-        Long recordId = repository.createRecord(record);
-        record.setId(recordId);
-        auditService.success(servletRequest, "通知中心", "发送测试通知", "CREATE",
-                auditService.params("templateId", id, "recordId", recordId, "success", record.getSuccess()));
-        return Optional.of(record);
+        try {
+            String renderedContent = render(template.getContent(), request);
+            NotifyResult result = "ENABLED".equalsIgnoreCase(template.getStatus())
+                    ? send(template, request, renderedContent)
+                    : NotifyResult.failure(channel(template.getChannel()), "模板已禁用");
+            NotifyAdminModels.Record record = new NotifyAdminModels.Record()
+                    .setTemplateCode(template.getTemplateCode())
+                    .setChannel(template.getChannel())
+                    .setTitle(template.getTitle())
+                    .setContent(renderedContent)
+                    .setReceivers(resolveReceivers(template, request))
+                    .setWebhookUrl(resolveWebhookUrl(template, request))
+                    .setSuccess(result.isSuccess())
+                    .setResultMessage(result.getMessage())
+                    .setTraceId(TraceContext.ensureTraceId())
+                    .setOperatorName(UserContextHolder.getUsername());
+            Long recordId = repository.createRecord(record);
+            record.setId(recordId);
+            auditService.success(servletRequest, "通知中心", "发送测试通知", "CREATE",
+                    auditService.params("templateId", id, "recordId", recordId, "success", record.getSuccess()));
+            return ActionResult.success(record);
+        } catch (IllegalArgumentException e) {
+            return ActionResult.fail(ResultCode.PARAM_ERROR, e.getMessage());
+        } catch (RuntimeException e) {
+            log.warn("[通知中心] 测试发送失败 templateId={}, error={}", id, e.getMessage());
+            return ActionResult.fail(ResultCode.SERVICE_ERROR, "通知测试发送失败");
+        }
     }
 
     public PageResult<NotifyAdminModels.Record> records(String channel, Boolean success, int pageNum, int pageSize) {
         int safePageNum = safePageNum(pageNum);
         int safePageSize = safePageSize(pageSize);
-        List<NotifyAdminModels.Record> records = repository.listRecords(channel, success, safePageNum, safePageSize);
-        long total = repository.countRecords(channel, success);
-        return PageResult.of(records, total, safePageNum, safePageSize);
+        try {
+            List<NotifyAdminModels.Record> records = repository.listRecords(channel, success, safePageNum, safePageSize);
+            long total = repository.countRecords(channel, success);
+            return PageResult.of(records, total, safePageNum, safePageSize);
+        } catch (RuntimeException e) {
+            log.warn("[通知中心] 发送记录查询失败 error={}", e.getMessage());
+            return PageResult.empty(safePageNum, safePageSize);
+        }
     }
 
     private NotifyResult send(NotifyAdminModels.Template template,
@@ -221,14 +272,35 @@ public class NotifyAdminService {
         return value != null && !value.isBlank();
     }
 
+    private Map<String, Long> emptyStats() {
+        Map<String, Long> stats = new LinkedHashMap<>();
+        stats.put("enabledTemplates", 0L);
+        stats.put("disabledTemplates", 0L);
+        stats.put("successRecords", 0L);
+        stats.put("failedRecords", 0L);
+        return stats;
+    }
+
     private <T> T available(ObjectProvider<T> provider) {
         if (provider == null) {
             return null;
         }
         try {
             return provider.getIfAvailable();
-        } catch (RuntimeException ignored) {
+        } catch (RuntimeException e) {
+            log.warn("[通知中心] 获取通知发送服务失败 error={}", e.getMessage());
             return null;
+        }
+    }
+
+    public record ActionResult<T>(boolean success, int code, String message, T data) {
+
+        public static <T> ActionResult<T> success(T data) {
+            return new ActionResult<>(true, ResultCode.SUCCESS.getCode(), ResultCode.SUCCESS.getMessage(), data);
+        }
+
+        public static <T> ActionResult<T> fail(ResultCode code, String message) {
+            return new ActionResult<>(false, code.getCode(), message, null);
         }
     }
 }

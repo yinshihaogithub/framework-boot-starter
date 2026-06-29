@@ -2,7 +2,6 @@ package com.framework.admin.notify;
 
 import com.framework.core.result.PageResult;
 import com.framework.core.result.Result;
-import com.framework.core.result.ResultCode;
 import com.framework.security.annotation.RequirePermission;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -52,7 +51,7 @@ public class NotifyAdminController {
     @RequirePermission("notify:template:create")
     public Result<Long> createTemplate(@RequestBody NotifyAdminModels.TemplateRequest request,
                                        HttpServletRequest servletRequest) {
-        return Result.success(notifyAdminService.createTemplate(request, servletRequest));
+        return toResult(notifyAdminService.createTemplate(request, servletRequest));
     }
 
     @Operation(summary = "更新通知模板")
@@ -61,17 +60,14 @@ public class NotifyAdminController {
     public Result<String> updateTemplate(@PathVariable Long id,
                                          @RequestBody NotifyAdminModels.TemplateRequest request,
                                          HttpServletRequest servletRequest) {
-        return notifyAdminService.updateTemplate(id, request, servletRequest)
-                ? Result.success("已更新")
-                : Result.fail(ResultCode.NOT_FOUND.getCode(), "模板不存在");
+        return toResult(notifyAdminService.updateTemplate(id, request, servletRequest));
     }
 
     @Operation(summary = "删除通知模板")
     @DeleteMapping("/templates/{id}")
     @RequirePermission("notify:template:delete")
     public Result<String> deleteTemplate(@PathVariable Long id, HttpServletRequest servletRequest) {
-        notifyAdminService.deleteTemplate(id, servletRequest);
-        return Result.success("已删除");
+        return toResult(notifyAdminService.deleteTemplate(id, servletRequest));
     }
 
     @Operation(summary = "发送测试通知")
@@ -80,9 +76,7 @@ public class NotifyAdminController {
     public Result<NotifyAdminModels.Record> sendTest(@PathVariable Long id,
                                                      @RequestBody(required = false) NotifyAdminModels.SendRequest request,
                                                      HttpServletRequest servletRequest) {
-        return notifyAdminService.sendTest(id, request, servletRequest)
-                .map(Result::success)
-                .orElseGet(() -> Result.fail(ResultCode.NOT_FOUND.getCode(), "模板不存在"));
+        return toResult(notifyAdminService.sendTest(id, request, servletRequest));
     }
 
     @Operation(summary = "通知发送记录")
@@ -92,5 +86,9 @@ public class NotifyAdminController {
                                                                 @RequestParam(defaultValue = "1") int pageNum,
                                                                 @RequestParam(defaultValue = "20") int pageSize) {
         return Result.success(notifyAdminService.records(channel, success, pageNum, pageSize));
+    }
+
+    private <T> Result<T> toResult(NotifyAdminService.ActionResult<T> result) {
+        return result.success() ? Result.success(result.data()) : Result.fail(result.code(), result.message());
     }
 }
