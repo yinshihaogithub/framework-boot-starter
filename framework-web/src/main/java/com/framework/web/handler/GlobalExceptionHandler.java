@@ -21,6 +21,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.servlet.NoHandlerFoundException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.stream.Collectors;
 
@@ -112,6 +113,15 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.NOT_FOUND)
     public Result<Void> handleNotFound(NoHandlerFoundException e) {
         return Result.fail(ResultCode.NOT_FOUND.getCode(), "接口不存在: " + e.getRequestURL());
+    }
+
+    /**
+     * Spring Boot 3 默认把未匹配路径作为资源查找失败抛出。
+     */
+    @ExceptionHandler(NoResourceFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public Result<Void> handleNoResourceFound(NoResourceFoundException e) {
+        return Result.fail(ResultCode.NOT_FOUND.getCode(), "接口不存在: " + e.getResourcePath());
     }
 
     /**
