@@ -81,9 +81,10 @@ public class RetryAspect {
             }
         }
 
+        String fallbackName = annotation.fallback().trim();
         // 重试耗尽，尝试回调
-        if (StringUtils.hasText(annotation.fallback())) {
-            return invokeFallback(joinPoint, method, annotation.fallback(), lastException);
+        if (StringUtils.hasText(fallbackName)) {
+            return invokeFallback(joinPoint, method, fallbackName, lastException);
         }
 
         throw lastException;

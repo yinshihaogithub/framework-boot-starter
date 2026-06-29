@@ -46,6 +46,28 @@ class RetryAspectTest {
     }
 
     @Test
+    void trimsFallbackNameBeforeLookup() {
+        RetryService target = new RetryService();
+        RetryService service = proxy(target);
+
+        assertThat(service.withTrimmedFallback("B-1")).isEqualTo("fallback:B-1");
+
+        assertThat(target.trimmedFallbackSourceAttempts).hasValue(1);
+        assertThat(target.fallbackAttempts).hasValue(1);
+    }
+
+    @Test
+    void blankFallbackIsTreatedAsNoFallback() {
+        RetryService target = new RetryService();
+        RetryService service = proxy(target);
+
+        assertThatThrownBy(service::withBlankFallback)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("downstream unavailable");
+        assertThat(target.blankFallbackSourceAttempts).hasValue(1);
+    }
+
+    @Test
     void rejectsInvalidConfigurationBeforeProceeding() {
         RetryService target = new RetryService();
         RetryService service = proxy(target);
@@ -83,6 +105,8 @@ class RetryAspectTest {
         private final AtomicInteger nonRetryableAttempts = new AtomicInteger();
         private final AtomicInteger fallbackSourceAttempts = new AtomicInteger();
         private final AtomicInteger fallbackAttempts = new AtomicInteger();
+        private final AtomicInteger trimmedFallbackSourceAttempts = new AtomicInteger();
+        private final AtomicInteger blankFallbackSourceAttempts = new AtomicInteger();
         private final AtomicInteger invalidAttempts = new AtomicInteger();
         private final AtomicInteger invalidMaxIntervalAttempts = new AtomicInteger();
         private final AtomicInteger invalidMultiplierAttempts = new AtomicInteger();
@@ -113,6 +137,18 @@ class RetryAspectTest {
         public String fallback(String businessKey) {
             fallbackAttempts.incrementAndGet();
             return "fallback:" + businessKey;
+        }
+
+        @Retry(maxAttempts = 0, initialInterval = 0, fallback = " fallback ")
+        public String withTrimmedFallback(String businessKey) {
+            trimmedFallbackSourceAttempts.incrementAndGet();
+            throw new IllegalStateException("downstream unavailable");
+        }
+
+        @Retry(maxAttempts = 0, initialInterval = 0, fallback = " ")
+        public String withBlankFallback() {
+            blankFallbackSourceAttempts.incrementAndGet();
+            throw new IllegalStateException("downstream unavailable");
         }
 
         @Retry(maxAttempts = -1)
