@@ -111,7 +111,7 @@ public class MqAdminController {
     }
 
     private <T> Result<T> toResult(MqAdminService.ActionResult<T> result) {
-        return result.success() ? Result.success(result.data()) : Result.fail(result.message());
+        return result.success() ? Result.success(result.data()) : Result.fail(result.code(), result.message());
     }
 
     @Data

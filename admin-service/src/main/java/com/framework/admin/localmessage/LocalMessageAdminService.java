@@ -2,6 +2,7 @@ package com.framework.admin.localmessage;
 
 import com.framework.admin.audit.AdminAuditService;
 import com.framework.core.result.PageResult;
+import com.framework.core.result.ResultCode;
 import com.framework.localmessage.model.LocalMessage;
 import com.framework.localmessage.model.LocalMessageStatus;
 import com.framework.localmessage.repository.LocalMessageRepository;
@@ -81,18 +82,18 @@ public class LocalMessageAdminService {
     public ActionResult<LocalMessageVO> detail(Long id) {
         LocalMessageService service = localMessageServiceProvider.getIfAvailable();
         if (service == null) {
-            return ActionResult.fail("本地消息服务未启用");
+            return ActionResult.fail(ResultCode.SERVICE_ERROR, "本地消息服务未启用");
         }
         return service.findById(id)
                 .map(LocalMessageVO::from)
                 .map(ActionResult::success)
-                .orElseGet(() -> ActionResult.fail("消息不存在"));
+                .orElseGet(() -> ActionResult.fail(ResultCode.NOT_FOUND, "消息不存在"));
     }
 
     public ActionResult<Integer> retryDueMessages(HttpServletRequest servletRequest) {
         LocalMessageService service = localMessageServiceProvider.getIfAvailable();
         if (service == null) {
-            return ActionResult.fail("本地消息服务未启用");
+            return ActionResult.fail(ResultCode.SERVICE_ERROR, "本地消息服务未启用");
         }
         int count = service.retryDueMessages();
         auditService.success(servletRequest, "本地消息", "扫描并重试到期本地消息", "UPDATE",
@@ -103,11 +104,11 @@ public class LocalMessageAdminService {
     public ActionResult<String> markSuccess(Long id, HttpServletRequest servletRequest) {
         LocalMessageRepository repository = repositoryProvider.getIfAvailable();
         if (repository == null) {
-            return ActionResult.fail("本地消息仓储未启用");
+            return ActionResult.fail(ResultCode.SERVICE_ERROR, "本地消息仓储未启用");
         }
         LocalMessage message = repository.findById(id).orElse(null);
         if (message == null) {
-            return ActionResult.fail("消息不存在");
+            return ActionResult.fail(ResultCode.NOT_FOUND, "消息不存在");
         }
         message.setStatus(LocalMessageStatus.SUCCESS);
         message.setErrorMessage(null);
@@ -121,11 +122,11 @@ public class LocalMessageAdminService {
     public ActionResult<String> markFailure(Long id, String reason, HttpServletRequest servletRequest) {
         LocalMessageRepository repository = repositoryProvider.getIfAvailable();
         if (repository == null) {
-            return ActionResult.fail("本地消息仓储未启用");
+            return ActionResult.fail(ResultCode.SERVICE_ERROR, "本地消息仓储未启用");
         }
         LocalMessage message = repository.findById(id).orElse(null);
         if (message == null) {
-            return ActionResult.fail("消息不存在");
+            return ActionResult.fail(ResultCode.NOT_FOUND, "消息不存在");
         }
         String safeReason = isBlank(reason) ? "manual terminate" : reason;
         message.setStatus(LocalMessageStatus.FAILED);
@@ -141,7 +142,7 @@ public class LocalMessageAdminService {
     public ActionResult<String> delete(Long id, HttpServletRequest servletRequest) {
         LocalMessageRepository repository = repositoryProvider.getIfAvailable();
         if (repository == null) {
-            return ActionResult.fail("本地消息仓储未启用");
+            return ActionResult.fail(ResultCode.SERVICE_ERROR, "本地消息仓储未启用");
         }
         repository.delete(id);
         auditService.success(servletRequest, "本地消息", "删除本地消息", "DELETE",
@@ -168,13 +169,13 @@ public class LocalMessageAdminService {
         return value == null || value.isBlank();
     }
 
-    public record ActionResult<T>(boolean success, String message, T data) {
+    public record ActionResult<T>(boolean success, int code, String message, T data) {
         public static <T> ActionResult<T> success(T data) {
-            return new ActionResult<>(true, null, data);
+            return new ActionResult<>(true, ResultCode.SUCCESS.getCode(), null, data);
         }
 
-        public static <T> ActionResult<T> fail(String message) {
-            return new ActionResult<>(false, message, null);
+        public static <T> ActionResult<T> fail(ResultCode code, String message) {
+            return new ActionResult<>(false, code.getCode(), message, null);
         }
     }
 }

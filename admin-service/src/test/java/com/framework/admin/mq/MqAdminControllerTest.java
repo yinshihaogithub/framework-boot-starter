@@ -3,6 +3,7 @@ package com.framework.admin.mq;
 import com.framework.admin.audit.AdminAuditService;
 import com.framework.core.result.PageResult;
 import com.framework.core.result.Result;
+import com.framework.core.result.ResultCode;
 import com.framework.mq.config.MqProperties;
 import com.framework.mq.deadletter.DeadLetterHandler;
 import com.framework.mq.deadletter.MqAdminDTO;
@@ -105,7 +106,32 @@ class MqAdminControllerTest {
         Result<String> result = controller.retryOne(1L, "admin", null, null);
 
         assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getCode()).isEqualTo(ResultCode.SERVICE_ERROR.getCode());
         assertThat(result.getMessage()).isEqualTo("未接入可用 MQ 发送器，无法重发消息");
+    }
+
+    @Test
+    void batchRetryRequiresMessageIds() {
+        MqAdminController controller = controller(null, new MqProperties(), null);
+
+        Result<MqAdminDTO.ManualRetryResult> result = controller.batchRetry(new MqAdminDTO.ManualRetryRequest(), null);
+
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getCode()).isEqualTo(ResultCode.PARAM_ERROR.getCode());
+        assertThat(result.getMessage()).isEqualTo("请选择要重发的消息");
+    }
+
+    @Test
+    void detailReportsNotFoundWhenFailedMessageDoesNotExist() {
+        DeadLetterHandler handler = new DeadLetterHandler(
+                new InMemoryMqFailedMessageRepository(List.of()), new MqProperties());
+        MqAdminController controller = controller(handler, new MqProperties(), null);
+
+        Result<MqAdminDTO.MqFailedMessageVO> result = controller.getFailedMessage(404L);
+
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getCode()).isEqualTo(ResultCode.NOT_FOUND.getCode());
+        assertThat(result.getMessage()).isEqualTo("消息不存在");
     }
 
     private static MqAdminController controller(DeadLetterHandler handler,

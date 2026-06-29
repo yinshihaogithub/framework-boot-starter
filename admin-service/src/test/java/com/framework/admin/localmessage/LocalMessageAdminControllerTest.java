@@ -3,6 +3,7 @@ package com.framework.admin.localmessage;
 import com.framework.admin.audit.AdminAuditService;
 import com.framework.core.result.PageResult;
 import com.framework.core.result.Result;
+import com.framework.core.result.ResultCode;
 import com.framework.localmessage.model.LocalMessage;
 import com.framework.localmessage.model.LocalMessageStatus;
 import com.framework.localmessage.repository.LocalMessageRepository;
@@ -71,7 +72,19 @@ class LocalMessageAdminControllerTest {
         Result<String> result = controller.markSuccess(404L, null);
 
         assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getCode()).isEqualTo(ResultCode.NOT_FOUND.getCode());
         assertThat(result.getMessage()).isEqualTo("消息不存在");
+    }
+
+    @Test
+    void detailReportsServiceUnavailableWhenLocalMessageServiceIsMissing() {
+        LocalMessageAdminController controller = disabledController();
+
+        Result<LocalMessageVO> result = controller.detail(1L);
+
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getCode()).isEqualTo(ResultCode.SERVICE_ERROR.getCode());
+        assertThat(result.getMessage()).isEqualTo("本地消息服务未启用");
     }
 
     @Test
@@ -103,6 +116,14 @@ class LocalMessageAdminControllerTest {
         LocalMessageAdminService service = new LocalMessageAdminService(
                 provider(localMessageService(repository)),
                 provider(repository),
+                auditService());
+        return new LocalMessageAdminController(service);
+    }
+
+    private static LocalMessageAdminController disabledController() {
+        LocalMessageAdminService service = new LocalMessageAdminService(
+                provider(null),
+                provider(null),
                 auditService());
         return new LocalMessageAdminController(service);
     }
