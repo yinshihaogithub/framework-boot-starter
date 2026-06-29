@@ -147,6 +147,15 @@ export interface LoginLog {
   createTime?: string
 }
 
+export interface OnlineSession {
+  userId: number
+  username?: string
+  tenantId?: string
+  deviceId: string
+  loginTime: number
+  ttlSeconds: number
+}
+
 export interface MenuItem {
   id: number
   parentId: number
@@ -450,6 +459,9 @@ export const api = {
   deleteLocalMessage: (id: number) => deleteData<string>(`/admin/local-messages/${id}`),
   logs: (params: Record<string, unknown>) => getData<PageResult<OperationLog>>('/admin/logs', params),
   loginLogs: (params: Record<string, unknown>) => getData<PageResult<LoginLog>>('/admin/logs/login', params),
+  sessions: () => getData<OnlineSession[]>('/admin/sessions'),
+  kickSession: (userId: number, deviceId: string) =>
+    deleteData<string>(`/admin/sessions/${userId}/${encodeURIComponent(deviceId)}`),
   traceLogs: (traceId: string) => getData<PageResult<OperationLog>>(`/admin/logs/traces/${traceId}`),
   traceDetail: (traceId: string) => getData<TraceDetail>(`/admin/traces/${traceId}`),
   monitorHealth: () => getData<HealthStatus>('/admin/monitor/health'),

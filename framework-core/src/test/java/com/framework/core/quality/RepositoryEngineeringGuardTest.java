@@ -491,6 +491,51 @@ class RepositoryEngineeringGuardTest {
     }
 
     @Test
+    void adminOnlineSessionManagementIsExposedEndToEnd() throws Exception {
+        String sessionManager = read(root.resolve(
+                "framework-auth/src/main/java/com/framework/auth/service/SessionManager.java"));
+        String controller = read(root.resolve(
+                "admin-service/src/main/java/com/framework/admin/session/AdminSessionController.java"));
+        String service = read(root.resolve(
+                "admin-service/src/main/java/com/framework/admin/session/AdminSessionService.java"));
+        String client = read(root.resolve("frontend/admin-web/src/api/client.ts"));
+        String app = read(root.resolve("frontend/admin-web/src/App.vue"));
+        String adminServiceScript = read(root.resolve("admin-service/src/main/resources/db/mysql/admin_service.sql"));
+        String aggregateScript = read(root.resolve("sql/mysql/framework_boot_starter_init.sql"));
+
+        assertThat(sessionManager)
+                .contains("public List<OnlineSession> listOnlineSessions()")
+                .contains("redis.getExpire(sessionKey, TimeUnit.SECONDS)")
+                .contains("public record OnlineSession");
+        assertThat(controller)
+                .contains("@RequestMapping(\"/admin/sessions\")")
+                .contains("@RequirePermission(\"session:view\")")
+                .contains("@RequirePermission(\"session:kick\")")
+                .contains("@DeleteMapping(\"/{userId}/{deviceId}\")");
+        assertThat(service)
+                .contains("sessionManager.forceLogout(userId, deviceId)")
+                .contains("auditService.success")
+                .contains("不能强制下线当前会话");
+        assertThat(client)
+                .contains("export interface OnlineSession")
+                .contains("sessions: () => getData<OnlineSession[]>('/admin/sessions')")
+                .contains("kickSession:");
+        assertThat(app)
+                .contains("activeView === 'sessions'")
+                .contains("Sessions: 'sessions'")
+                .contains("session:kick")
+                .contains("loadSessions");
+        assertThat(adminServiceScript)
+                .contains("'在线会话'")
+                .contains("'session:view'")
+                .contains("'session:kick'");
+        assertThat(aggregateScript)
+                .contains("'在线会话'")
+                .contains("'session:view'")
+                .contains("'session:kick'");
+    }
+
+    @Test
     void adminWriteEndpointsUseActionPermissionsInsteadOfViewPermissions() throws Exception {
         Path adminMain = root.resolve("admin-service/src/main/java/com/framework/admin");
         try (Stream<Path> files = Files.walk(adminMain)) {

@@ -235,6 +235,7 @@ VALUES
     (15, 2, 'MENU', '租户管理', 'system/tenants', 'SystemTenants', 'system:tenant:view', 'OfficeBuilding', 21, 1),
     (16, 2, 'MENU', '部门管理', 'system/depts', 'SystemDepts', 'system:dept:view', 'MostlyCloudy', 22, 1),
     (18, 0, 'MENU', '登录日志', 'login-logs', 'LoginLogs', 'log:login:view', 'Document', 31, 1),
+    (19, 0, 'MENU', '在线会话', 'sessions', 'Sessions', 'session:view', 'Monitor', 32, 1),
     (101, 3, 'BUTTON', '新增用户', NULL, NULL, 'system:user:create', NULL, 1, 0),
     (102, 3, 'BUTTON', '重置密码', NULL, NULL, 'system:user:reset-password', NULL, 2, 0),
     (103, 10, 'BUTTON', '消息重试', NULL, NULL, 'mq:retry', NULL, 1, 0),
@@ -262,7 +263,8 @@ VALUES
     (125, 6, 'BUTTON', '删除字典', NULL, NULL, 'system:dict:delete', NULL, 3, 0),
     (126, 7, 'BUTTON', '新增参数', NULL, NULL, 'system:config:create', NULL, 1, 0),
     (127, 7, 'BUTTON', '更新参数', NULL, NULL, 'system:config:update', NULL, 2, 0),
-    (128, 7, 'BUTTON', '删除参数', NULL, NULL, 'system:config:delete', NULL, 3, 0)
+    (128, 7, 'BUTTON', '删除参数', NULL, NULL, 'system:config:delete', NULL, 3, 0),
+    (129, 19, 'BUTTON', '强制下线', NULL, NULL, 'session:kick', NULL, 1, 0)
 ON DUPLICATE KEY UPDATE menu_name = VALUES(menu_name), route_path = VALUES(route_path),
     component = VALUES(component), permission = VALUES(permission), icon = VALUES(icon),
     sort_order = VALUES(sort_order), visible = VALUES(visible);

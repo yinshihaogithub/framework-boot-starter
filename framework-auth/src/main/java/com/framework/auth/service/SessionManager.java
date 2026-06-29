@@ -12,8 +12,9 @@ import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
 import java.util.ArrayList;
-import java.util.List;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -185,19 +186,18 @@ public class SessionManager {
      * 使用 SCAN 遍历 session keys
      */
     public long getOnlineUserCount() {
-        long count = 0;
-        org.springframework.data.redis.core.Cursor<byte[]> cursor = redis.getConnectionFactory()
-                .getConnection().scan(
-                        org.springframework.data.redis.core.ScanOptions.scanOptions()
-                                .match(FrameworkConstants.SESSION_PREFIX + "*")
-                                .count(100)
-                                .build());
-        while (cursor.hasNext()) {
-            cursor.next();
-            count++;
-        }
-        cursor.close();
-        return count;
+        return listOnlineSessions().size();
+    }
+
+    /**
+     * 获取在线会话列表，供管理后台查看与强制下线。
+     */
+    public List<OnlineSession> listOnlineSessions() {
+        return scanKeys(FrameworkConstants.SESSION_PREFIX + "*").stream()
+                .map(this::readOnlineSession)
+                .filter(session -> session.userId() != null && hasText(session.deviceId()))
+                .sorted(Comparator.comparingLong(OnlineSession::loginTime).reversed())
+                .toList();
     }
 
     /**
@@ -287,6 +287,18 @@ public class SessionManager {
         return FrameworkConstants.SESSION_PREFIX + userId + ":" + deviceId;
     }
 
+    private OnlineSession readOnlineSession(String sessionKey) {
+        Map<Object, Object> data = redis.opsForHash().entries(sessionKey);
+        Long ttlSeconds = redis.getExpire(sessionKey, TimeUnit.SECONDS);
+        return new OnlineSession(
+                parseLong(data.get("userId")),
+                asString(data.get("username")),
+                asString(data.get("tenantId")),
+                asString(data.get("deviceId")),
+                parseLongOrDefault(data.get("loginTime"), 0L),
+                ttlSeconds == null ? -1L : ttlSeconds);
+    }
+
     private String writeArray(String[] values) {
         try {
             return OBJECT_MAPPER.writeValueAsString(values != null ? values : new String[0]);
@@ -309,5 +321,29 @@ public class SessionManager {
 
     private String asString(Object value) {
         return value != null ? String.valueOf(value) : null;
+    }
+
+    private Long parseLong(Object value) {
+        if (value == null) {
+            return null;
+        }
+        try {
+            return Long.valueOf(String.valueOf(value));
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private long parseLongOrDefault(Object value, long defaultValue) {
+        Long parsed = parseLong(value);
+        return parsed == null ? defaultValue : parsed;
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.isBlank();
+    }
+
+    public record OnlineSession(Long userId, String username, String tenantId, String deviceId,
+                                long loginTime, long ttlSeconds) {
     }
 }

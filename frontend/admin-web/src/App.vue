@@ -807,6 +807,53 @@
           </el-card>
         </section>
 
+        <section v-if="activeView === 'sessions'" class="view">
+          <el-card shadow="never">
+            <template #header>
+              <div class="section-head">
+                <span>在线会话</span>
+                <div class="actions">
+                  <el-tag size="small">{{ onlineSessions.length }}</el-tag>
+                  <el-button :icon="Refresh" circle @click="loadSessions" />
+                </div>
+              </div>
+            </template>
+            <el-table :data="onlineSessions" height="500" stripe>
+              <el-table-column prop="username" label="用户名" min-width="140" />
+              <el-table-column prop="userId" label="用户ID" width="100" />
+              <el-table-column prop="tenantId" label="租户" width="110" />
+              <el-table-column prop="deviceId" label="设备" min-width="180" show-overflow-tooltip />
+              <el-table-column label="登录时间" min-width="180">
+                <template #default="{ row }">{{ formatLoginTime(row.loginTime) }}</template>
+              </el-table-column>
+              <el-table-column label="剩余有效期" width="130">
+                <template #default="{ row }">{{ formatTtl(row.ttlSeconds) }}</template>
+              </el-table-column>
+              <el-table-column label="当前" width="90">
+                <template #default="{ row }">
+                  <el-tag :type="isCurrentSession(row) ? 'success' : 'info'" size="small">
+                    {{ isCurrentSession(row) ? '是' : '否' }}
+                  </el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column label="操作" width="90" fixed="right">
+                <template #default="{ row }">
+                  <el-tooltip content="强制下线">
+                    <el-button
+                      v-if="can('session:kick')"
+                      :icon="SwitchButton"
+                      circle
+                      size="small"
+                      :disabled="isCurrentSession(row)"
+                      @click="kickSession(row)"
+                    />
+                  </el-tooltip>
+                </template>
+              </el-table-column>
+            </el-table>
+          </el-card>
+        </section>
+
         <section v-if="activeView === 'monitor'" class="view">
           <el-card shadow="never">
             <template #header>
@@ -1124,6 +1171,7 @@ import {
   type MqStats,
   type NotifyRecord,
   type NotifyTemplate,
+  type OnlineSession,
   type OperationLog,
   type PageResult,
   type Role,
@@ -1131,7 +1179,7 @@ import {
   type TraceDetail
 } from './api/client'
 
-type ViewName = 'dashboard' | 'system-tenants' | 'system-depts' | 'system-users' | 'system-roles' | 'system-menus' | 'system-dicts' | 'system-configs' | 'mq' | 'local' | 'notify' | 'excel' | 'logs' | 'login-logs' | 'trace' | 'monitor'
+type ViewName = 'dashboard' | 'system-tenants' | 'system-depts' | 'system-users' | 'system-roles' | 'system-menus' | 'system-dicts' | 'system-configs' | 'mq' | 'local' | 'notify' | 'excel' | 'logs' | 'login-logs' | 'sessions' | 'trace' | 'monitor'
 type NavItem = {
   index: string
   title: string
@@ -1159,6 +1207,7 @@ const viewTitles: Record<ViewName, string> = {
   excel: 'Excel 中心',
   logs: '日志中心',
   'login-logs': '登录日志',
+  sessions: '在线会话',
   trace: '链路追踪',
   monitor: '监控中心'
 }
@@ -1178,6 +1227,7 @@ const componentViewMap: Record<string, ViewName> = {
   Excel: 'excel',
   Logs: 'logs',
   LoginLogs: 'login-logs',
+  Sessions: 'sessions',
   Trace: 'trace',
   Monitor: 'monitor'
 }
@@ -1198,6 +1248,7 @@ const routeViewMap: Record<string, ViewName> = {
   excel: 'excel',
   logs: 'logs',
   'login-logs': 'login-logs',
+  sessions: 'sessions',
   trace: 'trace',
   monitor: 'monitor'
 }
@@ -1242,6 +1293,7 @@ const excelTasks = reactive<PageResult<ExcelTask>>({ records: [], total: 0, page
 const excelErrors = ref<ExcelErrorRecord[]>([])
 const logs = reactive<PageResult<OperationLog>>({ records: [], total: 0, pageNum: 1, pageSize: 20, pages: 0 })
 const loginLogs = reactive<PageResult<LoginLog>>({ records: [], total: 0, pageNum: 1, pageSize: 20, pages: 0 })
+const onlineSessions = ref<OnlineSession[]>([])
 const traceDetail = ref<TraceDetail>()
 const health = ref<HealthStatus>()
 const users = reactive<PageResult<AdminUser>>({ records: [], total: 0, pageNum: 1, pageSize: 20, pages: 0 })
@@ -1422,6 +1474,7 @@ async function refreshCurrent() {
     if (activeView.value === 'excel') await loadExcel()
     if (activeView.value === 'logs') await loadLogs()
     if (activeView.value === 'login-logs') await loadLoginLogs()
+    if (activeView.value === 'sessions') await loadSessions()
     if (activeView.value === 'trace') await loadTrace()
     if (activeView.value === 'monitor') await loadMonitor()
   } catch (error) {
@@ -1531,6 +1584,10 @@ async function loadLoginLogs() {
   }
   const page = await api.loginLogs(params)
   Object.assign(loginLogs, page)
+}
+
+async function loadSessions() {
+  onlineSessions.value = await api.sessions()
 }
 
 async function loadTrace() {
@@ -1727,6 +1784,13 @@ async function deleteUser(row: AdminUser) {
   await api.deleteUser(row.id)
   ElMessage.success('已删除')
   await loadUsers()
+}
+
+async function kickSession(row: OnlineSession) {
+  await confirmAction(`强制下线 ${row.username || row.userId} 的 ${row.deviceId} 会话？`, '强制下线')
+  const message = await api.kickSession(row.userId, row.deviceId)
+  ElMessage.success(message)
+  await loadSessions()
 }
 
 function openCreateRole() {
@@ -2261,6 +2325,10 @@ function flattenDepts(items: Dept[]): Dept[] {
   return items.flatMap((item) => [item, ...flattenDepts(item.children ?? [])])
 }
 
+function isCurrentSession(row: OnlineSession) {
+  return currentUser.value?.userId === row.userId && row.deviceId === 'admin-web'
+}
+
 function menuParentOptions() {
   return [{ id: 0, menuName: '根菜单' }, ...flattenMenus(menus.value)]
 }
@@ -2334,6 +2402,29 @@ function formatRuntime(value: unknown) {
     return `${(value / 1024 / 1024).toFixed(1)} MB`
   }
   return String(value)
+}
+
+function formatLoginTime(value: number) {
+  if (!value) {
+    return '-'
+  }
+  return new Date(value).toLocaleString()
+}
+
+function formatTtl(value: number) {
+  if (value < 0) {
+    return '-'
+  }
+  const hours = Math.floor(value / 3600)
+  const minutes = Math.floor((value % 3600) / 60)
+  const seconds = value % 60
+  if (hours > 0) {
+    return `${hours}h ${minutes}m`
+  }
+  if (minutes > 0) {
+    return `${minutes}m ${seconds}s`
+  }
+  return `${seconds}s`
 }
 
 function formatHealthDetails(details?: Record<string, unknown>) {

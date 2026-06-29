@@ -103,10 +103,34 @@ class SessionManagerTest {
         assertThat(sessionManager.validateAccessToken(bob.getAccessToken())).isFalse();
     }
 
+    @Test
+    void listOnlineSessionsReturnsSessionMetadataSortedByLoginTime() throws Exception {
+        sessionManager.createSession(1L, "alice", "tenant-a", "web",
+                new String[]{"ADMIN"}, new String[]{"user:view"});
+        Thread.sleep(2L);
+        sessionManager.createSession(2L, "bob", "tenant-b", "mobile",
+                new String[]{"USER"}, new String[]{"profile:view"});
+
+        List<SessionManager.OnlineSession> sessions = sessionManager.listOnlineSessions();
+
+        assertThat(sessionManager.getOnlineUserCount()).isEqualTo(2);
+        assertThat(sessions)
+                .extracting(SessionManager.OnlineSession::userId,
+                        SessionManager.OnlineSession::username,
+                        SessionManager.OnlineSession::tenantId,
+                        SessionManager.OnlineSession::deviceId,
+                        SessionManager.OnlineSession::ttlSeconds)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple(2L, "bob", "tenant-b", "mobile", 3600L),
+                        org.assertj.core.groups.Tuple.tuple(1L, "alice", "tenant-a", "web", 3600L));
+        assertThat(sessions.get(0).loginTime()).isGreaterThanOrEqualTo(sessions.get(1).loginTime());
+    }
+
     private static final class InMemoryRedisTemplate extends StringRedisTemplate {
 
         private final Map<String, String> values = new ConcurrentHashMap<>();
         private final Map<String, Map<Object, Object>> hashes = new ConcurrentHashMap<>();
+        private final Map<String, Long> ttlSeconds = new ConcurrentHashMap<>();
 
         @Override
         public Boolean hasKey(String key) {
@@ -115,13 +139,27 @@ class SessionManagerTest {
 
         @Override
         public Boolean expire(String key, long timeout, TimeUnit unit) {
-            return hasKey(key);
+            if (!Boolean.TRUE.equals(hasKey(key))) {
+                return false;
+            }
+            ttlSeconds.put(key, unit.toSeconds(timeout));
+            return true;
+        }
+
+        @Override
+        public Long getExpire(String key, TimeUnit timeUnit) {
+            Long seconds = ttlSeconds.get(key);
+            if (seconds == null) {
+                return -1L;
+            }
+            return timeUnit.convert(seconds, TimeUnit.SECONDS);
         }
 
         @Override
         public Boolean delete(String key) {
             boolean removedValue = values.remove(key) != null;
             boolean removedHash = hashes.remove(key) != null;
+            ttlSeconds.remove(key);
             return removedValue || removedHash;
         }
 
