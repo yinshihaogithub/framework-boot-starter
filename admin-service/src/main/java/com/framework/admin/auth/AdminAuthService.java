@@ -29,6 +29,11 @@ import java.util.List;
 @Service
 public class AdminAuthService {
 
+    private static final int USERNAME_MAX_LENGTH = 64;
+    private static final int DEVICE_ID_MAX_LENGTH = 64;
+    private static final int CLIENT_IP_MAX_LENGTH = 64;
+    private static final String DEFAULT_DEVICE_ID = "admin-web";
+
     private final AdminSystemRepository systemRepository;
     private final SessionManager sessionManager;
     private final ObjectProvider<LoginSecurityService> loginSecurityServiceProvider;
@@ -56,6 +61,14 @@ public class AdminAuthService {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), "用户名和密码不能为空");
         }
         String username = request.getUsername().trim();
+        if (username.length() > USERNAME_MAX_LENGTH) {
+            return Result.fail(ResultCode.PARAM_ERROR.getCode(), "用户名长度不能超过64个字符");
+        }
+        String deviceId = normalizeDeviceId(request.getDeviceId());
+        if (deviceId == null) {
+            return Result.fail(ResultCode.PARAM_ERROR.getCode(), "设备标识长度不能超过64个字符");
+        }
+        String safeClientIp = truncate(clientIp, CLIENT_IP_MAX_LENGTH);
         LoginSecurityService loginSecurity = loginSecurityService();
         try {
             if (loginSecurity != null) {
@@ -66,30 +79,29 @@ public class AdminAuthService {
                     || !PasswordUtils.verify(request.getPassword(), user.getPasswordHash())) {
                 recordLoginFailure(loginSecurity, username);
                 insertLoginLog(username, user == null ? null : user.getId(),
-                        clientIp, false, "账号或密码错误");
+                        safeClientIp, false, "账号或密码错误");
                 return Result.fail(ResultCode.LOGIN_FAIL);
             }
             clearLoginFailure(loginSecurity, username);
-            String deviceId = isBlank(request.getDeviceId()) ? "admin-web" : request.getDeviceId().trim();
             LoginUser loginUser = sessionManager.createSession(
                     user.getId(),
                     user.getUsername(),
                     String.valueOf(user.getTenantId()),
                     deviceId,
-                    user.getRoles().toArray(String[]::new),
-                    user.getPermissions().toArray(String[]::new));
+                    safeList(user.getRoles()).toArray(String[]::new),
+                    safeList(user.getPermissions()).toArray(String[]::new));
             updateLastLogin(user.getId());
-            List<Menu> menus = systemRepository.listMenusByUserId(user.getId());
-            insertLoginLog(username, user.getId(), clientIp, true, "登录成功");
+            List<Menu> menus = safeList(systemRepository.listMenusByUserId(user.getId()));
+            insertLoginLog(username, user.getId(), safeClientIp, true, "登录成功");
             return Result.success(new AdminAuthController.LoginResponse()
                     .setAccessToken(loginUser.getAccessToken())
                     .setUser(toCurrentUser(user))
                     .setMenus(menus));
         } catch (BusinessException e) {
-            insertLoginLog(username, null, clientIp, false, e.getMessage());
+            insertLoginLog(username, null, safeClientIp, false, e.getMessage());
             return Result.fail(e.getCode(), e.getMessage());
         } catch (RuntimeException e) {
-            insertLoginLog(username, null, clientIp, false, "登录服务暂不可用");
+            insertLoginLog(username, null, safeClientIp, false, "登录服务暂不可用");
             return serviceError("登录", "登录服务暂不可用", e);
         }
     }
@@ -237,11 +249,30 @@ public class AdminAuthService {
                 .setUsername(user.getUsername())
                 .setNickname(user.getNickname())
                 .setTenantId(user.getTenantId())
-                .setRoles(user.getRoles())
-                .setPermissions(user.getPermissions());
+                .setRoles(safeList(user.getRoles()))
+                .setPermissions(safeList(user.getPermissions()));
     }
 
     private boolean isBlank(String value) {
         return value == null || value.isBlank();
+    }
+
+    private String normalizeDeviceId(String deviceId) {
+        if (isBlank(deviceId)) {
+            return DEFAULT_DEVICE_ID;
+        }
+        String normalized = deviceId.trim();
+        return normalized.length() > DEVICE_ID_MAX_LENGTH ? null : normalized;
+    }
+
+    private String truncate(String value, int maxLength) {
+        if (value == null || value.length() <= maxLength) {
+            return value;
+        }
+        return value.substring(0, maxLength);
+    }
+
+    private <T> List<T> safeList(List<T> values) {
+        return values == null ? List.of() : values;
     }
 }

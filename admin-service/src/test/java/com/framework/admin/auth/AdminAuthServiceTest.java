@@ -47,6 +47,35 @@ class AdminAuthServiceTest {
     }
 
     @Test
+    void loginRejectsTooLongUsernameBeforeQueryingRepository() {
+        AdminAuthController.LoginRequest request = new AdminAuthController.LoginRequest();
+        request.setUsername("a".repeat(65));
+        request.setPassword("Admin@123");
+
+        Result<AdminAuthController.LoginResponse> result = service.login(request, "127.0.0.1");
+
+        assertThat(result.getCode()).isEqualTo(ResultCode.PARAM_ERROR.getCode());
+        assertThat(result.getMessage()).isEqualTo("用户名长度不能超过64个字符");
+        assertThat(repository.findByUsernameCalls).isZero();
+        assertThat(repository.loginLogs).isEmpty();
+    }
+
+    @Test
+    void loginRejectsTooLongDeviceIdBeforeCreatingSession() {
+        AdminAuthController.LoginRequest request = new AdminAuthController.LoginRequest();
+        request.setUsername("admin");
+        request.setPassword("Admin@123");
+        request.setDeviceId("d".repeat(65));
+
+        Result<AdminAuthController.LoginResponse> result = service.login(request, "127.0.0.1");
+
+        assertThat(result.getCode()).isEqualTo(ResultCode.PARAM_ERROR.getCode());
+        assertThat(result.getMessage()).isEqualTo("设备标识长度不能超过64个字符");
+        assertThat(repository.findByUsernameCalls).isZero();
+        assertThat(sessionManager.createdDeviceId).isNull();
+    }
+
+    @Test
     void loginCreatesSessionAndWritesSuccessLog() {
         repository.user = enabledUser();
         repository.menus = List.of(menu(1L, "dashboard"));
@@ -66,6 +95,44 @@ class AdminAuthServiceTest {
                 .extracting(LoginLogRecord::username, LoginLogRecord::userId, LoginLogRecord::clientIp,
                         LoginLogRecord::success, LoginLogRecord::message)
                 .containsExactly(tuple("admin", 1L, "10.0.0.8", true, "登录成功"));
+    }
+
+    @Test
+    void loginTrimsDeviceIdAndTruncatesClientIpForLoginLog() {
+        repository.user = enabledUser();
+        AdminAuthController.LoginRequest request = new AdminAuthController.LoginRequest();
+        request.setUsername("admin");
+        request.setPassword("Admin@123");
+        request.setDeviceId(" ios ");
+        String longClientIp = "1".repeat(80);
+
+        Result<AdminAuthController.LoginResponse> result = service.login(request, longClientIp);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(sessionManager.createdDeviceId).isEqualTo("ios");
+        assertThat(repository.loginLogs)
+                .extracting(LoginLogRecord::clientIp)
+                .containsExactly("1".repeat(64));
+    }
+
+    @Test
+    void loginAllowsUserWithoutRolePermissionOrMenuRows() {
+        repository.user = enabledUser()
+                .setRoles(null)
+                .setPermissions(null);
+        repository.menus = null;
+        AdminAuthController.LoginRequest request = new AdminAuthController.LoginRequest();
+        request.setUsername("admin");
+        request.setPassword("Admin@123");
+
+        Result<AdminAuthController.LoginResponse> result = service.login(request, "10.0.0.8");
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(sessionManager.createdRoles).isEmpty();
+        assertThat(sessionManager.createdPermissions).isEmpty();
+        assertThat(result.getData().getUser().getRoles()).isEmpty();
+        assertThat(result.getData().getUser().getPermissions()).isEmpty();
+        assertThat(result.getData().getMenus()).isEmpty();
     }
 
     @Test
@@ -421,6 +488,7 @@ class AdminAuthServiceTest {
     private static class FakeRepository extends AdminSystemRepository {
         private AdminUser user;
         private List<Menu> menus = List.of();
+        private int findByUsernameCalls;
         private Long lastLoginUserId;
         private final List<LoginLogRecord> loginLogs = new ArrayList<>();
         private Long resetPasswordUserId;
@@ -440,6 +508,7 @@ class AdminAuthServiceTest {
 
         @Override
         public Optional<AdminUser> findUserByUsername(String username) {
+            findByUsernameCalls++;
             if (findByUsernameFailure != null) {
                 throw findByUsernameFailure;
             }
@@ -498,6 +567,8 @@ class AdminAuthServiceTest {
 
     private static class FakeSessionManager extends SessionManager {
         private String createdDeviceId;
+        private List<String> createdRoles = List.of();
+        private List<String> createdPermissions = List.of();
         private String logoutToken;
         private Long forceLogoutAllUserId;
         private RuntimeException createSessionFailure;
@@ -515,6 +586,8 @@ class AdminAuthServiceTest {
                 throw createSessionFailure;
             }
             this.createdDeviceId = deviceId;
+            this.createdRoles = List.of(roles);
+            this.createdPermissions = List.of(permissions);
             return new LoginUser()
                     .setUserId(userId)
                     .setUsername(username)
