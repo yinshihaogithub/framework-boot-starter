@@ -89,6 +89,17 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * 业务层主动抛出的参数异常。
+     */
+    @ExceptionHandler(IllegalArgumentException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public Result<Void> handleIllegalArgument(IllegalArgumentException e) {
+        String message = e.getMessage();
+        return Result.fail(ResultCode.PARAM_ERROR.getCode(),
+                message == null || message.isBlank() ? ResultCode.PARAM_ERROR.getMessage() : message);
+    }
+
+    /**
      * 请求体不可读（JSON格式错误）
      */
     @ExceptionHandler(HttpMessageNotReadableException.class)
