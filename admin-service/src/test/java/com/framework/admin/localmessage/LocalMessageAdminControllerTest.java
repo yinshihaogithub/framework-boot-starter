@@ -88,6 +88,45 @@ class LocalMessageAdminControllerTest {
     }
 
     @Test
+    void manualRetrySucceedsWhenAuditServiceFails() {
+        InMemoryLocalMessageRepository repository = new InMemoryLocalMessageRepository();
+        repository.save(localMessage(3L)
+                .setStatus(LocalMessageStatus.FAILED)
+                .setRetryCount(3)
+                .setErrorMessage("handler missing")
+                .setNextRetryTime(null));
+        LocalMessageAdminController controller = controller(repository, new ThrowingAuditService());
+
+        Result<String> result = controller.retryNow(3L, null);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getData()).isEqualTo("已加入重试队列");
+        LocalMessage saved = repository.findById(3L).orElseThrow();
+        assertThat(saved.getStatus()).isEqualTo(LocalMessageStatus.PENDING);
+        assertThat(saved.getRetryCount()).isZero();
+        assertThat(saved.getErrorMessage()).isNull();
+    }
+
+    @Test
+    void manualSuccessSucceedsWhenAuditServiceFails() {
+        InMemoryLocalMessageRepository repository = new InMemoryLocalMessageRepository();
+        repository.save(localMessage(4L)
+                .setStatus(LocalMessageStatus.PENDING)
+                .setErrorMessage("old error")
+                .setNextRetryTime(LocalDateTime.now().plusMinutes(5)));
+        LocalMessageAdminController controller = controller(repository, new ThrowingAuditService());
+
+        Result<String> result = controller.markSuccess(4L, null);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getData()).isEqualTo("已标记成功");
+        LocalMessage saved = repository.findById(4L).orElseThrow();
+        assertThat(saved.getStatus()).isEqualTo(LocalMessageStatus.SUCCESS);
+        assertThat(saved.getErrorMessage()).isNull();
+        assertThat(saved.getNextRetryTime()).isNull();
+    }
+
+    @Test
     void manualUpdateFailsWhenMessageDoesNotExist() {
         LocalMessageAdminController controller = controller(new InMemoryLocalMessageRepository());
 
@@ -172,10 +211,15 @@ class LocalMessageAdminControllerTest {
     }
 
     private static LocalMessageAdminController controller(LocalMessageRepository repository) {
+        return controller(repository, auditService());
+    }
+
+    private static LocalMessageAdminController controller(LocalMessageRepository repository,
+                                                         AdminAuditService auditService) {
         LocalMessageAdminService service = new LocalMessageAdminService(
                 provider(localMessageService(repository)),
                 provider(repository),
-                auditService());
+                auditService);
         return new LocalMessageAdminController(service);
     }
 
@@ -277,6 +321,17 @@ class LocalMessageAdminControllerTest {
                                 Object params, Exception exception) {
             }
         };
+    }
+
+    private static class ThrowingAuditService extends AdminAuditService {
+        private ThrowingAuditService() {
+            super(null, null);
+        }
+
+        @Override
+        public void success(HttpServletRequest request, String module, String action, String operationType, Object params) {
+            throw new IllegalStateException("audit unavailable");
+        }
     }
 
     private static LocalMessageService localMessageService(LocalMessageRepository repository) {

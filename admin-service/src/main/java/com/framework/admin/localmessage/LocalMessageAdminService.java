@@ -8,6 +8,7 @@ import com.framework.localmessage.model.LocalMessageStatus;
 import com.framework.localmessage.repository.LocalMessageRepository;
 import com.framework.localmessage.service.LocalMessageService;
 import jakarta.servlet.http.HttpServletRequest;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
@@ -17,6 +18,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+@Slf4j
 @Service
 public class LocalMessageAdminService {
 
@@ -110,8 +112,7 @@ public class LocalMessageAdminService {
         }
         try {
             int count = service.retryDueMessages();
-            auditService.success(servletRequest, "本地消息", "扫描并重试到期本地消息", "UPDATE",
-                    auditService.params("count", count));
+            auditSuccess(servletRequest, "扫描并重试到期本地消息", "UPDATE", "count", count);
             return ActionResult.success(count);
         } catch (Exception ignored) {
             return ActionResult.fail(ResultCode.SERVICE_ERROR, "本地消息重试失败");
@@ -133,9 +134,9 @@ public class LocalMessageAdminService {
             message.setErrorMessage(null);
             message.setNextRetryTime(LocalDateTime.now());
             repository.save(message);
-            auditService.success(servletRequest, "本地消息", "人工立即重试本地消息", "UPDATE",
-                    auditService.params("id", id, "messageId", message.getMessageId(),
-                            "traceId", message.getTraceId(), "status", message.getStatus()));
+            auditSuccess(servletRequest, "人工立即重试本地消息", "UPDATE",
+                    "id", id, "messageId", message.getMessageId(),
+                    "traceId", message.getTraceId(), "status", message.getStatus());
             return ActionResult.success("已加入重试队列");
         } catch (Exception ignored) {
             return ActionResult.fail(ResultCode.SERVICE_ERROR, "本地消息操作失败");
@@ -156,8 +157,8 @@ public class LocalMessageAdminService {
             message.setErrorMessage(null);
             message.setNextRetryTime(null);
             repository.save(message);
-            auditService.success(servletRequest, "本地消息", "人工标记本地消息成功", "UPDATE",
-                    auditService.params("id", id, "messageId", message.getMessageId(), "traceId", message.getTraceId()));
+            auditSuccess(servletRequest, "人工标记本地消息成功", "UPDATE",
+                    "id", id, "messageId", message.getMessageId(), "traceId", message.getTraceId());
             return ActionResult.success("已标记成功");
         } catch (Exception ignored) {
             return ActionResult.fail(ResultCode.SERVICE_ERROR, "本地消息操作失败");
@@ -179,9 +180,9 @@ public class LocalMessageAdminService {
             message.setErrorMessage(safeReason);
             message.setNextRetryTime(null);
             repository.save(message);
-            auditService.success(servletRequest, "本地消息", "人工标记本地消息失败", "UPDATE",
-                    auditService.params("id", id, "messageId", message.getMessageId(), "traceId", message.getTraceId(),
-                            "reason", safeReason));
+            auditSuccess(servletRequest, "人工标记本地消息失败", "UPDATE",
+                    "id", id, "messageId", message.getMessageId(), "traceId", message.getTraceId(),
+                    "reason", safeReason);
             return ActionResult.success("已标记失败");
         } catch (Exception ignored) {
             return ActionResult.fail(ResultCode.SERVICE_ERROR, "本地消息操作失败");
@@ -195,8 +196,7 @@ public class LocalMessageAdminService {
         }
         try {
             repository.delete(id);
-            auditService.success(servletRequest, "本地消息", "删除本地消息", "DELETE",
-                    auditService.params("id", id));
+            auditSuccess(servletRequest, "删除本地消息", "DELETE", "id", id);
             return ActionResult.success("已删除");
         } catch (Exception ignored) {
             return ActionResult.fail(ResultCode.SERVICE_ERROR, "本地消息操作失败");
@@ -225,6 +225,17 @@ public class LocalMessageAdminService {
     private Map<String, Long> zero(Map<String, Long> stats) {
         stats.replaceAll((key, value) -> 0L);
         return stats;
+    }
+
+    private void auditSuccess(HttpServletRequest servletRequest, String action, String operationType, Object... params) {
+        if (auditService == null) {
+            return;
+        }
+        try {
+            auditService.success(servletRequest, "本地消息", action, operationType, auditService.params(params));
+        } catch (RuntimeException e) {
+            log.warn("[本地消息] 审计日志写入失败 action={}, error={}", action, e.getMessage());
+        }
     }
 
     private <T> T available(ObjectProvider<T> provider) {
