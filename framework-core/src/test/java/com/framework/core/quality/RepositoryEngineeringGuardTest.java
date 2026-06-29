@@ -510,6 +510,32 @@ class RepositoryEngineeringGuardTest {
     }
 
     @Test
+    void adminPermissionChangingOperationsInvalidatePermissionCache() throws Exception {
+        String service = read(root.resolve("admin-service/src/main/java/com/framework/admin/system/AdminSystemService.java"));
+        String repository = read(root.resolve("admin-service/src/main/java/com/framework/admin/system/AdminSystemRepository.java"));
+        String mapper = read(root.resolve("admin-service/src/main/java/com/framework/admin/system/AdminSystemMapper.java"));
+
+        assertThat(service)
+                .as("system management writes must invalidate Redis-backed permission cache")
+                .contains("PermissionCacheService")
+                .contains("refreshPermissionCache(userId)")
+                .contains("refreshPermissionCache(id)")
+                .contains("repository.listUserIdsByRoleId(id)")
+                .contains("refreshPermissionCache(affectedUserIds)")
+                .contains("clearPermissionCache()")
+                .contains("cacheService.refreshBatch")
+                .contains("cacheService.clearAll");
+        assertThat(repository)
+                .as("role-level permission changes need the affected users")
+                .contains("listUserIdsByRoleId");
+        assertThat(mapper)
+                .as("role-level permission changes need an annotation mapper query for affected users")
+                .contains("SELECT user_id")
+                .contains("FROM sys_user_role")
+                .contains("WHERE role_id = #{roleId}");
+    }
+
+    @Test
     void sourceConfigurationDoesNotUseH2AsDefaultDatabase() throws Exception {
         try (Stream<Path> files = Files.walk(root)) {
             List<Path> sourceFiles = files

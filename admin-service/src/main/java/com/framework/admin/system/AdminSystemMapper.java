@@ -343,6 +343,14 @@ public interface AdminSystemMapper {
     List<Long> listRoleIdsByUserId(@Param("userId") Long userId);
 
     @Select("""
+            SELECT user_id
+            FROM sys_user_role
+            WHERE role_id = #{roleId}
+            ORDER BY user_id ASC
+            """)
+    List<Long> listUserIdsByRoleId(@Param("roleId") Long roleId);
+
+    @Select("""
             SELECT DISTINCT m.permission
             FROM sys_menu m
             JOIN sys_role_menu rm ON rm.menu_id = m.id

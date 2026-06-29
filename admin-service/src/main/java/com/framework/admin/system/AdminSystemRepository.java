@@ -291,6 +291,10 @@ public class AdminSystemRepository {
         return mapper.listRoleIdsByUserId(userId);
     }
 
+    public List<Long> listUserIdsByRoleId(Long roleId) {
+        return mapper.listUserIdsByRoleId(roleId);
+    }
+
     public List<String> listPermissionsByUserId(Long userId) {
         return mapper.listPermissionsByUserId(userId);
     }

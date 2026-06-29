@@ -26,7 +26,11 @@ import com.framework.core.result.Result;
 import com.framework.core.result.ResultCode;
 import com.framework.auth.util.PasswordValidator;
 import com.framework.crypto.util.PasswordUtils;
+import com.framework.security.service.PermissionCacheService;
 import jakarta.servlet.http.HttpServletRequest;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -34,6 +38,7 @@ import java.util.List;
 /**
  * 系统管理后台服务。
  */
+@Slf4j
 @Service
 public class AdminSystemService {
 
@@ -43,10 +48,18 @@ public class AdminSystemService {
 
     private final AdminSystemRepository repository;
     private final AdminAuditService auditService;
+    private final ObjectProvider<PermissionCacheService> permissionCacheServiceProvider;
 
     public AdminSystemService(AdminSystemRepository repository, AdminAuditService auditService) {
+        this(repository, auditService, null);
+    }
+
+    @Autowired
+    public AdminSystemService(AdminSystemRepository repository, AdminAuditService auditService,
+                              ObjectProvider<PermissionCacheService> permissionCacheServiceProvider) {
         this.repository = repository;
         this.auditService = auditService;
+        this.permissionCacheServiceProvider = permissionCacheServiceProvider;
     }
 
     public List<Tenant> tenants() {
@@ -145,6 +158,7 @@ public class AdminSystemService {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), passwordError);
         }
         Long userId = repository.createUser(request, PasswordUtils.hash(request.getPassword()));
+        refreshPermissionCache(userId);
         auditService.success(servletRequest, "系统管理", "新增用户", "INSERT",
                 auditService.params("userId", userId, "username", request.getUsername(), "roleIds", request.getRoleIds()));
         return Result.success(userId);
@@ -158,6 +172,7 @@ public class AdminSystemService {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), "状态只能是 ENABLED 或 DISABLED");
         }
         repository.updateUser(id, request);
+        refreshPermissionCache(id);
         auditService.success(servletRequest, "系统管理", "更新用户", "UPDATE",
                 auditService.params("userId", id, "nickname", request.getNickname(), "status", request.getStatus(),
                         "roleIds", request.getRoleIds()));
@@ -170,6 +185,7 @@ public class AdminSystemService {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), "状态只能是 ENABLED 或 DISABLED");
         }
         repository.updateUserStatus(id, status);
+        refreshPermissionCache(id);
         auditService.success(servletRequest, "系统管理", "更新用户状态", "UPDATE",
                 auditService.params("userId", id, "status", status));
         return Result.success("已更新");
@@ -194,6 +210,7 @@ public class AdminSystemService {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), "内置管理员不能删除");
         }
         repository.deleteUser(id);
+        refreshPermissionCache(id);
         auditService.success(servletRequest, "系统管理", "删除用户", "DELETE",
                 auditService.params("userId", id));
         return Result.success("已删除");
@@ -219,7 +236,9 @@ public class AdminSystemService {
         if (validation != null) {
             return validation;
         }
+        List<Long> affectedUserIds = repository.listUserIdsByRoleId(id);
         repository.updateRole(id, request);
+        refreshPermissionCache(affectedUserIds);
         auditService.success(servletRequest, "系统管理", "更新角色", "UPDATE",
                 auditService.params("roleId", id, "roleCode", request.getRoleCode(), "status", request.getStatus()));
         return Result.success("已更新");
@@ -229,7 +248,9 @@ public class AdminSystemService {
         if (id == 1L) {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), "内置超级管理员角色不能删除");
         }
+        List<Long> affectedUserIds = repository.listUserIdsByRoleId(id);
         repository.deleteRole(id);
+        refreshPermissionCache(affectedUserIds);
         auditService.success(servletRequest, "系统管理", "删除角色", "DELETE",
                 auditService.params("roleId", id));
         return Result.success("已删除");
@@ -240,7 +261,9 @@ public class AdminSystemService {
     }
 
     public Result<String> updateRoleMenus(Long id, RoleMenuRequest request, HttpServletRequest servletRequest) {
+        List<Long> affectedUserIds = repository.listUserIdsByRoleId(id);
         repository.replaceRoleMenus(id, request == null ? List.of() : request.getMenuIds());
+        refreshPermissionCache(affectedUserIds);
         auditService.success(servletRequest, "系统管理", "角色菜单授权", "UPDATE",
                 auditService.params("roleId", id, "menuIds", request == null ? List.of() : request.getMenuIds()));
         return Result.success("已授权");
@@ -256,6 +279,7 @@ public class AdminSystemService {
             return Result.fail(validation.getCode(), validation.getMessage());
         }
         Long menuId = repository.createMenu(request);
+        clearPermissionCache();
         auditService.success(servletRequest, "系统管理", "新增菜单", "INSERT",
                 auditService.params("menuId", menuId, "menuName", request.getMenuName(), "permission", request.getPermission()));
         return Result.success(menuId);
@@ -270,6 +294,7 @@ public class AdminSystemService {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), "上级菜单不能选择自己");
         }
         repository.updateMenu(id, request);
+        clearPermissionCache();
         auditService.success(servletRequest, "系统管理", "更新菜单", "UPDATE",
                 auditService.params("menuId", id, "menuName", request.getMenuName(), "permission", request.getPermission()));
         return Result.success("已更新");
@@ -277,6 +302,7 @@ public class AdminSystemService {
 
     public Result<String> deleteMenu(Long id, HttpServletRequest servletRequest) {
         repository.deleteMenu(id);
+        clearPermissionCache();
         auditService.success(servletRequest, "系统管理", "删除菜单", "DELETE",
                 auditService.params("menuId", id));
         return Result.success("已删除");
@@ -402,6 +428,56 @@ public class AdminSystemService {
 
     private boolean isValidStatus(String status) {
         return isBlank(status) || "ENABLED".equals(status) || "DISABLED".equals(status);
+    }
+
+    private void refreshPermissionCache(Long userId) {
+        if (userId == null) {
+            return;
+        }
+        try {
+            PermissionCacheService cacheService = permissionCacheService();
+            if (cacheService != null) {
+                cacheService.refresh(userId);
+            }
+        } catch (RuntimeException e) {
+            log.warn("[权限缓存] 刷新用户缓存失败 userId={}", userId, e);
+        }
+    }
+
+    private void refreshPermissionCache(List<Long> userIds) {
+        if (userIds == null || userIds.isEmpty()) {
+            return;
+        }
+        List<Long> safeUserIds = userIds.stream()
+                .filter(userId -> userId != null)
+                .distinct()
+                .toList();
+        if (safeUserIds.isEmpty()) {
+            return;
+        }
+        try {
+            PermissionCacheService cacheService = permissionCacheService();
+            if (cacheService != null) {
+                cacheService.refreshBatch(safeUserIds);
+            }
+        } catch (RuntimeException e) {
+            log.warn("[权限缓存] 批量刷新用户缓存失败 userIds={}", safeUserIds, e);
+        }
+    }
+
+    private void clearPermissionCache() {
+        try {
+            PermissionCacheService cacheService = permissionCacheService();
+            if (cacheService != null) {
+                cacheService.clearAll();
+            }
+        } catch (RuntimeException e) {
+            log.warn("[权限缓存] 清空缓存失败", e);
+        }
+    }
+
+    private PermissionCacheService permissionCacheService() {
+        return permissionCacheServiceProvider == null ? null : permissionCacheServiceProvider.getIfAvailable();
     }
 
     private Result<String> validateRole(RoleRequest request) {
