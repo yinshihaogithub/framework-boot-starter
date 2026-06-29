@@ -122,6 +122,50 @@ class MqAdminControllerTest {
     }
 
     @Test
+    void queryEndpointsFallBackWhenMqProvidersFail() {
+        MqAdminController controller = failingController();
+
+        Result<MqAdminDTO.MqStats> stats = controller.stats();
+        Result<PageResult<MqAdminDTO.MqFailedMessageVO>> page = controller.listFailedMessages(
+                null, null, null, null, null, -1, 500);
+        Result<MqAdminDTO.MqFailedMessageVO> detail = controller.getFailedMessage(1L);
+
+        assertThat(stats.isSuccess()).isTrue();
+        assertThat(stats.getData().getTotalCount()).isZero();
+        assertThat(stats.getData().getRuntime().isEnabled()).isFalse();
+        assertThat(stats.getData().getRuntime().getProvider()).isEqualTo("NONE");
+        assertThat(page.isSuccess()).isTrue();
+        assertThat(page.getData().getPageNum()).isEqualTo(1);
+        assertThat(page.getData().getPageSize()).isEqualTo(200);
+        assertThat(page.getData().getRecords()).isEmpty();
+        assertThat(detail.isSuccess()).isFalse();
+        assertThat(detail.getCode()).isEqualTo(ResultCode.SERVICE_ERROR.getCode());
+        assertThat(detail.getMessage()).isEqualTo("MQ死信存储未启用");
+    }
+
+    @Test
+    void manualEndpointsReportServiceErrorWhenMqProvidersFail() {
+        MqAdminController controller = failingController();
+        MqAdminDTO.ManualRetryRequest request = new MqAdminDTO.ManualRetryRequest();
+        request.setIds(List.of(1L));
+
+        Result<String> retry = controller.retryOne(1L, "admin", null, null);
+        Result<MqAdminDTO.ManualRetryResult> batch = controller.batchRetry(request, null);
+        Result<String> success = controller.manualSuccess(1L, null, null);
+        Result<String> failure = controller.manualFailure(1L, null, null);
+        Result<String> delete = controller.deleteFailedMessage(1L, null);
+
+        assertThat(retry.isSuccess()).isFalse();
+        assertThat(retry.getCode()).isEqualTo(ResultCode.SERVICE_ERROR.getCode());
+        assertThat(retry.getMessage()).isEqualTo("未接入可用 MQ 发送器，无法重发消息");
+        assertThat(batch.getCode()).isEqualTo(ResultCode.SERVICE_ERROR.getCode());
+        assertThat(success.getCode()).isEqualTo(ResultCode.SERVICE_ERROR.getCode());
+        assertThat(success.getMessage()).isEqualTo("MQ死信存储未启用");
+        assertThat(failure.getCode()).isEqualTo(ResultCode.SERVICE_ERROR.getCode());
+        assertThat(delete.getCode()).isEqualTo(ResultCode.SERVICE_ERROR.getCode());
+    }
+
+    @Test
     void detailReportsNotFoundWhenFailedMessageDoesNotExist() {
         DeadLetterHandler handler = new DeadLetterHandler(
                 new InMemoryMqFailedMessageRepository(List.of()), new MqProperties());
@@ -247,6 +291,18 @@ class MqAdminControllerTest {
         return new MqAdminController(service);
     }
 
+    private static MqAdminController failingController() {
+        MqAdminService service = new MqAdminService(
+                failingProvider(),
+                failingProvider(),
+                failingProvider(),
+                failingProvider(),
+                failingProvider(),
+                new StaticApplicationContext(),
+                auditService());
+        return new MqAdminController(service);
+    }
+
     private static MqFailedMessage failedMessage(Long id, String traceId, String status) {
         MqFailedMessage message = new MqFailedMessage();
         message.setId(id);
@@ -296,6 +352,35 @@ class MqAdminControllerTest {
             @Override
             public Stream<T> stream() {
                 return value == null ? Stream.empty() : Stream.of(value);
+            }
+        };
+    }
+
+    private static <T> ObjectProvider<T> failingProvider() {
+        return new ObjectProvider<>() {
+            @Override
+            public T getObject(Object... args) {
+                throw new IllegalStateException("mq provider unavailable");
+            }
+
+            @Override
+            public T getIfAvailable() {
+                throw new IllegalStateException("mq provider unavailable");
+            }
+
+            @Override
+            public T getIfUnique() {
+                throw new IllegalStateException("mq provider unavailable");
+            }
+
+            @Override
+            public T getObject() {
+                throw new IllegalStateException("mq provider unavailable");
+            }
+
+            @Override
+            public Stream<T> stream() {
+                throw new IllegalStateException("mq provider unavailable");
             }
         };
     }

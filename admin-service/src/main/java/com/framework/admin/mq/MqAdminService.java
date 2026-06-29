@@ -62,19 +62,23 @@ public class MqAdminService {
 
     public MqAdminDTO.MqStats stats() {
         MqAdminDTO.MqStats stats = new MqAdminDTO.MqStats();
-        DeadLetterHandler handler = deadLetterHandlerProvider.getIfAvailable();
+        DeadLetterHandler handler = available(deadLetterHandlerProvider);
         if (handler != null) {
-            var store = handler.getFailedMessageStore();
-            stats.setPendingCount(store.values().stream()
-                    .filter(m -> MqFailedMessage.STATUS_PENDING.equals(m.getStatus())).count());
-            stats.setRetryingCount(store.values().stream()
-                    .filter(m -> MqFailedMessage.STATUS_RETRYING.equals(m.getStatus())).count());
-            stats.setSuccessCount(store.values().stream()
-                    .filter(m -> MqFailedMessage.STATUS_SUCCESS.equals(m.getStatus())
-                            || MqFailedMessage.STATUS_MANUAL.equals(m.getStatus())).count());
-            stats.setExhaustedCount(store.values().stream()
-                    .filter(m -> MqFailedMessage.STATUS_EXHAUSTED.equals(m.getStatus())).count());
-            stats.setTotalCount(store.size());
+            try {
+                var store = handler.getFailedMessageStore();
+                stats.setPendingCount(store.values().stream()
+                        .filter(m -> MqFailedMessage.STATUS_PENDING.equals(m.getStatus())).count());
+                stats.setRetryingCount(store.values().stream()
+                        .filter(m -> MqFailedMessage.STATUS_RETRYING.equals(m.getStatus())).count());
+                stats.setSuccessCount(store.values().stream()
+                        .filter(m -> MqFailedMessage.STATUS_SUCCESS.equals(m.getStatus())
+                                || MqFailedMessage.STATUS_MANUAL.equals(m.getStatus())).count());
+                stats.setExhaustedCount(store.values().stream()
+                        .filter(m -> MqFailedMessage.STATUS_EXHAUSTED.equals(m.getStatus())).count());
+                stats.setTotalCount(store.size());
+            } catch (Exception e) {
+                log.debug("获取MQ失败消息统计失败: {}", e.getMessage());
+            }
         }
         stats.setQueues(listQueues());
         stats.setRuntime(getRuntimeInfo());
@@ -85,7 +89,7 @@ public class MqAdminService {
                                                                        String traceId, String businessKey,
                                                                        String messageType, int pageNum,
                                                                        int pageSize) {
-        DeadLetterHandler handler = deadLetterHandlerProvider.getIfAvailable();
+        DeadLetterHandler handler = available(deadLetterHandlerProvider);
         int safePageNum = safePageNum(pageNum);
         int safePageSize = safePageSize(pageSize);
         if (handler == null) {
@@ -97,43 +101,61 @@ public class MqAdminService {
         String normalizedBusinessKey = text(businessKey);
         String normalizedMessageType = text(messageType);
 
-        List<MqFailedMessage> filtered = handler.getFailedMessageStore().values().stream()
-                .filter(m -> isBlank(normalizedQueueName) || normalizedQueueName.equals(m.getQueueName()))
-                .filter(m -> isBlank(normalizedStatus) || normalizedStatus.equals(m.getStatus()))
-                .filter(m -> isBlank(normalizedTraceId) || contains(m.getTraceId(), normalizedTraceId))
-                .filter(m -> isBlank(normalizedBusinessKey) || contains(m.getBusinessKey(), normalizedBusinessKey))
-                .filter(m -> isBlank(normalizedMessageType)
-                        || normalizedMessageType.equalsIgnoreCase(m.getMessageType()))
-                .sorted(Comparator.comparing(MqFailedMessage::getCreateTime,
-                        Comparator.nullsLast(Comparator.naturalOrder())).reversed())
-                .collect(Collectors.toList());
+        try {
+            List<MqFailedMessage> filtered = handler.getFailedMessageStore().values().stream()
+                    .filter(m -> isBlank(normalizedQueueName) || normalizedQueueName.equals(m.getQueueName()))
+                    .filter(m -> isBlank(normalizedStatus) || normalizedStatus.equals(m.getStatus()))
+                    .filter(m -> isBlank(normalizedTraceId) || contains(m.getTraceId(), normalizedTraceId))
+                    .filter(m -> isBlank(normalizedBusinessKey) || contains(m.getBusinessKey(), normalizedBusinessKey))
+                    .filter(m -> isBlank(normalizedMessageType)
+                            || normalizedMessageType.equalsIgnoreCase(m.getMessageType()))
+                    .sorted(Comparator.comparing(MqFailedMessage::getCreateTime,
+                            Comparator.nullsLast(Comparator.naturalOrder())).reversed())
+                    .collect(Collectors.toList());
 
-        int total = filtered.size();
-        long offset = (long) (safePageNum - 1) * safePageSize;
-        int start = offset < total ? (int) offset : total;
-        int end = Math.min(start + safePageSize, total);
-        List<MqAdminDTO.MqFailedMessageVO> page = start < total
-                ? filtered.subList(start, end).stream().map(this::toVO).collect(Collectors.toList())
-                : Collections.emptyList();
-        return PageResult.of(page, total, safePageNum, safePageSize);
+            int total = filtered.size();
+            long offset = (long) (safePageNum - 1) * safePageSize;
+            int start = offset < total ? (int) offset : total;
+            int end = Math.min(start + safePageSize, total);
+            List<MqAdminDTO.MqFailedMessageVO> page = start < total
+                    ? filtered.subList(start, end).stream().map(this::toVO).collect(Collectors.toList())
+                    : Collections.emptyList();
+            return PageResult.of(page, total, safePageNum, safePageSize);
+        } catch (Exception e) {
+            log.debug("查询MQ失败消息失败: {}", e.getMessage());
+            return PageResult.empty(safePageNum, safePageSize);
+        }
     }
 
     public ActionResult<MqAdminDTO.MqFailedMessageVO> getFailedMessage(Long id) {
-        DeadLetterHandler handler = deadLetterHandlerProvider.getIfAvailable();
-        MqFailedMessage message = handler == null ? null : handler.getById(id);
-        return message == null ? ActionResult.fail(ResultCode.NOT_FOUND, "消息不存在") : ActionResult.success(toVO(message));
+        DeadLetterHandler handler = available(deadLetterHandlerProvider);
+        if (handler == null) {
+            return ActionResult.fail(ResultCode.SERVICE_ERROR, "MQ死信存储未启用");
+        }
+        try {
+            MqFailedMessage message = handler.getById(id);
+            return message == null ? ActionResult.fail(ResultCode.NOT_FOUND, "消息不存在") : ActionResult.success(toVO(message));
+        } catch (Exception e) {
+            log.debug("查询MQ失败消息详情失败: {}", e.getMessage());
+            return ActionResult.fail(ResultCode.SERVICE_ERROR, "MQ失败消息查询失败");
+        }
     }
 
     public ActionResult<String> retryOne(Long id, String operator, String remark, HttpServletRequest servletRequest) {
-        MqRetryScheduler scheduler = retrySchedulerProvider.getIfAvailable();
+        MqRetryScheduler scheduler = available(retrySchedulerProvider);
         if (scheduler == null) {
             return ActionResult.fail(ResultCode.SERVICE_ERROR, retryUnavailableMessage());
         }
-        String normalizedOperator = operator(operator);
-        boolean ok = scheduler.manualRetry(id, normalizedOperator, remark);
-        auditService.success(servletRequest, "MQ管理", "手动重发MQ消息", "UPDATE",
-                auditService.params("id", id, "operator", normalizedOperator, "remark", remark, "success", ok));
-        return ok ? ActionResult.success("重发成功") : ActionResult.fail(ResultCode.BUSINESS_ERROR, "重发失败");
+        try {
+            String normalizedOperator = operator(operator);
+            boolean ok = scheduler.manualRetry(id, normalizedOperator, remark);
+            auditService.success(servletRequest, "MQ管理", "手动重发MQ消息", "UPDATE",
+                    auditService.params("id", id, "operator", normalizedOperator, "remark", remark, "success", ok));
+            return ok ? ActionResult.success("重发成功") : ActionResult.fail(ResultCode.BUSINESS_ERROR, "重发失败");
+        } catch (Exception e) {
+            log.debug("手动重发MQ消息失败: {}", e.getMessage());
+            return ActionResult.fail(ResultCode.SERVICE_ERROR, "MQ消息重发失败");
+        }
     }
 
     public ActionResult<MqAdminDTO.ManualRetryResult> batchRetry(MqAdminDTO.ManualRetryRequest request,
@@ -141,90 +163,115 @@ public class MqAdminService {
         if (request == null || request.getIds() == null || request.getIds().isEmpty()) {
             return ActionResult.fail(ResultCode.PARAM_ERROR, "请选择要重发的消息");
         }
-        MqRetryScheduler scheduler = retrySchedulerProvider.getIfAvailable();
+        MqRetryScheduler scheduler = available(retrySchedulerProvider);
         if (scheduler == null) {
             return ActionResult.fail(ResultCode.SERVICE_ERROR, retryUnavailableMessage());
         }
-        MqAdminDTO.ManualRetryResult result = scheduler.batchManualRetry(
-                request.getIds(),
-                isBlank(request.getOperator()) ? "admin" : request.getOperator(),
-                request.getRemark());
-        auditService.success(servletRequest, "MQ管理", "批量重发MQ消息", "UPDATE",
-                auditService.params("ids", request.getIds(), "operator", request.getOperator(),
-                        "remark", request.getRemark(), "success", result.getSuccess(),
-                        "failure", result.getFailed()));
-        return ActionResult.success(result);
+        try {
+            MqAdminDTO.ManualRetryResult result = scheduler.batchManualRetry(
+                    request.getIds(),
+                    isBlank(request.getOperator()) ? "admin" : request.getOperator(),
+                    request.getRemark());
+            auditService.success(servletRequest, "MQ管理", "批量重发MQ消息", "UPDATE",
+                    auditService.params("ids", request.getIds(), "operator", request.getOperator(),
+                            "remark", request.getRemark(), "success", result.getSuccess(),
+                            "failure", result.getFailed()));
+            return ActionResult.success(result);
+        } catch (Exception e) {
+            log.debug("批量重发MQ消息失败: {}", e.getMessage());
+            return ActionResult.fail(ResultCode.SERVICE_ERROR, "MQ消息批量重发失败");
+        }
     }
 
     public ActionResult<String> manualSuccess(Long id, String operator, String remark, HttpServletRequest servletRequest) {
-        DeadLetterHandler handler = deadLetterHandlerProvider.getIfAvailable();
+        DeadLetterHandler handler = available(deadLetterHandlerProvider);
         if (handler == null) {
             return ActionResult.fail(ResultCode.SERVICE_ERROR, "MQ死信存储未启用");
         }
-        MqFailedMessage message = handler.getById(id);
-        if (message == null) {
-            return ActionResult.fail(ResultCode.NOT_FOUND, "消息不存在");
+        try {
+            MqFailedMessage message = handler.getById(id);
+            if (message == null) {
+                return ActionResult.fail(ResultCode.NOT_FOUND, "消息不存在");
+            }
+            String beforeStatus = message.getStatus();
+            message.setStatus(MqFailedMessage.STATUS_MANUAL);
+            message.setNextRetryTime(null);
+            message.setOperator(operator(operator));
+            message.setCompensateRemark(remark(remark, "人工补偿完成"));
+            handler.updateRecord(message);
+            auditService.success(servletRequest, "MQ管理", "人工补偿完成MQ消息", "UPDATE",
+                    auditService.params("id", id, "messageId", message.getMessageId(), "traceId", message.getTraceId(),
+                            "operator", message.getOperator(), "remark", message.getCompensateRemark(),
+                            "beforeStatus", beforeStatus, "afterStatus", message.getStatus()));
+            return ActionResult.success("已人工补偿完成");
+        } catch (Exception e) {
+            log.debug("人工补偿MQ消息失败: {}", e.getMessage());
+            return ActionResult.fail(ResultCode.SERVICE_ERROR, "MQ人工补偿失败");
         }
-        String beforeStatus = message.getStatus();
-        message.setStatus(MqFailedMessage.STATUS_MANUAL);
-        message.setNextRetryTime(null);
-        message.setOperator(operator(operator));
-        message.setCompensateRemark(remark(remark, "人工补偿完成"));
-        handler.updateRecord(message);
-        auditService.success(servletRequest, "MQ管理", "人工补偿完成MQ消息", "UPDATE",
-                auditService.params("id", id, "messageId", message.getMessageId(), "traceId", message.getTraceId(),
-                        "operator", message.getOperator(), "remark", message.getCompensateRemark(),
-                        "beforeStatus", beforeStatus, "afterStatus", message.getStatus()));
-        return ActionResult.success("已人工补偿完成");
     }
 
     public ActionResult<String> manualFailure(Long id, String operator, String remark, HttpServletRequest servletRequest) {
-        DeadLetterHandler handler = deadLetterHandlerProvider.getIfAvailable();
+        DeadLetterHandler handler = available(deadLetterHandlerProvider);
         if (handler == null) {
             return ActionResult.fail(ResultCode.SERVICE_ERROR, "MQ死信存储未启用");
         }
-        MqFailedMessage message = handler.getById(id);
-        if (message == null) {
-            return ActionResult.fail(ResultCode.NOT_FOUND, "消息不存在");
+        try {
+            MqFailedMessage message = handler.getById(id);
+            if (message == null) {
+                return ActionResult.fail(ResultCode.NOT_FOUND, "消息不存在");
+            }
+            String beforeStatus = message.getStatus();
+            message.setStatus(MqFailedMessage.STATUS_EXHAUSTED);
+            message.setNextRetryTime(null);
+            message.setOperator(operator(operator));
+            message.setCompensateRemark(remark(remark, "人工终止"));
+            handler.updateRecord(message);
+            auditService.success(servletRequest, "MQ管理", "人工终止MQ消息", "UPDATE",
+                    auditService.params("id", id, "messageId", message.getMessageId(), "traceId", message.getTraceId(),
+                            "operator", message.getOperator(), "remark", message.getCompensateRemark(),
+                            "beforeStatus", beforeStatus, "afterStatus", message.getStatus()));
+            return ActionResult.success("已人工终止");
+        } catch (Exception e) {
+            log.debug("人工终止MQ消息失败: {}", e.getMessage());
+            return ActionResult.fail(ResultCode.SERVICE_ERROR, "MQ人工终止失败");
         }
-        String beforeStatus = message.getStatus();
-        message.setStatus(MqFailedMessage.STATUS_EXHAUSTED);
-        message.setNextRetryTime(null);
-        message.setOperator(operator(operator));
-        message.setCompensateRemark(remark(remark, "人工终止"));
-        handler.updateRecord(message);
-        auditService.success(servletRequest, "MQ管理", "人工终止MQ消息", "UPDATE",
-                auditService.params("id", id, "messageId", message.getMessageId(), "traceId", message.getTraceId(),
-                        "operator", message.getOperator(), "remark", message.getCompensateRemark(),
-                        "beforeStatus", beforeStatus, "afterStatus", message.getStatus()));
-        return ActionResult.success("已人工终止");
     }
 
     public ActionResult<String> deleteFailedMessage(Long id, HttpServletRequest servletRequest) {
-        DeadLetterHandler handler = deadLetterHandlerProvider.getIfAvailable();
+        DeadLetterHandler handler = available(deadLetterHandlerProvider);
         if (handler == null) {
             return ActionResult.fail(ResultCode.SERVICE_ERROR, "MQ死信存储未启用");
         }
-        boolean deleted = handler.removeRecord(id);
-        auditService.success(servletRequest, "MQ管理", "删除MQ失败记录", "DELETE",
-                auditService.params("id", id, "deleted", deleted));
-        return deleted ? ActionResult.success("删除成功") : ActionResult.fail(ResultCode.NOT_FOUND, "记录不存在");
+        try {
+            boolean deleted = handler.removeRecord(id);
+            auditService.success(servletRequest, "MQ管理", "删除MQ失败记录", "DELETE",
+                    auditService.params("id", id, "deleted", deleted));
+            return deleted ? ActionResult.success("删除成功") : ActionResult.fail(ResultCode.NOT_FOUND, "记录不存在");
+        } catch (Exception e) {
+            log.debug("删除MQ失败记录失败: {}", e.getMessage());
+            return ActionResult.fail(ResultCode.SERVICE_ERROR, "MQ失败记录删除失败");
+        }
     }
 
     public ActionResult<String> cleanProcessed(HttpServletRequest servletRequest) {
-        DeadLetterHandler handler = deadLetterHandlerProvider.getIfAvailable();
+        DeadLetterHandler handler = available(deadLetterHandlerProvider);
         if (handler == null) {
             return ActionResult.success("已清理 0 条记录");
         }
-        int cleaned = handler.cleanProcessedRecords();
-        auditService.success(servletRequest, "MQ管理", "清空MQ已处理记录", "DELETE",
-                auditService.params("cleaned", cleaned));
-        return ActionResult.success("已清理 " + cleaned + " 条记录");
+        try {
+            int cleaned = handler.cleanProcessedRecords();
+            auditService.success(servletRequest, "MQ管理", "清空MQ已处理记录", "DELETE",
+                    auditService.params("cleaned", cleaned));
+            return ActionResult.success("已清理 " + cleaned + " 条记录");
+        } catch (Exception e) {
+            log.debug("清空MQ已处理记录失败: {}", e.getMessage());
+            return ActionResult.fail(ResultCode.SERVICE_ERROR, "MQ已处理记录清理失败");
+        }
     }
 
     public List<MqAdminDTO.MqQueueInfo> listQueues() {
         List<MqAdminDTO.MqQueueInfo> queues = new ArrayList<>();
-        RabbitAdmin rabbitAdmin = rabbitAdminProvider.getIfAvailable();
+        RabbitAdmin rabbitAdmin = available(rabbitAdminProvider);
         try {
             applicationContext.getBeansOfType(Queue.class).values().forEach(queue -> {
                 MqAdminDTO.MqQueueInfo info = new MqAdminDTO.MqQueueInfo();
@@ -242,7 +289,7 @@ public class MqAdminService {
     }
 
     private MqAdminDTO.MqRuntimeInfo getRuntimeInfo() {
-        MqProperties properties = mqPropertiesProvider.getIfAvailable();
+        MqProperties properties = available(mqPropertiesProvider);
         MqAdminDTO.MqRuntimeInfo info = new MqAdminDTO.MqRuntimeInfo();
         if (properties == null) {
             return info.setEnabled(false)
@@ -256,7 +303,7 @@ public class MqAdminService {
         return info.setEnabled(properties.isEnabled())
                 .setProvider(properties.getProvider().name())
                 .setDeadLetterEnabled(properties.getDeadLetter().isEnabled())
-                .setRetryAvailable(retrySchedulerProvider.getIfAvailable() != null)
+                .setRetryAvailable(available(retrySchedulerProvider) != null)
                 .setDeadLetterQueue(properties.getDeadLetter().getQueue())
                 .setMaxRetry(properties.getMaxRetry())
                 .setRetryFixedDelay(properties.getRetry().getFixedDelay())
@@ -265,15 +312,23 @@ public class MqAdminService {
     }
 
     private List<MqAdminDTO.MqProviderStatus> providerStatuses(MqProperties.Provider activeProvider) {
-        Set<MqProperties.Provider> availableProviders = messageSenderProvider.stream()
-                .map(MqMessageSender::provider)
-                .collect(Collectors.toCollection(() -> EnumSet.noneOf(MqProperties.Provider.class)));
+        Set<MqProperties.Provider> availableProviders;
+        try {
+            availableProviders = messageSenderProvider == null ? EnumSet.noneOf(MqProperties.Provider.class)
+                    : messageSenderProvider.stream()
+                    .map(MqMessageSender::provider)
+                    .collect(Collectors.toCollection(() -> EnumSet.noneOf(MqProperties.Provider.class)));
+        } catch (RuntimeException e) {
+            log.debug("获取MQ发送器状态失败: {}", e.getMessage());
+            availableProviders = EnumSet.noneOf(MqProperties.Provider.class);
+        }
+        Set<MqProperties.Provider> providers = availableProviders;
         return List.of(MqProperties.Provider.RABBIT, MqProperties.Provider.KAFKA, MqProperties.Provider.ROCKET)
                 .stream()
                 .map(provider -> new MqAdminDTO.MqProviderStatus()
                         .setProvider(provider.name())
                         .setActive(provider == activeProvider)
-                        .setAvailable(availableProviders.contains(provider)))
+                        .setAvailable(providers.contains(provider)))
                 .toList();
     }
 
@@ -362,6 +417,18 @@ public class MqAdminService {
 
     private String retryUnavailableMessage() {
         return "未接入可用 MQ 发送器，无法重发消息";
+    }
+
+    private <T> T available(ObjectProvider<T> provider) {
+        if (provider == null) {
+            return null;
+        }
+        try {
+            return provider.getIfAvailable();
+        } catch (RuntimeException e) {
+            log.debug("获取可选MQ组件失败: {}", e.getMessage());
+            return null;
+        }
     }
 
     public record ActionResult<T>(boolean success, int code, String message, T data) {
