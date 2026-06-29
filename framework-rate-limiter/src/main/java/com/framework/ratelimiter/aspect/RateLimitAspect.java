@@ -55,18 +55,30 @@ public class RateLimitAspect {
 
         String rateLimitKey = buildKey(annotation, method, signature, joinPoint.getArgs());
 
-        RRateLimiter rateLimiter = redissonClient.getRateLimiter(rateLimitKey);
-        // 初始化限流器（OVERALL = 单实例总速率；PER_CLIENT = 每实例独立）
-        rateLimiter.trySetRate(RateType.OVERALL, annotation.limit(), annotation.window(),
-                toRateIntervalUnit(annotation.unit()));
+        // Redisson 异常时按限流失败处理，避免底层基础设施异常穿透到业务接口。
+        boolean acquired = acquire(rateLimitKey, annotation);
 
-        // 尝试获取令牌
-        if (!rateLimiter.tryAcquire()) {
+        if (!acquired) {
             log.warn("[限流拦截] key={}", rateLimitKey);
             throw new BusinessException(ResultCode.RATE_LIMITED, annotation.message());
         }
 
         return joinPoint.proceed();
+    }
+
+    private boolean acquire(String rateLimitKey, RateLimit annotation) {
+        try {
+            RRateLimiter rateLimiter = redissonClient.getRateLimiter(rateLimitKey);
+            // 初始化限流器（OVERALL = 单实例总速率；PER_CLIENT = 每实例独立）
+            rateLimiter.trySetRate(RateType.OVERALL, annotation.limit(), annotation.window(),
+                    toRateIntervalUnit(annotation.unit()));
+
+            // 尝试获取令牌
+            return rateLimiter.tryAcquire();
+        } catch (Exception e) {
+            log.warn("[限流服务异常] key={}, error={}", rateLimitKey, e.getMessage());
+            throw new BusinessException(ResultCode.RATE_LIMITED, "限流服务暂不可用，请稍后重试");
+        }
     }
 
     private void validate(RateLimit annotation, Method method) {

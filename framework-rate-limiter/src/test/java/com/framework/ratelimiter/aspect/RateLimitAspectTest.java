@@ -81,6 +81,32 @@ class RateLimitAspectTest {
     }
 
     @Test
+    void redissonLookupFailuresFailClosedBeforeProceeding() {
+        RateLimitedService service = proxy(new RateLimitedService(),
+                new ThrowingRedisson(ThrowingRedisson.FailurePoint.GET_RATE_LIMITER).client());
+
+        assertThatThrownBy(service::blocked)
+                .isInstanceOf(BusinessException.class)
+                .hasMessage("限流服务暂不可用，请稍后重试")
+                .extracting("code")
+                .isEqualTo(ResultCode.RATE_LIMITED.getCode());
+        assertThat(service.invocations).isZero();
+    }
+
+    @Test
+    void rateLimiterAcquireFailuresFailClosedBeforeProceeding() {
+        RateLimitedService service = proxy(new RateLimitedService(),
+                new ThrowingRedisson(ThrowingRedisson.FailurePoint.TRY_ACQUIRE).client());
+
+        assertThatThrownBy(service::blocked)
+                .isInstanceOf(BusinessException.class)
+                .hasMessage("限流服务暂不可用，请稍后重试")
+                .extracting("code")
+                .isEqualTo(ResultCode.RATE_LIMITED.getCode());
+        assertThat(service.invocations).isZero();
+    }
+
+    @Test
     void rejectsInvalidLimitConfigurationBeforeUsingRedis() {
         RecordingRedisson redisson = new RecordingRedisson(true);
         RateLimitedService service = proxy(new RateLimitedService(), redisson.client());
@@ -227,6 +253,49 @@ class RateLimitAspectTest {
                         }
                         return defaultValue(method.getReturnType());
                     });
+        }
+    }
+
+    private static final class ThrowingRedisson {
+        private final FailurePoint failurePoint;
+
+        private ThrowingRedisson(FailurePoint failurePoint) {
+            this.failurePoint = failurePoint;
+        }
+
+        private RedissonClient client() {
+            return (RedissonClient) Proxy.newProxyInstance(
+                    RedissonClient.class.getClassLoader(),
+                    new Class<?>[]{RedissonClient.class},
+                    (proxy, method, args) -> {
+                        if ("getRateLimiter".equals(method.getName())) {
+                            if (failurePoint == FailurePoint.GET_RATE_LIMITER) {
+                                throw new IllegalStateException("redisson unavailable");
+                            }
+                            return rateLimiter();
+                        }
+                        return defaultValue(method.getReturnType());
+                    });
+        }
+
+        private RRateLimiter rateLimiter() {
+            return (RRateLimiter) Proxy.newProxyInstance(
+                    RRateLimiter.class.getClassLoader(),
+                    new Class<?>[]{RRateLimiter.class},
+                    (proxy, method, args) -> {
+                        if ("trySetRate".equals(method.getName())) {
+                            return true;
+                        }
+                        if ("tryAcquire".equals(method.getName()) && method.getParameterCount() == 0) {
+                            throw new IllegalStateException("rate limiter unavailable");
+                        }
+                        return defaultValue(method.getReturnType());
+                    });
+        }
+
+        private enum FailurePoint {
+            GET_RATE_LIMITER,
+            TRY_ACQUIRE
         }
     }
 
