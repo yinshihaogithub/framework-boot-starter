@@ -86,10 +86,14 @@ public class AdminSystemService {
         if (validation != null) {
             return Result.fail(validation.getCode(), validation.getMessage());
         }
-        Long tenantId = repository.createTenant(request);
-        auditService.success(servletRequest, "系统管理", "新增租户", "INSERT",
-                auditService.params("tenantId", tenantId, "tenantCode", request.getTenantCode()));
-        return Result.success(tenantId);
+        try {
+            Long tenantId = repository.createTenant(request);
+            auditService.success(servletRequest, "系统管理", "新增租户", "INSERT",
+                    auditService.params("tenantId", tenantId, "tenantCode", request.getTenantCode()));
+            return Result.success(tenantId);
+        } catch (RuntimeException e) {
+            return serviceError("新增租户", "租户保存失败", e);
+        }
     }
 
     public Result<String> updateTenant(Long id, TenantRequest request, HttpServletRequest servletRequest) {
@@ -97,23 +101,31 @@ public class AdminSystemService {
         if (validation != null) {
             return validation;
         }
-        repository.updateTenant(id, request);
-        auditService.success(servletRequest, "系统管理", "更新租户", "UPDATE",
-                auditService.params("tenantId", id, "tenantCode", request.getTenantCode(), "status", request.getStatus()));
-        return Result.success("已更新");
+        try {
+            repository.updateTenant(id, request);
+            auditService.success(servletRequest, "系统管理", "更新租户", "UPDATE",
+                    auditService.params("tenantId", id, "tenantCode", request.getTenantCode(), "status", request.getStatus()));
+            return Result.success("已更新");
+        } catch (RuntimeException e) {
+            return serviceError("更新租户", "租户更新失败", e);
+        }
     }
 
     public Result<String> deleteTenant(Long id, HttpServletRequest servletRequest) {
         if (id == 1L) {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), "默认租户不能删除");
         }
-        if (repository.countUsersByTenant(id) > 0) {
-            return Result.fail(ResultCode.PARAM_ERROR.getCode(), "租户下存在用户，不能删除");
+        try {
+            if (repository.countUsersByTenant(id) > 0) {
+                return Result.fail(ResultCode.PARAM_ERROR.getCode(), "租户下存在用户，不能删除");
+            }
+            repository.deleteTenant(id);
+            auditService.success(servletRequest, "系统管理", "删除租户", "DELETE",
+                    auditService.params("tenantId", id));
+            return Result.success("已删除");
+        } catch (RuntimeException e) {
+            return serviceError("删除租户", "租户删除失败", e);
         }
-        repository.deleteTenant(id);
-        auditService.success(servletRequest, "系统管理", "删除租户", "DELETE",
-                auditService.params("tenantId", id));
-        return Result.success("已删除");
     }
 
     public List<Dept> depts(Long tenantId) {
@@ -130,10 +142,14 @@ public class AdminSystemService {
         if (validation != null) {
             return Result.fail(validation.getCode(), validation.getMessage());
         }
-        Long deptId = repository.createDept(request);
-        auditService.success(servletRequest, "系统管理", "新增部门", "INSERT",
-                auditService.params("deptId", deptId, "tenantId", request.getTenantId(), "deptName", request.getDeptName()));
-        return Result.success(deptId);
+        try {
+            Long deptId = repository.createDept(request);
+            auditService.success(servletRequest, "系统管理", "新增部门", "INSERT",
+                    auditService.params("deptId", deptId, "tenantId", request.getTenantId(), "deptName", request.getDeptName()));
+            return Result.success(deptId);
+        } catch (RuntimeException e) {
+            return serviceError("新增部门", "部门保存失败", e);
+        }
     }
 
     public Result<String> updateDept(Long id, DeptRequest request, HttpServletRequest servletRequest) {
@@ -144,21 +160,29 @@ public class AdminSystemService {
         if (id.equals(request.getParentId())) {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), "上级部门不能选择自己");
         }
-        repository.updateDept(id, request);
-        auditService.success(servletRequest, "系统管理", "更新部门", "UPDATE",
-                auditService.params("deptId", id, "tenantId", request.getTenantId(), "deptName", request.getDeptName(),
-                        "status", request.getStatus()));
-        return Result.success("已更新");
+        try {
+            repository.updateDept(id, request);
+            auditService.success(servletRequest, "系统管理", "更新部门", "UPDATE",
+                    auditService.params("deptId", id, "tenantId", request.getTenantId(), "deptName", request.getDeptName(),
+                            "status", request.getStatus()));
+            return Result.success("已更新");
+        } catch (RuntimeException e) {
+            return serviceError("更新部门", "部门更新失败", e);
+        }
     }
 
     public Result<String> deleteDept(Long id, HttpServletRequest servletRequest) {
         if (id == 1L) {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), "总部部门不能删除");
         }
-        repository.deleteDept(id);
-        auditService.success(servletRequest, "系统管理", "删除部门", "DELETE",
-                auditService.params("deptId", id));
-        return Result.success("已删除");
+        try {
+            repository.deleteDept(id);
+            auditService.success(servletRequest, "系统管理", "删除部门", "DELETE",
+                    auditService.params("deptId", id));
+            return Result.success("已删除");
+        } catch (RuntimeException e) {
+            return serviceError("删除部门", "部门删除失败", e);
+        }
     }
 
     public PageResult<AdminUser> users(String keyword, String status, int pageNum, int pageSize) {
@@ -185,11 +209,15 @@ public class AdminSystemService {
         if (passwordError != null) {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), passwordError);
         }
-        Long userId = repository.createUser(request, PasswordUtils.hash(request.getPassword()));
-        refreshPermissionCache(userId);
-        auditService.success(servletRequest, "系统管理", "新增用户", "INSERT",
-                auditService.params("userId", userId, "username", request.getUsername(), "roleIds", request.getRoleIds()));
-        return Result.success(userId);
+        try {
+            Long userId = repository.createUser(request, PasswordUtils.hash(request.getPassword()));
+            refreshPermissionCache(userId);
+            auditService.success(servletRequest, "系统管理", "新增用户", "INSERT",
+                    auditService.params("userId", userId, "username", request.getUsername(), "roleIds", request.getRoleIds()));
+            return Result.success(userId);
+        } catch (RuntimeException e) {
+            return serviceError("新增用户", "用户保存失败", e);
+        }
     }
 
     public Result<String> updateUser(Long id, UserUpdateRequest request, HttpServletRequest servletRequest) {
@@ -202,13 +230,17 @@ public class AdminSystemService {
         if (isBuiltInAdmin(id) && "DISABLED".equals(request.getStatus())) {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), "内置管理员不能禁用");
         }
-        repository.updateUser(id, request);
-        refreshPermissionCache(id);
-        forceLogoutUser(id);
-        auditService.success(servletRequest, "系统管理", "更新用户", "UPDATE",
-                auditService.params("userId", id, "nickname", request.getNickname(), "status", request.getStatus(),
-                        "roleIds", request.getRoleIds()));
-        return Result.success("已更新");
+        try {
+            repository.updateUser(id, request);
+            refreshPermissionCache(id);
+            forceLogoutUser(id);
+            auditService.success(servletRequest, "系统管理", "更新用户", "UPDATE",
+                    auditService.params("userId", id, "nickname", request.getNickname(), "status", request.getStatus(),
+                            "roleIds", request.getRoleIds()));
+            return Result.success("已更新");
+        } catch (RuntimeException e) {
+            return serviceError("更新用户", "用户更新失败", e);
+        }
     }
 
     public Result<String> updateUserStatus(Long id, UserStatusRequest request, HttpServletRequest servletRequest) {
@@ -219,12 +251,16 @@ public class AdminSystemService {
         if (isBuiltInAdmin(id) && "DISABLED".equals(status)) {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), "内置管理员不能禁用");
         }
-        repository.updateUserStatus(id, status);
-        refreshPermissionCache(id);
-        forceLogoutUser(id);
-        auditService.success(servletRequest, "系统管理", "更新用户状态", "UPDATE",
-                auditService.params("userId", id, "status", status));
-        return Result.success("已更新");
+        try {
+            repository.updateUserStatus(id, status);
+            refreshPermissionCache(id);
+            forceLogoutUser(id);
+            auditService.success(servletRequest, "系统管理", "更新用户状态", "UPDATE",
+                    auditService.params("userId", id, "status", status));
+            return Result.success("已更新");
+        } catch (RuntimeException e) {
+            return serviceError("更新用户状态", "用户状态更新失败", e);
+        }
     }
 
     public Result<String> resetPassword(Long id, ResetPasswordRequest request, HttpServletRequest servletRequest) {
@@ -235,30 +271,43 @@ public class AdminSystemService {
         if (passwordError != null) {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), passwordError);
         }
-        repository.resetPassword(id, PasswordUtils.hash(request.getPassword()));
-        forceLogoutUser(id);
-        auditService.success(servletRequest, "系统管理", "重置用户密码", "UPDATE",
-                auditService.params("userId", id));
-        return Result.success("已重置");
+        try {
+            repository.resetPassword(id, PasswordUtils.hash(request.getPassword()));
+            forceLogoutUser(id);
+            auditService.success(servletRequest, "系统管理", "重置用户密码", "UPDATE",
+                    auditService.params("userId", id));
+            return Result.success("已重置");
+        } catch (RuntimeException e) {
+            return serviceError("重置用户密码", "用户密码重置失败", e);
+        }
     }
 
     public Result<String> deleteUser(Long id, HttpServletRequest servletRequest) {
         if (isBuiltInAdmin(id)) {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), "内置管理员不能删除");
         }
-        repository.deleteUser(id);
-        refreshPermissionCache(id);
-        forceLogoutUser(id);
-        auditService.success(servletRequest, "系统管理", "删除用户", "DELETE",
-                auditService.params("userId", id));
-        return Result.success("已删除");
+        try {
+            repository.deleteUser(id);
+            refreshPermissionCache(id);
+            forceLogoutUser(id);
+            auditService.success(servletRequest, "系统管理", "删除用户", "DELETE",
+                    auditService.params("userId", id));
+            return Result.success("已删除");
+        } catch (RuntimeException e) {
+            return serviceError("删除用户", "用户删除失败", e);
+        }
     }
 
     public Result<String> unlockUser(Long id, HttpServletRequest servletRequest) {
         if (id == null) {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), "用户ID不能为空");
         }
-        AdminUser user = repository.findUserById(id).orElse(null);
+        AdminUser user;
+        try {
+            user = repository.findUserById(id).orElse(null);
+        } catch (RuntimeException e) {
+            return serviceError("解锁用户", "用户解锁失败", e);
+        }
         if (user == null) {
             return Result.fail(ResultCode.NOT_FOUND.getCode(), "用户不存在");
         }
@@ -266,10 +315,14 @@ public class AdminSystemService {
         if (loginSecurityService == null) {
             return Result.fail(ResultCode.SERVICE_ERROR.getCode(), "登录安全服务不可用");
         }
-        loginSecurityService.unlock(user.getUsername());
-        auditService.success(servletRequest, "系统管理", "解锁用户", "UPDATE",
-                auditService.params("userId", id, "username", user.getUsername()));
-        return Result.success("已解锁");
+        try {
+            loginSecurityService.unlock(user.getUsername());
+            auditService.success(servletRequest, "系统管理", "解锁用户", "UPDATE",
+                    auditService.params("userId", id, "username", user.getUsername()));
+            return Result.success("已解锁");
+        } catch (RuntimeException e) {
+            return serviceError("解锁用户", "用户解锁失败", e);
+        }
     }
 
     public List<Role> roles() {
@@ -286,10 +339,14 @@ public class AdminSystemService {
         if (validation != null) {
             return Result.fail(validation.getCode(), validation.getMessage());
         }
-        Long roleId = repository.createRole(request);
-        auditService.success(servletRequest, "系统管理", "新增角色", "INSERT",
-                auditService.params("roleId", roleId, "roleCode", request.getRoleCode()));
-        return Result.success(roleId);
+        try {
+            Long roleId = repository.createRole(request);
+            auditService.success(servletRequest, "系统管理", "新增角色", "INSERT",
+                    auditService.params("roleId", roleId, "roleCode", request.getRoleCode()));
+            return Result.success(roleId);
+        } catch (RuntimeException e) {
+            return serviceError("新增角色", "角色保存失败", e);
+        }
     }
 
     public Result<String> updateRole(Long id, RoleRequest request, HttpServletRequest servletRequest) {
@@ -300,26 +357,34 @@ public class AdminSystemService {
         if (isBuiltInSuperAdminRole(id) && "DISABLED".equals(request.getStatus())) {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), "内置超级管理员角色不能禁用");
         }
-        List<Long> affectedUserIds = repository.listUserIdsByRoleId(id);
-        repository.updateRole(id, request);
-        refreshPermissionCache(affectedUserIds);
-        forceLogoutUsers(affectedUserIds);
-        auditService.success(servletRequest, "系统管理", "更新角色", "UPDATE",
-                auditService.params("roleId", id, "roleCode", request.getRoleCode(), "status", request.getStatus()));
-        return Result.success("已更新");
+        try {
+            List<Long> affectedUserIds = repository.listUserIdsByRoleId(id);
+            repository.updateRole(id, request);
+            refreshPermissionCache(affectedUserIds);
+            forceLogoutUsers(affectedUserIds);
+            auditService.success(servletRequest, "系统管理", "更新角色", "UPDATE",
+                    auditService.params("roleId", id, "roleCode", request.getRoleCode(), "status", request.getStatus()));
+            return Result.success("已更新");
+        } catch (RuntimeException e) {
+            return serviceError("更新角色", "角色更新失败", e);
+        }
     }
 
     public Result<String> deleteRole(Long id, HttpServletRequest servletRequest) {
         if (isBuiltInSuperAdminRole(id)) {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), "内置超级管理员角色不能删除");
         }
-        List<Long> affectedUserIds = repository.listUserIdsByRoleId(id);
-        repository.deleteRole(id);
-        refreshPermissionCache(affectedUserIds);
-        forceLogoutUsers(affectedUserIds);
-        auditService.success(servletRequest, "系统管理", "删除角色", "DELETE",
-                auditService.params("roleId", id));
-        return Result.success("已删除");
+        try {
+            List<Long> affectedUserIds = repository.listUserIdsByRoleId(id);
+            repository.deleteRole(id);
+            refreshPermissionCache(affectedUserIds);
+            forceLogoutUsers(affectedUserIds);
+            auditService.success(servletRequest, "系统管理", "删除角色", "DELETE",
+                    auditService.params("roleId", id));
+            return Result.success("已删除");
+        } catch (RuntimeException e) {
+            return serviceError("删除角色", "角色删除失败", e);
+        }
     }
 
     public List<Long> roleMenuIds(Long id) {
@@ -332,13 +397,17 @@ public class AdminSystemService {
     }
 
     public Result<String> updateRoleMenus(Long id, RoleMenuRequest request, HttpServletRequest servletRequest) {
-        List<Long> affectedUserIds = repository.listUserIdsByRoleId(id);
-        repository.replaceRoleMenus(id, request == null ? List.of() : request.getMenuIds());
-        refreshPermissionCache(affectedUserIds);
-        forceLogoutUsers(affectedUserIds);
-        auditService.success(servletRequest, "系统管理", "角色菜单授权", "UPDATE",
-                auditService.params("roleId", id, "menuIds", request == null ? List.of() : request.getMenuIds()));
-        return Result.success("已授权");
+        try {
+            List<Long> affectedUserIds = repository.listUserIdsByRoleId(id);
+            repository.replaceRoleMenus(id, request == null ? List.of() : request.getMenuIds());
+            refreshPermissionCache(affectedUserIds);
+            forceLogoutUsers(affectedUserIds);
+            auditService.success(servletRequest, "系统管理", "角色菜单授权", "UPDATE",
+                    auditService.params("roleId", id, "menuIds", request == null ? List.of() : request.getMenuIds()));
+            return Result.success("已授权");
+        } catch (RuntimeException e) {
+            return serviceError("角色菜单授权", "角色授权失败", e);
+        }
     }
 
     public List<Menu> menus() {
@@ -355,12 +424,16 @@ public class AdminSystemService {
         if (validation != null) {
             return Result.fail(validation.getCode(), validation.getMessage());
         }
-        Long menuId = repository.createMenu(request);
-        clearPermissionCache();
-        forceLogoutAllUsers();
-        auditService.success(servletRequest, "系统管理", "新增菜单", "INSERT",
-                auditService.params("menuId", menuId, "menuName", request.getMenuName(), "permission", request.getPermission()));
-        return Result.success(menuId);
+        try {
+            Long menuId = repository.createMenu(request);
+            clearPermissionCache();
+            forceLogoutAllUsers();
+            auditService.success(servletRequest, "系统管理", "新增菜单", "INSERT",
+                    auditService.params("menuId", menuId, "menuName", request.getMenuName(), "permission", request.getPermission()));
+            return Result.success(menuId);
+        } catch (RuntimeException e) {
+            return serviceError("新增菜单", "菜单保存失败", e);
+        }
     }
 
     public Result<String> updateMenu(Long id, MenuRequest request, HttpServletRequest servletRequest) {
@@ -371,21 +444,29 @@ public class AdminSystemService {
         if (id.equals(request.getParentId())) {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), "上级菜单不能选择自己");
         }
-        repository.updateMenu(id, request);
-        clearPermissionCache();
-        forceLogoutAllUsers();
-        auditService.success(servletRequest, "系统管理", "更新菜单", "UPDATE",
-                auditService.params("menuId", id, "menuName", request.getMenuName(), "permission", request.getPermission()));
-        return Result.success("已更新");
+        try {
+            repository.updateMenu(id, request);
+            clearPermissionCache();
+            forceLogoutAllUsers();
+            auditService.success(servletRequest, "系统管理", "更新菜单", "UPDATE",
+                    auditService.params("menuId", id, "menuName", request.getMenuName(), "permission", request.getPermission()));
+            return Result.success("已更新");
+        } catch (RuntimeException e) {
+            return serviceError("更新菜单", "菜单更新失败", e);
+        }
     }
 
     public Result<String> deleteMenu(Long id, HttpServletRequest servletRequest) {
-        repository.deleteMenu(id);
-        clearPermissionCache();
-        forceLogoutAllUsers();
-        auditService.success(servletRequest, "系统管理", "删除菜单", "DELETE",
-                auditService.params("menuId", id));
-        return Result.success("已删除");
+        try {
+            repository.deleteMenu(id);
+            clearPermissionCache();
+            forceLogoutAllUsers();
+            auditService.success(servletRequest, "系统管理", "删除菜单", "DELETE",
+                    auditService.params("menuId", id));
+            return Result.success("已删除");
+        } catch (RuntimeException e) {
+            return serviceError("删除菜单", "菜单删除失败", e);
+        }
     }
 
     public List<DictType> dictTypes() {
@@ -402,10 +483,14 @@ public class AdminSystemService {
         if (validation != null) {
             return Result.fail(validation.getCode(), validation.getMessage());
         }
-        Long dictTypeId = repository.createDictType(request);
-        auditService.success(servletRequest, "系统管理", "新增字典类型", "INSERT",
-                auditService.params("dictTypeId", dictTypeId, "dictCode", request.getDictCode()));
-        return Result.success(dictTypeId);
+        try {
+            Long dictTypeId = repository.createDictType(request);
+            auditService.success(servletRequest, "系统管理", "新增字典类型", "INSERT",
+                    auditService.params("dictTypeId", dictTypeId, "dictCode", request.getDictCode()));
+            return Result.success(dictTypeId);
+        } catch (RuntimeException e) {
+            return serviceError("新增字典类型", "字典类型保存失败", e);
+        }
     }
 
     public Result<String> updateDictType(Long id, DictTypeRequest request, HttpServletRequest servletRequest) {
@@ -413,17 +498,25 @@ public class AdminSystemService {
         if (validation != null) {
             return validation;
         }
-        repository.updateDictType(id, request);
-        auditService.success(servletRequest, "系统管理", "更新字典类型", "UPDATE",
-                auditService.params("dictTypeId", id, "dictCode", request.getDictCode(), "status", request.getStatus()));
-        return Result.success("已更新");
+        try {
+            repository.updateDictType(id, request);
+            auditService.success(servletRequest, "系统管理", "更新字典类型", "UPDATE",
+                    auditService.params("dictTypeId", id, "dictCode", request.getDictCode(), "status", request.getStatus()));
+            return Result.success("已更新");
+        } catch (RuntimeException e) {
+            return serviceError("更新字典类型", "字典类型更新失败", e);
+        }
     }
 
     public Result<String> deleteDictType(Long id, HttpServletRequest servletRequest) {
-        repository.deleteDictType(id);
-        auditService.success(servletRequest, "系统管理", "删除字典类型", "DELETE",
-                auditService.params("dictTypeId", id));
-        return Result.success("已删除");
+        try {
+            repository.deleteDictType(id);
+            auditService.success(servletRequest, "系统管理", "删除字典类型", "DELETE",
+                    auditService.params("dictTypeId", id));
+            return Result.success("已删除");
+        } catch (RuntimeException e) {
+            return serviceError("删除字典类型", "字典类型删除失败", e);
+        }
     }
 
     public List<DictItem> dictItems(String dictCode) {
@@ -440,11 +533,15 @@ public class AdminSystemService {
         if (validation != null) {
             return Result.fail(validation.getCode(), validation.getMessage());
         }
-        Long dictItemId = repository.createDictItem(request);
-        auditService.success(servletRequest, "系统管理", "新增字典项", "INSERT",
-                auditService.params("dictItemId", dictItemId, "dictCode", request.getDictCode(),
-                        "itemValue", request.getItemValue()));
-        return Result.success(dictItemId);
+        try {
+            Long dictItemId = repository.createDictItem(request);
+            auditService.success(servletRequest, "系统管理", "新增字典项", "INSERT",
+                    auditService.params("dictItemId", dictItemId, "dictCode", request.getDictCode(),
+                            "itemValue", request.getItemValue()));
+            return Result.success(dictItemId);
+        } catch (RuntimeException e) {
+            return serviceError("新增字典项", "字典项保存失败", e);
+        }
     }
 
     public Result<String> updateDictItem(Long id, DictItemRequest request, HttpServletRequest servletRequest) {
@@ -452,18 +549,26 @@ public class AdminSystemService {
         if (validation != null) {
             return validation;
         }
-        repository.updateDictItem(id, request);
-        auditService.success(servletRequest, "系统管理", "更新字典项", "UPDATE",
-                auditService.params("dictItemId", id, "dictCode", request.getDictCode(),
-                        "itemValue", request.getItemValue()));
-        return Result.success("已更新");
+        try {
+            repository.updateDictItem(id, request);
+            auditService.success(servletRequest, "系统管理", "更新字典项", "UPDATE",
+                    auditService.params("dictItemId", id, "dictCode", request.getDictCode(),
+                            "itemValue", request.getItemValue()));
+            return Result.success("已更新");
+        } catch (RuntimeException e) {
+            return serviceError("更新字典项", "字典项更新失败", e);
+        }
     }
 
     public Result<String> deleteDictItem(Long id, HttpServletRequest servletRequest) {
-        repository.deleteDictItem(id);
-        auditService.success(servletRequest, "系统管理", "删除字典项", "DELETE",
-                auditService.params("dictItemId", id));
-        return Result.success("已删除");
+        try {
+            repository.deleteDictItem(id);
+            auditService.success(servletRequest, "系统管理", "删除字典项", "DELETE",
+                    auditService.params("dictItemId", id));
+            return Result.success("已删除");
+        } catch (RuntimeException e) {
+            return serviceError("删除字典项", "字典项删除失败", e);
+        }
     }
 
     public List<ConfigItem> configs() {
@@ -480,11 +585,15 @@ public class AdminSystemService {
         if (validation != null) {
             return Result.fail(validation.getCode(), validation.getMessage());
         }
-        Long configId = repository.createConfig(request);
-        auditService.success(servletRequest, "系统管理", "新增系统参数", "INSERT",
-                auditService.params("configId", configId, "configKey", request.getConfigKey(),
-                        "sensitive", request.getSensitive()));
-        return Result.success(configId);
+        try {
+            Long configId = repository.createConfig(request);
+            auditService.success(servletRequest, "系统管理", "新增系统参数", "INSERT",
+                    auditService.params("configId", configId, "configKey", request.getConfigKey(),
+                            "sensitive", request.getSensitive()));
+            return Result.success(configId);
+        } catch (RuntimeException e) {
+            return serviceError("新增系统参数", "系统参数保存失败", e);
+        }
     }
 
     public Result<String> updateConfig(Long id, ConfigRequest request, HttpServletRequest servletRequest) {
@@ -492,18 +601,31 @@ public class AdminSystemService {
         if (validation != null) {
             return validation;
         }
-        repository.updateConfig(id, request);
-        auditService.success(servletRequest, "系统管理", "更新系统参数", "UPDATE",
-                auditService.params("configId", id, "configKey", request.getConfigKey(),
-                        "sensitive", request.getSensitive()));
-        return Result.success("已更新");
+        try {
+            repository.updateConfig(id, request);
+            auditService.success(servletRequest, "系统管理", "更新系统参数", "UPDATE",
+                    auditService.params("configId", id, "configKey", request.getConfigKey(),
+                            "sensitive", request.getSensitive()));
+            return Result.success("已更新");
+        } catch (RuntimeException e) {
+            return serviceError("更新系统参数", "系统参数更新失败", e);
+        }
     }
 
     public Result<String> deleteConfig(Long id, HttpServletRequest servletRequest) {
-        repository.deleteConfig(id);
-        auditService.success(servletRequest, "系统管理", "删除系统参数", "DELETE",
-                auditService.params("configId", id));
-        return Result.success("已删除");
+        try {
+            repository.deleteConfig(id);
+            auditService.success(servletRequest, "系统管理", "删除系统参数", "DELETE",
+                    auditService.params("configId", id));
+            return Result.success("已删除");
+        } catch (RuntimeException e) {
+            return serviceError("删除系统参数", "系统参数删除失败", e);
+        }
+    }
+
+    private <T> Result<T> serviceError(String action, String message, RuntimeException exception) {
+        log.warn("[系统管理] {}失败 error={}", action, exception.getMessage());
+        return Result.fail(ResultCode.SERVICE_ERROR.getCode(), message);
     }
 
     private int safePageNum(int pageNum) {

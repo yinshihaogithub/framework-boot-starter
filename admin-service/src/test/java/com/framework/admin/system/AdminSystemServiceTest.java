@@ -3,13 +3,18 @@ package com.framework.admin.system;
 import com.framework.admin.audit.AdminAuditService;
 import com.framework.admin.system.AdminSystemModels.AdminUser;
 import com.framework.admin.system.AdminSystemModels.ConfigItem;
+import com.framework.admin.system.AdminSystemModels.ConfigRequest;
 import com.framework.admin.system.AdminSystemModels.DictItem;
+import com.framework.admin.system.AdminSystemModels.DictItemRequest;
 import com.framework.admin.system.AdminSystemModels.DictType;
+import com.framework.admin.system.AdminSystemModels.DictTypeRequest;
 import com.framework.admin.system.AdminSystemModels.Dept;
+import com.framework.admin.system.AdminSystemModels.DeptRequest;
 import com.framework.admin.system.AdminSystemModels.Menu;
 import com.framework.admin.system.AdminSystemModels.MenuRequest;
 import com.framework.admin.system.AdminSystemModels.ResetPasswordRequest;
 import com.framework.admin.system.AdminSystemModels.Role;
+import com.framework.admin.system.AdminSystemModels.RoleMenuRequest;
 import com.framework.admin.system.AdminSystemModels.RoleRequest;
 import com.framework.admin.system.AdminSystemModels.Tenant;
 import com.framework.admin.system.AdminSystemModels.TenantRequest;
@@ -389,6 +394,141 @@ class AdminSystemServiceTest {
         assertThat(result.getMessage()).isEqualTo("租户编码和名称不能为空");
     }
 
+    @Test
+    void writeEndpointsReturnServiceErrorWhenRepositoryFails() {
+        repository.commandFailure = new RuntimeException("database down");
+        UserCreateRequest userCreate = new UserCreateRequest();
+        userCreate.setUsername("alice");
+        userCreate.setPassword("Pass@123");
+
+        assertServiceError(service.createTenant(tenantRequest(), null), "租户保存失败");
+        assertServiceError(service.updateTenant(9L, tenantRequest(), null), "租户更新失败");
+        assertServiceError(service.deleteTenant(9L, null), "租户删除失败");
+        assertServiceError(service.createDept(deptRequest(), null), "部门保存失败");
+        assertServiceError(service.updateDept(9L, deptRequest(), null), "部门更新失败");
+        assertServiceError(service.deleteDept(9L, null), "部门删除失败");
+        assertServiceError(service.createUser(userCreate, null), "用户保存失败");
+        assertServiceError(service.updateUser(9L, userUpdateRequest(), null), "用户更新失败");
+        assertServiceError(service.updateUserStatus(9L, userStatusRequest(), null), "用户状态更新失败");
+        assertServiceError(service.resetPassword(9L, resetPasswordRequest(), null), "用户密码重置失败");
+        assertServiceError(service.deleteUser(9L, null), "用户删除失败");
+        assertServiceError(service.createRole(roleRequest(), null), "角色保存失败");
+        assertServiceError(service.updateRole(9L, roleRequest(), null), "角色更新失败");
+        assertServiceError(service.deleteRole(9L, null), "角色删除失败");
+        assertServiceError(service.updateRoleMenus(9L, roleMenuRequest(), null), "角色授权失败");
+        assertServiceError(service.createMenu(menuRequest(), null), "菜单保存失败");
+        assertServiceError(service.updateMenu(9L, menuRequest(), null), "菜单更新失败");
+        assertServiceError(service.deleteMenu(9L, null), "菜单删除失败");
+        assertServiceError(service.createDictType(dictTypeRequest(), null), "字典类型保存失败");
+        assertServiceError(service.updateDictType(9L, dictTypeRequest(), null), "字典类型更新失败");
+        assertServiceError(service.deleteDictType(9L, null), "字典类型删除失败");
+        assertServiceError(service.createDictItem(dictItemRequest(), null), "字典项保存失败");
+        assertServiceError(service.updateDictItem(9L, dictItemRequest(), null), "字典项更新失败");
+        assertServiceError(service.deleteDictItem(9L, null), "字典项删除失败");
+        assertServiceError(service.createConfig(configRequest(), null), "系统参数保存失败");
+        assertServiceError(service.updateConfig(9L, configRequest(), null), "系统参数更新失败");
+        assertServiceError(service.deleteConfig(9L, null), "系统参数删除失败");
+        assertThat(auditService.actions).isEmpty();
+    }
+
+    @Test
+    void unlockUserReturnsServiceErrorWhenRepositoryFails() {
+        repository.commandFailure = new RuntimeException("database down");
+
+        Result<String> result = service.unlockUser(9L, null);
+
+        assertServiceError(result, "用户解锁失败");
+        assertThat(auditService.actions).isEmpty();
+    }
+
+    private static void assertServiceError(Result<?> result, String message) {
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getCode()).isEqualTo(ResultCode.SERVICE_ERROR.getCode());
+        assertThat(result.getMessage()).isEqualTo(message);
+    }
+
+    private static TenantRequest tenantRequest() {
+        TenantRequest request = new TenantRequest();
+        request.setTenantCode("tenant-a");
+        request.setTenantName("租户A");
+        request.setStatus("ENABLED");
+        return request;
+    }
+
+    private static DeptRequest deptRequest() {
+        DeptRequest request = new DeptRequest();
+        request.setDeptName("研发部");
+        request.setParentId(0L);
+        request.setStatus("ENABLED");
+        return request;
+    }
+
+    private static UserUpdateRequest userUpdateRequest() {
+        UserUpdateRequest request = new UserUpdateRequest();
+        request.setNickname("Alice");
+        request.setStatus("ENABLED");
+        return request;
+    }
+
+    private static UserStatusRequest userStatusRequest() {
+        UserStatusRequest request = new UserStatusRequest();
+        request.setStatus("ENABLED");
+        return request;
+    }
+
+    private static ResetPasswordRequest resetPasswordRequest() {
+        ResetPasswordRequest request = new ResetPasswordRequest();
+        request.setPassword("NewAdmin@123");
+        return request;
+    }
+
+    private static RoleRequest roleRequest() {
+        RoleRequest request = new RoleRequest();
+        request.setRoleCode("OPS");
+        request.setRoleName("运维");
+        request.setStatus("ENABLED");
+        return request;
+    }
+
+    private static RoleMenuRequest roleMenuRequest() {
+        RoleMenuRequest request = new RoleMenuRequest();
+        request.setMenuIds(List.of(1L, 2L));
+        return request;
+    }
+
+    private static MenuRequest menuRequest() {
+        MenuRequest request = new MenuRequest();
+        request.setMenuType("MENU");
+        request.setMenuName("运维中心");
+        request.setParentId(0L);
+        return request;
+    }
+
+    private static DictTypeRequest dictTypeRequest() {
+        DictTypeRequest request = new DictTypeRequest();
+        request.setDictCode("sys_status");
+        request.setDictName("系统状态");
+        request.setStatus("ENABLED");
+        return request;
+    }
+
+    private static DictItemRequest dictItemRequest() {
+        DictItemRequest request = new DictItemRequest();
+        request.setDictCode("sys_status");
+        request.setItemLabel("启用");
+        request.setItemValue("ENABLED");
+        request.setStatus("ENABLED");
+        return request;
+    }
+
+    private static ConfigRequest configRequest() {
+        ConfigRequest request = new ConfigRequest();
+        request.setConfigKey("system.name");
+        request.setConfigName("系统名称");
+        request.setConfigValue("Framework");
+        return request;
+    }
+
     private static class FakeRepository extends AdminSystemRepository {
         private List<AdminUser> users = List.of();
         private long userCount;
@@ -416,6 +556,7 @@ class AdminSystemServiceTest {
         private Long updatedMenuId;
         private MenuRequest updatedMenu;
         private RuntimeException queryFailure;
+        private RuntimeException commandFailure;
 
         private FakeRepository() {
             super(null);
@@ -449,11 +590,52 @@ class AdminSystemServiceTest {
 
         @Override
         public Optional<AdminUser> findUserById(Long id) {
+            failCommandIfNeeded();
             return Optional.ofNullable(userById);
         }
 
         @Override
+        public Long createTenant(TenantRequest request) {
+            failCommandIfNeeded();
+            return 10L;
+        }
+
+        @Override
+        public void updateTenant(Long id, TenantRequest request) {
+            failCommandIfNeeded();
+        }
+
+        @Override
+        public long countUsersByTenant(Long tenantId) {
+            failCommandIfNeeded();
+            return tenantUserCount;
+        }
+
+        @Override
+        public void deleteTenant(Long id) {
+            failCommandIfNeeded();
+            this.deletedTenantId = id;
+        }
+
+        @Override
+        public Long createDept(DeptRequest request) {
+            failCommandIfNeeded();
+            return 11L;
+        }
+
+        @Override
+        public void updateDept(Long id, DeptRequest request) {
+            failCommandIfNeeded();
+        }
+
+        @Override
+        public void deleteDept(Long id) {
+            failCommandIfNeeded();
+        }
+
+        @Override
         public Long createUser(UserCreateRequest request, String passwordHash) {
+            failCommandIfNeeded();
             this.createdUser = request;
             this.createdPasswordHash = passwordHash;
             return nextUserId;
@@ -461,34 +643,33 @@ class AdminSystemServiceTest {
 
         @Override
         public void updateUser(Long userId, UserUpdateRequest request) {
+            failCommandIfNeeded();
             this.updatedUserId = userId;
             this.updatedUser = request;
         }
 
         @Override
         public void updateUserStatus(Long userId, String status) {
+            failCommandIfNeeded();
             this.updatedUserStatusId = userId;
             this.updatedUserStatus = status;
         }
 
         @Override
-        public long countUsersByTenant(Long tenantId) {
-            return tenantUserCount;
-        }
-
-        @Override
-        public void deleteTenant(Long id) {
-            this.deletedTenantId = id;
-        }
-
-        @Override
         public void resetPassword(Long userId, String passwordHash) {
+            failCommandIfNeeded();
             this.resetPasswordUserId = userId;
             this.resetPasswordHash = passwordHash;
         }
 
         @Override
+        public void deleteUser(Long userId) {
+            failCommandIfNeeded();
+        }
+
+        @Override
         public Long createRole(RoleRequest request) {
+            failCommandIfNeeded();
             this.createdRole = request;
             return 3L;
         }
@@ -501,13 +682,20 @@ class AdminSystemServiceTest {
 
         @Override
         public void updateRole(Long roleId, RoleRequest request) {
+            failCommandIfNeeded();
             this.updatedRoleId = roleId;
             this.updatedRole = request;
         }
 
         @Override
         public List<Long> listUserIdsByRoleId(Long roleId) {
+            failCommandIfNeeded();
             return affectedUserIdsByRole;
+        }
+
+        @Override
+        public void deleteRole(Long roleId) {
+            failCommandIfNeeded();
         }
 
         @Override
@@ -518,6 +706,7 @@ class AdminSystemServiceTest {
 
         @Override
         public void replaceRoleMenus(Long roleId, List<Long> menuIds) {
+            failCommandIfNeeded();
             this.replacedRoleMenuRoleId = roleId;
             this.replacedRoleMenuIds = menuIds == null ? List.of() : List.copyOf(menuIds);
         }
@@ -530,14 +719,21 @@ class AdminSystemServiceTest {
 
         @Override
         public Long createMenu(MenuRequest request) {
+            failCommandIfNeeded();
             this.createdMenu = request;
             return 12L;
         }
 
         @Override
         public void updateMenu(Long menuId, MenuRequest request) {
+            failCommandIfNeeded();
             this.updatedMenuId = menuId;
             this.updatedMenu = request;
+        }
+
+        @Override
+        public void deleteMenu(Long menuId) {
+            failCommandIfNeeded();
         }
 
         @Override
@@ -558,9 +754,63 @@ class AdminSystemServiceTest {
             return List.of();
         }
 
+        @Override
+        public Long createDictType(DictTypeRequest request) {
+            failCommandIfNeeded();
+            return 13L;
+        }
+
+        @Override
+        public void updateDictType(Long id, DictTypeRequest request) {
+            failCommandIfNeeded();
+        }
+
+        @Override
+        public void deleteDictType(Long id) {
+            failCommandIfNeeded();
+        }
+
+        @Override
+        public Long createDictItem(DictItemRequest request) {
+            failCommandIfNeeded();
+            return 14L;
+        }
+
+        @Override
+        public void updateDictItem(Long id, DictItemRequest request) {
+            failCommandIfNeeded();
+        }
+
+        @Override
+        public void deleteDictItem(Long id) {
+            failCommandIfNeeded();
+        }
+
+        @Override
+        public Long createConfig(ConfigRequest request) {
+            failCommandIfNeeded();
+            return 15L;
+        }
+
+        @Override
+        public void updateConfig(Long id, ConfigRequest request) {
+            failCommandIfNeeded();
+        }
+
+        @Override
+        public void deleteConfig(Long id) {
+            failCommandIfNeeded();
+        }
+
         private void failQueryIfNeeded() {
             if (queryFailure != null) {
                 throw queryFailure;
+            }
+        }
+
+        private void failCommandIfNeeded() {
+            if (commandFailure != null) {
+                throw commandFailure;
             }
         }
     }
