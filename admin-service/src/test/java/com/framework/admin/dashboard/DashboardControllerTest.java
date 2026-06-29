@@ -3,10 +3,13 @@ package com.framework.admin.dashboard;
 import com.framework.admin.excel.ExcelAdminRepository;
 import com.framework.admin.file.FileAdminRepository;
 import com.framework.admin.notify.NotifyAdminRepository;
+import com.framework.admin.system.AdminSystemModels.ConfigItem;
+import com.framework.admin.system.AdminSystemRepository;
 import com.framework.core.result.Result;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 
@@ -17,6 +20,7 @@ class DashboardControllerTest {
     @Test
     void moduleStatusesMatchAdminRuntimeModules() {
         DashboardService service = new DashboardService(
+                provider(null),
                 provider(null),
                 provider(null),
                 provider(null),
@@ -51,7 +55,8 @@ class DashboardControllerTest {
                 provider(null),
                 provider(new FakeNotifyRepository()),
                 provider(new FakeExcelRepository()),
-                provider(new FakeFileRepository()));
+                provider(new FakeFileRepository()),
+                provider(new FakeSystemRepository(false)));
         DashboardController controller = new DashboardController(service);
 
         Result<DashboardController.DashboardSummary> result = controller.summary();
@@ -67,6 +72,25 @@ class DashboardControllerTest {
         assertThat(result.getData().files())
                 .containsEntry("active", 4L)
                 .containsEntry("totalSize", 1024L);
+        assertThat(result.getData().security().defaultPasswordChanged()).isFalse();
+    }
+
+    @Test
+    void summaryIncludesDefaultPasswordChangedSecurityStatus() {
+        DashboardService service = new DashboardService(
+                provider(null),
+                provider(null),
+                provider(null),
+                provider(null),
+                provider(null),
+                provider(null),
+                provider(new FakeSystemRepository(true)));
+        DashboardController controller = new DashboardController(service);
+
+        Result<DashboardController.DashboardSummary> result = controller.summary();
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getData().security().defaultPasswordChanged()).isTrue();
     }
 
     private static class FakeNotifyRepository extends NotifyAdminRepository {
@@ -114,6 +138,22 @@ class DashboardControllerTest {
         @Override
         public Map<String, Long> stats() {
             return Map.of("active", 4L, "deleted", 1L, "totalSize", 1024L);
+        }
+    }
+
+    private static class FakeSystemRepository extends AdminSystemRepository {
+        private final boolean defaultPasswordChanged;
+
+        private FakeSystemRepository(boolean defaultPasswordChanged) {
+            super(null);
+            this.defaultPasswordChanged = defaultPasswordChanged;
+        }
+
+        @Override
+        public List<ConfigItem> listConfigs() {
+            return List.of(new ConfigItem()
+                    .setConfigKey("admin.default.password.changed")
+                    .setConfigValue(String.valueOf(defaultPasswordChanged)));
         }
     }
 

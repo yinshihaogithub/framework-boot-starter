@@ -38,7 +38,11 @@ public class DashboardController {
                                    Map<String, Long> notifications,
                                    Map<String, Long> excel,
                                    Map<String, Long> files,
+                                   SecurityStatus security,
                                    List<ModuleStatus> modules) {
+    }
+
+    public record SecurityStatus(boolean defaultPasswordChanged) {
     }
 
     public record ModuleStatus(String name, String status) {

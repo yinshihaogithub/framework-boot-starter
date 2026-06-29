@@ -3,6 +3,8 @@ package com.framework.admin.dashboard;
 import com.framework.admin.excel.ExcelAdminRepository;
 import com.framework.admin.file.FileAdminRepository;
 import com.framework.admin.notify.NotifyAdminRepository;
+import com.framework.admin.system.AdminSystemModels.ConfigItem;
+import com.framework.admin.system.AdminSystemRepository;
 import com.framework.localmessage.model.LocalMessageStatus;
 import com.framework.localmessage.service.LocalMessageService;
 import com.framework.log.mapper.OperationLogMapper;
@@ -28,19 +30,22 @@ public class DashboardService {
     private final ObjectProvider<NotifyAdminRepository> notifyAdminRepositoryProvider;
     private final ObjectProvider<ExcelAdminRepository> excelAdminRepositoryProvider;
     private final ObjectProvider<FileAdminRepository> fileAdminRepositoryProvider;
+    private final ObjectProvider<AdminSystemRepository> adminSystemRepositoryProvider;
 
     public DashboardService(ObjectProvider<DeadLetterHandler> deadLetterHandlerProvider,
                             ObjectProvider<LocalMessageService> localMessageServiceProvider,
                             ObjectProvider<OperationLogMapper> operationLogMapperProvider,
                             ObjectProvider<NotifyAdminRepository> notifyAdminRepositoryProvider,
                             ObjectProvider<ExcelAdminRepository> excelAdminRepositoryProvider,
-                            ObjectProvider<FileAdminRepository> fileAdminRepositoryProvider) {
+                            ObjectProvider<FileAdminRepository> fileAdminRepositoryProvider,
+                            ObjectProvider<AdminSystemRepository> adminSystemRepositoryProvider) {
         this.deadLetterHandlerProvider = deadLetterHandlerProvider;
         this.localMessageServiceProvider = localMessageServiceProvider;
         this.operationLogMapperProvider = operationLogMapperProvider;
         this.notifyAdminRepositoryProvider = notifyAdminRepositoryProvider;
         this.excelAdminRepositoryProvider = excelAdminRepositoryProvider;
         this.fileAdminRepositoryProvider = fileAdminRepositoryProvider;
+        this.adminSystemRepositoryProvider = adminSystemRepositoryProvider;
     }
 
     public DashboardController.DashboardSummary summary() {
@@ -51,6 +56,7 @@ public class DashboardService {
                 notifyMetrics(),
                 excelMetrics(),
                 fileMetrics(),
+                securityStatus(),
                 moduleStatuses());
     }
 
@@ -178,6 +184,24 @@ public class DashboardService {
     private Map<String, Long> zero(Map<String, Long> metrics) {
         metrics.replaceAll((key, value) -> 0L);
         return metrics;
+    }
+
+    private DashboardController.SecurityStatus securityStatus() {
+        AdminSystemRepository repository = adminSystemRepositoryProvider.getIfAvailable();
+        if (repository == null) {
+            return new DashboardController.SecurityStatus(true);
+        }
+        try {
+            boolean changed = repository.listConfigs().stream()
+                    .filter(config -> "admin.default.password.changed".equals(config.getConfigKey()))
+                    .map(ConfigItem::getConfigValue)
+                    .findFirst()
+                    .map(Boolean::parseBoolean)
+                    .orElse(false);
+            return new DashboardController.SecurityStatus(changed);
+        } catch (Exception ignored) {
+            return new DashboardController.SecurityStatus(true);
+        }
     }
 
     private List<DashboardController.ModuleStatus> moduleStatuses() {

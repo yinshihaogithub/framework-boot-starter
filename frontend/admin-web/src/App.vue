@@ -144,6 +144,25 @@
             <div class="metric"><span>有效文件</span><strong>{{ dashboard?.files?.active ?? 0 }}</strong></div>
             <div class="metric"><span>文件空间</span><strong>{{ formatBytes(dashboard?.files?.totalSize ?? 0) }}</strong></div>
           </div>
+          <el-alert
+            v-if="dashboard?.security?.defaultPasswordChanged === false"
+            class="security-alert"
+            type="warning"
+            show-icon
+            :closable="false"
+          >
+            <template #title>
+              <span>默认管理员密码尚未修改</span>
+            </template>
+            <template #default>
+              <div class="security-alert-body">
+                <span>请立即修改当前账号密码，避免默认凭据暴露在共享环境中。</span>
+                <el-button :icon="Lock" size="small" type="warning" @click="openChangePassword">
+                  修改密码
+                </el-button>
+              </div>
+            </template>
+          </el-alert>
           <el-card shadow="never">
             <template #header><div class="section-head"><span>框架模块</span><el-tag size="small" type="info">{{ dashboard?.modules?.length ?? 0 }}</el-tag></div></template>
             <div class="module-grid">
@@ -3165,6 +3184,21 @@ function formatHealthDetails(details?: Record<string, unknown>) {
   color: #18181b;
   font-size: 26px;
   line-height: 1;
+}
+
+.security-alert {
+  border-radius: 8px;
+}
+
+.security-alert-body {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.security-alert-body span {
+  min-width: 0;
 }
 
 .module-grid,

@@ -672,23 +672,31 @@ class RepositoryEngineeringGuardTest {
         assertThat(controller)
                 .contains("Map<String, Long> notifications")
                 .contains("Map<String, Long> excel")
-                .contains("Map<String, Long> files");
+                .contains("Map<String, Long> files")
+                .contains("SecurityStatus")
+                .contains("defaultPasswordChanged");
         assertThat(service)
                 .contains("ObjectProvider<NotifyAdminRepository>")
                 .contains("ObjectProvider<ExcelAdminRepository>")
                 .contains("ObjectProvider<FileAdminRepository>")
+                .contains("ObjectProvider<AdminSystemRepository>")
+                .contains("admin.default.password.changed")
                 .contains("notifyMetrics()")
                 .contains("excelMetrics()")
-                .contains("fileMetrics()");
+                .contains("fileMetrics()")
+                .contains("securityStatus()");
         assertThat(client)
                 .contains("notifications: Record<string, number>")
                 .contains("excel: Record<string, number>")
-                .contains("files: Record<string, number>");
+                .contains("files: Record<string, number>")
+                .contains("security: { defaultPasswordChanged: boolean }");
         assertThat(app)
                 .contains("dashboard?.notifications?.records")
                 .contains("dashboard?.excel?.total")
                 .contains("dashboard?.files?.active")
-                .contains("dashboard?.files?.totalSize");
+                .contains("dashboard?.files?.totalSize")
+                .contains("dashboard?.security?.defaultPasswordChanged === false")
+                .contains("默认管理员密码尚未修改");
     }
 
     @Test

@@ -39,6 +39,7 @@ export interface DashboardSummary {
   notifications: Record<string, number>
   excel: Record<string, number>
   files: Record<string, number>
+  security: { defaultPasswordChanged: boolean }
   modules: Array<{ name: string; status: string }>
 }
 
