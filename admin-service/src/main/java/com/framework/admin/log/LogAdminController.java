@@ -3,6 +3,7 @@ package com.framework.admin.log;
 import com.framework.admin.system.AdminSystemModels.LoginLog;
 import com.framework.core.result.PageResult;
 import com.framework.core.result.Result;
+import com.framework.core.result.ResultCode;
 import com.framework.log.entity.OperationLogEntity;
 import com.framework.security.annotation.RequirePermission;
 import io.swagger.v3.oas.annotations.Operation;
@@ -55,7 +56,10 @@ public class LogAdminController {
     public Result<PageResult<OperationLogEntity>> trace(@PathVariable String traceId,
                                                         @RequestParam(defaultValue = "1") int pageNum,
                                                         @RequestParam(defaultValue = "50") int pageSize) {
-        return Result.success(logAdminService.trace(traceId, pageNum, pageSize));
+        if (traceId == null || traceId.isBlank()) {
+            return Result.fail(ResultCode.PARAM_ERROR.getCode(), "traceId 不能为空");
+        }
+        return Result.success(logAdminService.trace(traceId.trim(), pageNum, pageSize));
     }
 
     @Operation(summary = "登录日志列表")
