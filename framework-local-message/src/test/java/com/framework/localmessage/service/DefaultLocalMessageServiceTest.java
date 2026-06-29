@@ -234,16 +234,29 @@ class DefaultLocalMessageServiceTest {
     }
 
     @Test
-    void retryDueMessagesSkipsMessagesWithoutHandler() {
+    void retryDueMessagesMarksMissingHandlerAsRetryableFailureThenFailed() {
         InMemoryLocalMessageRepository repository = new InMemoryLocalMessageRepository();
-        DefaultLocalMessageService service = new DefaultLocalMessageService(repository, properties(), List.of());
+        LocalMessageProperties properties = properties();
+        DefaultLocalMessageService service = new DefaultLocalMessageService(repository, properties, List.of());
         LocalMessage message = service.publish("order.created", "ORD-1", "{}");
 
         int count = service.retryDueMessages();
 
-        assertThat(count).isZero();
-        assertThat(repository.findById(message.getId()).orElseThrow().getStatus())
-                .isEqualTo(LocalMessageStatus.PENDING);
+        assertThat(count).isEqualTo(1);
+        LocalMessage firstFailure = repository.findById(message.getId()).orElseThrow();
+        assertThat(firstFailure.getStatus()).isEqualTo(LocalMessageStatus.PENDING);
+        assertThat(firstFailure.getRetryCount()).isEqualTo(1);
+        assertThat(firstFailure.getNextRetryTime()).isNotNull();
+        assertThat(firstFailure.getErrorMessage())
+                .isEqualTo("No LocalMessageHandler registered for topic: order.created");
+
+        firstFailure.setNextRetryTime(LocalDateTime.now().minusSeconds(1));
+        service.retryDueMessages();
+
+        LocalMessage finalFailure = repository.findById(message.getId()).orElseThrow();
+        assertThat(finalFailure.getStatus()).isEqualTo(LocalMessageStatus.FAILED);
+        assertThat(finalFailure.getRetryCount()).isEqualTo(properties.getMaxRetry());
+        assertThat(finalFailure.getNextRetryTime()).isNull();
     }
 
     private static LocalMessageProperties properties() {

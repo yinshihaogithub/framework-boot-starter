@@ -253,6 +253,24 @@ class RepositoryEngineeringGuardTest {
     }
 
     @Test
+    void localMessagesWithoutHandlersEnterRetryAndCompensationFlow() throws Exception {
+        String service = read(root.resolve(
+                "framework-local-message/src/main/java/com/framework/localmessage/service/DefaultLocalMessageService.java"));
+        String test = read(root.resolve(
+                "framework-local-message/src/test/java/com/framework/localmessage/service/DefaultLocalMessageServiceTest.java"));
+
+        assertThat(service)
+                .as("local messages without handlers must not stay pending forever")
+                .contains("No LocalMessageHandler registered for topic")
+                .contains("markFailure(message")
+                .contains("LocalMessageStatus.FAILED");
+        assertThat(test)
+                .contains("retryDueMessagesMarksMissingHandlerAsRetryableFailureThenFailed")
+                .contains("No LocalMessageHandler registered for topic: order.created")
+                .contains("LocalMessageStatus.FAILED");
+    }
+
+    @Test
     void jobModuleShipsOptionalXxlJobAdminMysqlScript() throws Exception {
         Path script = root.resolve("framework-job/src/main/resources/db/mysql/xxl_job_admin.sql");
 

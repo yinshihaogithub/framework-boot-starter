@@ -53,10 +53,12 @@ public class DefaultLocalMessageService implements LocalMessageService {
         for (LocalMessage message : messages) {
             String topic = normalize(message.getTopic());
             LocalMessageHandler handler = handlers.get(topic);
+            message.setTopic(topic);
             if (handler == null) {
+                handled++;
+                markFailure(message, new IllegalStateException("No LocalMessageHandler registered for topic: " + topic));
                 continue;
             }
-            message.setTopic(topic);
             handled++;
             dispatch(message, handler);
         }
