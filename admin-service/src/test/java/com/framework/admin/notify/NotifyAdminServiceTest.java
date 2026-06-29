@@ -122,6 +122,60 @@ class NotifyAdminServiceTest {
     }
 
     @Test
+    void createTemplateSucceedsWhenAuditFails() {
+        InMemoryNotifyAdminRepository repository = new InMemoryNotifyAdminRepository();
+        NotifyAdminService service = service(repository, null, new ThrowingAuditService());
+
+        NotifyAdminService.ActionResult<Long> result = service.createTemplate(templateRequest(), null);
+
+        assertThat(result.success()).isTrue();
+        assertThat(result.data()).isNotNull();
+        assertThat(repository.templates).hasSize(1);
+    }
+
+    @Test
+    void updateTemplateSucceedsWhenAuditFails() {
+        InMemoryNotifyAdminRepository repository = new InMemoryNotifyAdminRepository();
+        Long templateId = repository.createTemplate(templateRequest());
+        NotifyAdminModels.TemplateRequest request = templateRequest();
+        request.setTitle("updated");
+        NotifyAdminService service = service(repository, null, new ThrowingAuditService());
+
+        NotifyAdminService.ActionResult<String> result = service.updateTemplate(templateId, request, null);
+
+        assertThat(result.success()).isTrue();
+        assertThat(result.data()).isEqualTo("已更新");
+        assertThat(repository.findTemplate(templateId).orElseThrow().getTitle()).isEqualTo("updated");
+    }
+
+    @Test
+    void deleteTemplateSucceedsWhenAuditFails() {
+        InMemoryNotifyAdminRepository repository = new InMemoryNotifyAdminRepository();
+        Long templateId = repository.createTemplate(templateRequest());
+        NotifyAdminService service = service(repository, null, new ThrowingAuditService());
+
+        NotifyAdminService.ActionResult<String> result = service.deleteTemplate(templateId, null);
+
+        assertThat(result.success()).isTrue();
+        assertThat(result.data()).isEqualTo("已删除");
+        assertThat(repository.templates).isEmpty();
+    }
+
+    @Test
+    void sendTestSucceedsWhenAuditFails() {
+        InMemoryNotifyAdminRepository repository = new InMemoryNotifyAdminRepository();
+        Long templateId = repository.createTemplate(templateRequest());
+        NotifyAdminService service = service(repository, new CapturingNotifyService(true, "sent"),
+                new ThrowingAuditService());
+
+        NotifyAdminService.ActionResult<NotifyAdminModels.Record> result = service.sendTest(templateId, null, null);
+
+        assertThat(result.success()).isTrue();
+        assertThat(result.data().getSuccess()).isTrue();
+        assertThat(repository.records).hasSize(1);
+    }
+
+    @Test
     void sendTestAcceptsLowercaseTemplateChannel() {
         InMemoryNotifyAdminRepository repository = new InMemoryNotifyAdminRepository();
         NotifyAdminModels.TemplateRequest templateRequest = templateRequest();
@@ -244,6 +298,11 @@ class NotifyAdminServiceTest {
         return new NotifyAdminService(repository, provider(notifyService), auditService());
     }
 
+    private static NotifyAdminService service(InMemoryNotifyAdminRepository repository, NotifyService notifyService,
+                                             AdminAuditService auditService) {
+        return new NotifyAdminService(repository, provider(notifyService), auditService);
+    }
+
     private static NotifyAdminModels.TemplateRequest templateRequest() {
         NotifyAdminModels.TemplateRequest request = new NotifyAdminModels.TemplateRequest();
         request.setTemplateCode("welcome");
@@ -326,6 +385,18 @@ class NotifyAdminServiceTest {
                                 Object params, Exception exception) {
             }
         };
+    }
+
+    private static class ThrowingAuditService extends AdminAuditService {
+
+        private ThrowingAuditService() {
+            super(null, null);
+        }
+
+        @Override
+        public void success(HttpServletRequest request, String module, String action, String operationType, Object params) {
+            throw new IllegalStateException("audit unavailable");
+        }
     }
 
     private static class CapturingNotifyService implements NotifyService {

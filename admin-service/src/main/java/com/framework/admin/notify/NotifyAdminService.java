@@ -74,8 +74,8 @@ public class NotifyAdminService {
         try {
             validateTemplate(request);
             Long id = repository.createTemplate(request);
-            auditService.success(servletRequest, "通知中心", "新增通知模板", "CREATE",
-                    auditService.params("id", id, "templateCode", request.getTemplateCode(), "channel", request.getChannel()));
+            auditSuccess(servletRequest, "新增通知模板", "CREATE",
+                    "id", id, "templateCode", request.getTemplateCode(), "channel", request.getChannel());
             return ActionResult.success(id);
         } catch (IllegalArgumentException e) {
             return ActionResult.fail(ResultCode.PARAM_ERROR, e.getMessage());
@@ -93,8 +93,8 @@ public class NotifyAdminService {
                 return ActionResult.fail(ResultCode.NOT_FOUND, "模板不存在");
             }
             repository.updateTemplate(id, request);
-            auditService.success(servletRequest, "通知中心", "更新通知模板", "UPDATE",
-                    auditService.params("id", id, "templateCode", request.getTemplateCode(), "channel", request.getChannel()));
+            auditSuccess(servletRequest, "更新通知模板", "UPDATE",
+                    "id", id, "templateCode", request.getTemplateCode(), "channel", request.getChannel());
             return ActionResult.success("已更新");
         } catch (IllegalArgumentException e) {
             return ActionResult.fail(ResultCode.PARAM_ERROR, e.getMessage());
@@ -107,8 +107,7 @@ public class NotifyAdminService {
     public ActionResult<String> deleteTemplate(Long id, HttpServletRequest servletRequest) {
         try {
             repository.deleteTemplate(id);
-            auditService.success(servletRequest, "通知中心", "删除通知模板", "DELETE",
-                    auditService.params("id", id));
+            auditSuccess(servletRequest, "删除通知模板", "DELETE", "id", id);
             return ActionResult.success("已删除");
         } catch (RuntimeException e) {
             log.warn("[通知中心] 删除通知模板失败 id={}, error={}", id, e.getMessage());
@@ -147,8 +146,8 @@ public class NotifyAdminService {
                     .setOperatorName(UserContextHolder.getUsername());
             Long recordId = repository.createRecord(record);
             record.setId(recordId);
-            auditService.success(servletRequest, "通知中心", "发送测试通知", "CREATE",
-                    auditService.params("templateId", id, "recordId", recordId, "success", record.getSuccess()));
+            auditSuccess(servletRequest, "发送测试通知", "CREATE",
+                    "templateId", id, "recordId", recordId, "success", record.getSuccess());
             return ActionResult.success(record);
         } catch (IllegalArgumentException e) {
             return ActionResult.fail(ResultCode.PARAM_ERROR, e.getMessage());
@@ -270,6 +269,17 @@ public class NotifyAdminService {
 
     private boolean hasText(String value) {
         return value != null && !value.isBlank();
+    }
+
+    private void auditSuccess(HttpServletRequest request, String action, String operationType, Object... params) {
+        if (auditService == null) {
+            return;
+        }
+        try {
+            auditService.success(request, "通知中心", action, operationType, auditService.params(params));
+        } catch (RuntimeException e) {
+            log.warn("[通知中心] 审计日志写入失败 action={}, error={}", action, e.getMessage());
+        }
     }
 
     private Map<String, Long> emptyStats() {
