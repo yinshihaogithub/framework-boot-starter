@@ -1,6 +1,7 @@
 package com.framework.auth.service;
 
 import com.framework.core.exception.AuthException;
+import com.framework.core.result.ResultCode;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
@@ -81,6 +82,57 @@ class LoginSecurityServiceTest {
         assertThat(redis.incrementKeys).isEmpty();
         assertThat(redis.deletedKeys).isEmpty();
         assertThat(redis.expireKeys).isEmpty();
+    }
+
+    @Test
+    void redisFailuresDuringLockCheckFailClosed() {
+        LoginSecurityService service = new LoginSecurityService(new ThrowingRedisTemplate(), 5, 30);
+
+        assertThatThrownBy(() -> service.checkAccountLocked("alice"))
+                .isInstanceOf(AuthException.class)
+                .hasMessage("登录安全服务暂不可用，请稍后重试")
+                .extracting("code")
+                .isEqualTo(ResultCode.SERVICE_ERROR.getCode());
+    }
+
+    @Test
+    void redisFailuresDuringRecordLoginFailureFailClosed() {
+        LoginSecurityService service = new LoginSecurityService(new ThrowingRedisTemplate(), 5, 30);
+
+        assertThatThrownBy(() -> service.recordLoginFailure("alice"))
+                .isInstanceOf(AuthException.class)
+                .hasMessage("登录安全服务暂不可用，请稍后重试")
+                .extracting("code")
+                .isEqualTo(ResultCode.SERVICE_ERROR.getCode());
+    }
+
+    @Test
+    void redisFailuresDuringClearLoginFailureDoNotBlockLogin() {
+        LoginSecurityService service = new LoginSecurityService(new ThrowingRedisTemplate(), 5, 30);
+
+        service.clearLoginFailure("alice");
+    }
+
+    @Test
+    void redisFailuresDuringStatusReadsFallbackToUnlocked() {
+        LoginSecurityService service = new LoginSecurityService(new ThrowingRedisTemplate(), 5, 30);
+
+        LoginSecurityService.LoginSecurityStatus status = service.getStatus("alice");
+
+        assertThat(status.failCount()).isZero();
+        assertThat(status.locked()).isFalse();
+        assertThat(status.lockTtlMinutes()).isZero();
+    }
+
+    @Test
+    void redisFailuresDuringUnlockFailClosed() {
+        LoginSecurityService service = new LoginSecurityService(new ThrowingRedisTemplate(), 5, 30);
+
+        assertThatThrownBy(() -> service.unlock("alice"))
+                .isInstanceOf(AuthException.class)
+                .hasMessage("登录安全服务暂不可用，请稍后重试")
+                .extracting("code")
+                .isEqualTo(ResultCode.SERVICE_ERROR.getCode());
     }
 
     private static final class RecordingRedisTemplate extends StringRedisTemplate {
@@ -166,6 +218,44 @@ class LoginSecurityServiceTest {
                 return 0D;
             }
             return null;
+        }
+    }
+
+    private static final class ThrowingRedisTemplate extends StringRedisTemplate {
+
+        @Override
+        public Boolean hasKey(String key) {
+            throw redisUnavailable();
+        }
+
+        @Override
+        public Long getExpire(String key, TimeUnit timeUnit) {
+            throw redisUnavailable();
+        }
+
+        @Override
+        public Boolean expire(String key, long timeout, TimeUnit unit) {
+            throw redisUnavailable();
+        }
+
+        @Override
+        public Boolean delete(String key) {
+            throw redisUnavailable();
+        }
+
+        @Override
+        @SuppressWarnings("unchecked")
+        public ValueOperations<String, String> opsForValue() {
+            return (ValueOperations<String, String>) Proxy.newProxyInstance(
+                    ValueOperations.class.getClassLoader(),
+                    new Class<?>[]{ValueOperations.class},
+                    (proxy, method, args) -> {
+                        throw redisUnavailable();
+                    });
+        }
+
+        private static IllegalStateException redisUnavailable() {
+            return new IllegalStateException("redis unavailable");
         }
     }
 }

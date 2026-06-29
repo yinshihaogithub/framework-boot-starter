@@ -671,7 +671,10 @@ class RepositoryEngineeringGuardTest {
 
         assertThat(loginSecurityService)
                 .contains("public LoginSecurityStatus getStatus(String username)")
-                .contains("public record LoginSecurityStatus");
+                .contains("public record LoginSecurityStatus")
+                .contains("SECURITY_UNAVAILABLE_MESSAGE")
+                .contains("ResultCode.SERVICE_ERROR")
+                .contains("loginSecurityUnavailable");
         assertThat(models)
                 .contains("private Long loginFailCount")
                 .contains("private Boolean loginLocked")
