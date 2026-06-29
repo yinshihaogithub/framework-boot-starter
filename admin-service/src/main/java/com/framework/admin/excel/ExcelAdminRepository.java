@@ -3,6 +3,7 @@ package com.framework.admin.excel;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 @Repository
@@ -52,7 +53,7 @@ public class ExcelAdminRepository {
         if (value == null || value.isBlank()) {
             return null;
         }
-        return value.trim();
+        return value.trim().toUpperCase(Locale.ROOT);
     }
 
 }

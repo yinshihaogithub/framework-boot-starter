@@ -13,6 +13,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 
@@ -42,8 +43,11 @@ public class ExcelAdminService {
     public PageResult<ExcelAdminModels.Task> tasks(String taskType, String status, int pageNum, int pageSize) {
         int safePageNum = safePageNum(pageNum);
         int safePageSize = safePageSize(pageSize);
-        List<ExcelAdminModels.Task> records = repository.listTasks(taskType, status, safePageNum, safePageSize);
-        long total = repository.countTasks(taskType, status);
+        String normalizedTaskType = normalize(taskType);
+        String normalizedStatus = normalize(status);
+        List<ExcelAdminModels.Task> records = repository.listTasks(normalizedTaskType, normalizedStatus,
+                safePageNum, safePageSize);
+        long total = repository.countTasks(normalizedTaskType, normalizedStatus);
         return PageResult.of(records, total, safePageNum, safePageSize);
     }
 
@@ -127,6 +131,10 @@ public class ExcelAdminService {
 
     private String text(String value, String fallback) {
         return value == null || value.isBlank() ? fallback : value.trim();
+    }
+
+    private String normalize(String value) {
+        return value == null || value.isBlank() ? null : value.trim().toUpperCase(Locale.ROOT);
     }
 
     @Data

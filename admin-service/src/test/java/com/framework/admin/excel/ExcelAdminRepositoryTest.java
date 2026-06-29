@@ -13,7 +13,7 @@ class ExcelAdminRepositoryTest {
 
     @Test
     void listTasksTrimsFiltersAndCalculatesOffset() {
-        repository.listTasks(" EXPORT ", " SUCCESS ", 3, 20);
+        repository.listTasks(" export ", " success ", 3, 20);
 
         assertThat(mapper.taskType).isEqualTo("EXPORT");
         assertThat(mapper.status).isEqualTo("SUCCESS");

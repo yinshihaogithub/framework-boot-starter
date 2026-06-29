@@ -85,6 +85,20 @@ class ExcelAdminServiceTest {
         assertThat(page.getTotal()).isEqualTo(1);
     }
 
+    @Test
+    void tasksNormalizeTypeAndStatusFilters() {
+        InMemoryExcelAdminRepository repository = new InMemoryExcelAdminRepository();
+        repository.createTask(new ExcelAdminModels.Task().setTaskName("导出").setTaskType("EXPORT").setStatus("SUCCESS"));
+        ExcelAdminService service = service(repository, null);
+
+        PageResult<ExcelAdminModels.Task> page = service.tasks(" export ", " success ", 1, 20);
+
+        assertThat(page.getTotal()).isEqualTo(1);
+        assertThat(page.getRecords())
+                .extracting(ExcelAdminModels.Task::getTaskType, ExcelAdminModels.Task::getStatus)
+                .containsExactly(org.assertj.core.groups.Tuple.tuple("EXPORT", "SUCCESS"));
+    }
+
     private static ExcelAdminService service(InMemoryExcelAdminRepository repository, ExcelExportService exportService) {
         return new ExcelAdminService(repository, provider(exportService), auditService());
     }
