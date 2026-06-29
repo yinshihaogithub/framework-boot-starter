@@ -510,6 +510,9 @@
                     <el-option label="MANUAL" value="MANUAL" />
                   </el-select>
                   <el-input v-model="mqQuery.traceId" clearable placeholder="Trace ID" class="filter" />
+                  <el-input v-model="mqQuery.businessKey" clearable placeholder="业务键" class="filter" />
+                  <el-input v-model="mqQuery.messageType" clearable placeholder="消息类型" class="filter" />
+                  <el-input v-model="mqQuery.queueName" clearable placeholder="队列" class="filter" />
                   <el-button :icon="Search" circle type="primary" @click="loadMq" />
                   <el-button v-if="can('mq:retry')" :icon="RefreshRight" circle :disabled="!mqStats?.runtime?.retryAvailable || selectedMqMessageIds.length === 0" @click="batchRetryMq" />
                   <el-button v-if="can('mq:retry')" :icon="Delete" circle @click="cleanMq" />
@@ -523,9 +526,19 @@
                 <template #default="{ row }"><el-tag :type="mqStatusType(row.status)" size="small">{{ row.status }}</el-tag></template>
               </el-table-column>
               <el-table-column prop="messageType" label="类型" min-width="140" show-overflow-tooltip />
+              <el-table-column prop="messageId" label="消息ID" min-width="170" show-overflow-tooltip />
+              <el-table-column prop="parentMessageId" label="父消息" min-width="160" show-overflow-tooltip />
               <el-table-column prop="businessKey" label="业务键" min-width="150" show-overflow-tooltip />
               <el-table-column prop="traceId" label="Trace ID" min-width="190" show-overflow-tooltip />
-              <el-table-column prop="retryCount" label="重试" width="82" />
+              <el-table-column prop="queueName" label="队列" min-width="160" show-overflow-tooltip />
+              <el-table-column prop="exchange" label="交换机" min-width="150" show-overflow-tooltip />
+              <el-table-column prop="routingKey" label="路由键" min-width="150" show-overflow-tooltip />
+              <el-table-column label="重试" width="92">
+                <template #default="{ row }">{{ row.retryCount ?? 0 }}/{{ row.maxRetry ?? '-' }}</template>
+              </el-table-column>
+              <el-table-column prop="nextRetryTime" label="下次重试" min-width="170" show-overflow-tooltip />
+              <el-table-column prop="operator" label="操作人" min-width="120" show-overflow-tooltip />
+              <el-table-column prop="compensateRemark" label="补偿备注" min-width="170" show-overflow-tooltip />
               <el-table-column prop="errorMessage" label="错误" min-width="220" show-overflow-tooltip />
               <el-table-column label="操作" width="220" fixed="right">
                 <template #default="{ row }">
@@ -833,8 +846,14 @@
                   <el-table-column prop="id" label="ID" width="86" />
                   <el-table-column prop="status" label="状态" width="120" />
                   <el-table-column prop="messageType" label="类型" min-width="150" show-overflow-tooltip />
+                  <el-table-column prop="messageId" label="消息ID" min-width="170" show-overflow-tooltip />
+                  <el-table-column prop="parentMessageId" label="父消息" min-width="160" show-overflow-tooltip />
                   <el-table-column prop="queueName" label="队列" min-width="160" show-overflow-tooltip />
                   <el-table-column prop="businessKey" label="业务键" min-width="150" show-overflow-tooltip />
+                  <el-table-column prop="nextRetryTime" label="下次重试" min-width="170" show-overflow-tooltip />
+                  <el-table-column label="重试" width="92">
+                    <template #default="{ row }">{{ row.retryCount ?? 0 }}/{{ row.maxRetry ?? '-' }}</template>
+                  </el-table-column>
                   <el-table-column prop="errorMessage" label="错误" min-width="220" show-overflow-tooltip />
                   <el-table-column label="操作" width="80" fixed="right">
                     <template #default="{ row }"><el-button :icon="View" circle size="small" @click="openDetail(row)" /></template>
@@ -1540,7 +1559,7 @@ const changePasswordForm = reactive({
   newPassword: '',
   confirmPassword: ''
 })
-const mqQuery = reactive({ status: '', traceId: '', pageNum: 1, pageSize: 20 })
+const mqQuery = reactive({ status: '', traceId: '', businessKey: '', messageType: '', queueName: '', pageNum: 1, pageSize: 20 })
 const localQuery = reactive({ status: '', topic: '', businessKey: '', traceId: '', pageNum: 1, pageSize: 20 })
 const notifyQuery = reactive({ keyword: '', channel: '', status: '', pageNum: 1, pageSize: 20 })
 const notifyRecordQuery = reactive<{ channel: string; success: boolean | ''; pageNum: number; pageSize: number }>({ channel: '', success: '', pageNum: 1, pageSize: 20 })
