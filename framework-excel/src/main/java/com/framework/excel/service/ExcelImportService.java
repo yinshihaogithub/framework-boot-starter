@@ -68,7 +68,7 @@ public class ExcelImportService {
                             int rowIndex = context != null && context.readRowHolder() != null
                                     ? context.readRowHolder().getRowIndex() + 1
                                     : 0;
-                            result.getErrors().add(new ExcelRowError(rowIndex, exception.getMessage()));
+                            result.getErrors().add(new ExcelRowError(rowIndex, exceptionMessage(exception)));
                         }
 
                         @Override
@@ -81,7 +81,7 @@ public class ExcelImportService {
             if (e instanceof ExcelAnalysisStopException && result.hasErrors()) {
                 return result;
             }
-            result.getErrors().add(new ExcelRowError(0, e.getMessage()));
+            result.getErrors().add(new ExcelRowError(0, exceptionMessage(e)));
         }
         return result;
     }
@@ -143,5 +143,17 @@ public class ExcelImportService {
 
     private String normalizeHeader(String header) {
         return header == null ? "" : header.trim();
+    }
+
+    private String exceptionMessage(Exception exception) {
+        if (exception == null) {
+            return "unknown excel import error";
+        }
+        String message = exception.getMessage();
+        if (message != null && !message.isBlank()) {
+            return message;
+        }
+        String simpleName = exception.getClass().getSimpleName();
+        return simpleName.isBlank() ? exception.getClass().getName() : simpleName;
     }
 }

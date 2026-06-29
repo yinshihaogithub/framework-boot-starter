@@ -8,6 +8,8 @@ import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 
@@ -123,6 +125,17 @@ class ExcelImportServiceTest {
                 .contains("@ExcelProperty header must not be blank");
     }
 
+    @Test
+    void returnsFallbackErrorMessageWhenImportExceptionMessageIsBlank() {
+        ExcelImportService importService = new ExcelImportService(new ExcelProperties());
+
+        ExcelImportResult<ImportRow> result = importService.importExcel(new NullMessageInputStream(), ImportRow.class);
+
+        assertThat(result.hasErrors()).isTrue();
+        assertThat(result.successCount()).isZero();
+        assertThat(result.getErrors().get(0).getMessage()).isEqualTo("IOException");
+    }
+
     private static ImportRow importRow(String name) {
         ImportRow row = new ImportRow();
         row.setName(name);
@@ -195,6 +208,14 @@ class ExcelImportServiceTest {
 
         public void setName(String name) {
             this.name = name;
+        }
+    }
+
+    static class NullMessageInputStream extends InputStream {
+
+        @Override
+        public int read() throws IOException {
+            throw new IOException();
         }
     }
 }
