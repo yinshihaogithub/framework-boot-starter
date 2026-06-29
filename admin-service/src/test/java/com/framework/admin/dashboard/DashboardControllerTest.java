@@ -93,6 +93,30 @@ class DashboardControllerTest {
         assertThat(result.getData().security().defaultPasswordChanged()).isTrue();
     }
 
+    @Test
+    void summaryFallsBackWhenOptionalProvidersFail() {
+        DashboardService service = new DashboardService(
+                failingProvider(),
+                failingProvider(),
+                failingProvider(),
+                failingProvider(),
+                failingProvider(),
+                failingProvider(),
+                failingProvider());
+        DashboardController controller = new DashboardController(service);
+
+        Result<DashboardController.DashboardSummary> result = controller.summary();
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getData().mq()).containsEntry("total", 0L);
+        assertThat(result.getData().localMessage()).containsEntry("total", 0L);
+        assertThat(result.getData().logs()).containsEntry("total", 0L);
+        assertThat(result.getData().notifications()).containsEntry("records", 0L);
+        assertThat(result.getData().excel()).containsEntry("total", 0L);
+        assertThat(result.getData().files()).containsEntry("active", 0L);
+        assertThat(result.getData().security().defaultPasswordChanged()).isTrue();
+    }
+
     private static class FakeNotifyRepository extends NotifyAdminRepository {
         private FakeNotifyRepository() {
             super(null);
@@ -182,6 +206,35 @@ class DashboardControllerTest {
             @Override
             public Stream<T> stream() {
                 return value == null ? Stream.empty() : Stream.of(value);
+            }
+        };
+    }
+
+    private static <T> ObjectProvider<T> failingProvider() {
+        return new ObjectProvider<>() {
+            @Override
+            public T getObject(Object... args) {
+                throw new IllegalStateException("optional provider unavailable");
+            }
+
+            @Override
+            public T getIfAvailable() {
+                throw new IllegalStateException("optional provider unavailable");
+            }
+
+            @Override
+            public T getIfUnique() {
+                throw new IllegalStateException("optional provider unavailable");
+            }
+
+            @Override
+            public T getObject() {
+                throw new IllegalStateException("optional provider unavailable");
+            }
+
+            @Override
+            public Stream<T> stream() {
+                return Stream.empty();
             }
         };
     }

@@ -67,16 +67,20 @@ public class DashboardService {
         metrics.put("manual", 0L);
         metrics.put("exhausted", 0L);
         metrics.put("total", 0L);
-        DeadLetterHandler handler = deadLetterHandlerProvider.getIfAvailable();
+        DeadLetterHandler handler = available(deadLetterHandlerProvider);
         if (handler == null) {
             return metrics;
         }
-        var store = handler.getFailedMessageStore();
-        metrics.put("pending", countMq(store, MqFailedMessage.STATUS_PENDING));
-        metrics.put("retrying", countMq(store, MqFailedMessage.STATUS_RETRYING));
-        metrics.put("manual", countMq(store, MqFailedMessage.STATUS_MANUAL));
-        metrics.put("exhausted", countMq(store, MqFailedMessage.STATUS_EXHAUSTED));
-        metrics.put("total", (long) store.size());
+        try {
+            var store = handler.getFailedMessageStore();
+            metrics.put("pending", countMq(store, MqFailedMessage.STATUS_PENDING));
+            metrics.put("retrying", countMq(store, MqFailedMessage.STATUS_RETRYING));
+            metrics.put("manual", countMq(store, MqFailedMessage.STATUS_MANUAL));
+            metrics.put("exhausted", countMq(store, MqFailedMessage.STATUS_EXHAUSTED));
+            metrics.put("total", (long) store.size());
+        } catch (Exception ignored) {
+            return zero(metrics);
+        }
         return metrics;
     }
 
@@ -92,25 +96,29 @@ public class DashboardService {
             metrics.put(status.name().toLowerCase(), 0L);
         }
         metrics.put("total", 0L);
-        LocalMessageService service = localMessageServiceProvider.getIfAvailable();
+        LocalMessageService service = available(localMessageServiceProvider);
         if (service == null) {
             return metrics;
         }
-        var messages = service.findAll();
-        for (LocalMessageStatus status : LocalMessageStatus.values()) {
-            long count = messages.stream()
-                    .filter(message -> status == message.getStatus())
-                    .count();
-            metrics.put(status.name().toLowerCase(), count);
+        try {
+            var messages = service.findAll();
+            for (LocalMessageStatus status : LocalMessageStatus.values()) {
+                long count = messages.stream()
+                        .filter(message -> status == message.getStatus())
+                        .count();
+                metrics.put(status.name().toLowerCase(), count);
+            }
+            metrics.put("total", (long) messages.size());
+        } catch (Exception ignored) {
+            return zero(metrics);
         }
-        metrics.put("total", (long) messages.size());
         return metrics;
     }
 
     private Map<String, Long> logMetrics() {
         Map<String, Long> metrics = new LinkedHashMap<>();
         metrics.put("total", 0L);
-        OperationLogMapper mapper = operationLogMapperProvider.getIfAvailable();
+        OperationLogMapper mapper = available(operationLogMapperProvider);
         if (mapper == null) {
             return metrics;
         }
@@ -129,7 +137,7 @@ public class DashboardService {
         metrics.put("records", 0L);
         metrics.put("successRecords", 0L);
         metrics.put("failedRecords", 0L);
-        NotifyAdminRepository repository = notifyAdminRepositoryProvider.getIfAvailable();
+        NotifyAdminRepository repository = available(notifyAdminRepositoryProvider);
         if (repository == null) {
             return metrics;
         }
@@ -152,7 +160,7 @@ public class DashboardService {
         metrics.put("failed", 0L);
         metrics.put("import", 0L);
         metrics.put("export", 0L);
-        ExcelAdminRepository repository = excelAdminRepositoryProvider.getIfAvailable();
+        ExcelAdminRepository repository = available(excelAdminRepositoryProvider);
         if (repository == null) {
             return metrics;
         }
@@ -169,7 +177,7 @@ public class DashboardService {
         metrics.put("active", 0L);
         metrics.put("deleted", 0L);
         metrics.put("totalSize", 0L);
-        FileAdminRepository repository = fileAdminRepositoryProvider.getIfAvailable();
+        FileAdminRepository repository = available(fileAdminRepositoryProvider);
         if (repository == null) {
             return metrics;
         }
@@ -186,8 +194,19 @@ public class DashboardService {
         return metrics;
     }
 
+    private <T> T available(ObjectProvider<T> provider) {
+        if (provider == null) {
+            return null;
+        }
+        try {
+            return provider.getIfAvailable();
+        } catch (RuntimeException ignored) {
+            return null;
+        }
+    }
+
     private DashboardController.SecurityStatus securityStatus() {
-        AdminSystemRepository repository = adminSystemRepositoryProvider.getIfAvailable();
+        AdminSystemRepository repository = available(adminSystemRepositoryProvider);
         if (repository == null) {
             return new DashboardController.SecurityStatus(true);
         }
