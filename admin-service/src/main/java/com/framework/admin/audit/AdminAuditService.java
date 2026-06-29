@@ -6,6 +6,7 @@ import com.framework.core.trace.TraceContext;
 import com.framework.log.entity.OperationLogEntity;
 import com.framework.log.mapper.OperationLogMapper;
 import jakarta.servlet.http.HttpServletRequest;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.lang.reflect.Array;
@@ -20,6 +21,7 @@ import java.util.Map;
 /**
  * Writes mandatory admin audit events for management operations.
  */
+@Slf4j
 @Service
 public class AdminAuditService {
 
@@ -69,9 +71,13 @@ public class AdminAuditService {
             entity.setClientIp(clientIp(request));
             entity.setTraceId(TraceContext.ensureTraceId());
             entity.setCreateTime(new Date());
+            if (operationLogMapper == null) {
+                throw new IllegalStateException("operation log mapper unavailable");
+            }
             operationLogMapper.insert(entity);
-        } catch (Exception ignored) {
-            // Audit must never block the admin management flow.
+        } catch (Exception e) {
+            log.warn("[后台审计] 操作日志写入失败 module={}, action={}, type={}, success={}, error={}",
+                    module, action, operationType, success, e.getMessage());
         }
     }
 

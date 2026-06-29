@@ -88,10 +88,34 @@ class AdminAuditServiceTest {
     }
 
     @Test
+    void longParamsAreTruncatedBeforeWritingOperationLog() {
+        service.success(null, "系统管理", "更新参数", "UPDATE",
+                service.params("content", "x".repeat(5000)));
+
+        assertThat(mapper.inserted.getParams()).hasSize(4000);
+    }
+
+    @Test
+    void longErrorMessageIsTruncatedBeforeWritingFailureLog() {
+        service.failure(null, "消息中心", "人工补偿", "UPDATE", null,
+                new IllegalStateException("x".repeat(5000)));
+
+        assertThat(mapper.inserted.getErrorMessage()).hasSize(4000);
+    }
+
+    @Test
     void mapperFailureDoesNotBlockAdminFlow() {
         mapper.throwOnInsert = true;
 
         assertThatCode(() -> service.success(null, "系统管理", "删除角色", "DELETE", null))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void missingMapperDoesNotBlockAdminFlow() {
+        AdminAuditService serviceWithoutMapper = new AdminAuditService(null, null);
+
+        assertThatCode(() -> serviceWithoutMapper.success(null, "系统管理", "删除角色", "DELETE", null))
                 .doesNotThrowAnyException();
     }
 
