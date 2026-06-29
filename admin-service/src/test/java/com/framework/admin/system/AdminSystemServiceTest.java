@@ -3,6 +3,7 @@ package com.framework.admin.system;
 import com.framework.admin.audit.AdminAuditService;
 import com.framework.admin.system.AdminSystemModels.AdminUser;
 import com.framework.admin.system.AdminSystemModels.MenuRequest;
+import com.framework.admin.system.AdminSystemModels.ResetPasswordRequest;
 import com.framework.admin.system.AdminSystemModels.RoleRequest;
 import com.framework.admin.system.AdminSystemModels.TenantRequest;
 import com.framework.admin.system.AdminSystemModels.UserCreateRequest;
@@ -58,6 +59,31 @@ class AdminSystemServiceTest {
         assertThat(repository.createdPasswordHash).isNotEqualTo("Pass@123");
         assertThat(PasswordUtils.verify("Pass@123", repository.createdPasswordHash)).isTrue();
         assertThat(auditService.actions).containsExactly("新增用户");
+    }
+
+    @Test
+    void createUserRejectsWeakPassword() {
+        UserCreateRequest request = new UserCreateRequest();
+        request.setUsername("alice");
+        request.setPassword("password");
+
+        Result<Long> result = service.createUser(request, null);
+
+        assertThat(result.getCode()).isEqualTo(ResultCode.PARAM_ERROR.getCode());
+        assertThat(result.getMessage()).isEqualTo("密码必须包含大写字母");
+        assertThat(repository.createdUser).isNull();
+    }
+
+    @Test
+    void resetPasswordRejectsWeakPassword() {
+        ResetPasswordRequest request = new ResetPasswordRequest();
+        request.setPassword("12345678");
+
+        Result<String> result = service.resetPassword(9L, request, null);
+
+        assertThat(result.getCode()).isEqualTo(ResultCode.PARAM_ERROR.getCode());
+        assertThat(result.getMessage()).isEqualTo("密码必须包含小写字母");
+        assertThat(repository.resetPasswordUserId).isNull();
     }
 
     @Test
@@ -129,6 +155,8 @@ class AdminSystemServiceTest {
         private long tenantUserCount;
         private Long deletedTenantId;
         private RoleRequest createdRole;
+        private Long resetPasswordUserId;
+        private String resetPasswordHash;
 
         private FakeRepository() {
             super(null);
@@ -161,6 +189,12 @@ class AdminSystemServiceTest {
         @Override
         public void deleteTenant(Long id) {
             this.deletedTenantId = id;
+        }
+
+        @Override
+        public void resetPassword(Long userId, String passwordHash) {
+            this.resetPasswordUserId = userId;
+            this.resetPasswordHash = passwordHash;
         }
 
         @Override

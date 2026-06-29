@@ -24,6 +24,7 @@ import com.framework.admin.system.AdminSystemModels.UserUpdateRequest;
 import com.framework.core.result.PageResult;
 import com.framework.core.result.Result;
 import com.framework.core.result.ResultCode;
+import com.framework.auth.util.PasswordValidator;
 import com.framework.crypto.util.PasswordUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.stereotype.Service;
@@ -139,6 +140,10 @@ public class AdminSystemService {
         if (request == null || isBlank(request.getUsername()) || isBlank(request.getPassword())) {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), "用户名和密码不能为空");
         }
+        String passwordError = PasswordValidator.validateStrong(request.getPassword());
+        if (passwordError != null) {
+            return Result.fail(ResultCode.PARAM_ERROR.getCode(), passwordError);
+        }
         Long userId = repository.createUser(request, PasswordUtils.hash(request.getPassword()));
         auditService.success(servletRequest, "系统管理", "新增用户", "INSERT",
                 auditService.params("userId", userId, "username", request.getUsername(), "roleIds", request.getRoleIds()));
@@ -173,6 +178,10 @@ public class AdminSystemService {
     public Result<String> resetPassword(Long id, ResetPasswordRequest request, HttpServletRequest servletRequest) {
         if (request == null || isBlank(request.getPassword())) {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), "密码不能为空");
+        }
+        String passwordError = PasswordValidator.validateStrong(request.getPassword());
+        if (passwordError != null) {
+            return Result.fail(ResultCode.PARAM_ERROR.getCode(), passwordError);
         }
         repository.resetPassword(id, PasswordUtils.hash(request.getPassword()));
         auditService.success(servletRequest, "系统管理", "重置用户密码", "UPDATE",

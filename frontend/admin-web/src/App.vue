@@ -1221,7 +1221,7 @@ const iconMap: Record<string, Component> = {
 const authed = ref(false)
 const loginLoading = ref(false)
 const currentUser = ref<CurrentUser>()
-const loginForm = reactive({ username: 'admin', password: 'Admin@123' })
+const loginForm = reactive({ username: '', password: '' })
 const activeView = ref<ViewName>('dashboard')
 const traceKeyword = ref('')
 const dashboard = ref<DashboardSummary>()
@@ -1285,7 +1285,7 @@ const deptForm = reactive({
 })
 const userForm = reactive({
   username: '',
-  password: 'Admin@123',
+  password: '',
   nickname: '',
   mobile: '',
   email: '',
@@ -1655,7 +1655,7 @@ function openEditUser(row: AdminUser) {
 function resetUserForm() {
   Object.assign(userForm, {
     username: '',
-    password: 'Admin@123',
+    password: '',
     nickname: '',
     mobile: '',
     email: '',
@@ -1666,8 +1666,27 @@ function resetUserForm() {
 }
 
 async function resetUserPassword(id: number) {
-  await api.resetPassword(id, 'Admin@123')
-  ElMessage.success('已重置为 Admin@123')
+  const result = await ElMessageBox.prompt('请输入新密码', '重置密码', {
+    inputType: 'password',
+    inputPlaceholder: '至少 8 位，包含大小写、数字和特殊字符',
+    confirmButtonText: '确认重置',
+    cancelButtonText: '取消',
+    inputValidator: validateStrongPassword
+  })
+  await api.resetPassword(id, String(result.value || ''))
+  ElMessage.success('密码已重置')
+}
+
+function validateStrongPassword(value: string) {
+  const password = String(value || '')
+  if (!password) return '请输入新密码'
+  if (password.length < 8) return '密码长度至少8位'
+  if (password.length > 64) return '密码长度不能超过64位'
+  if (!/[a-z]/.test(password)) return '密码必须包含小写字母'
+  if (!/[A-Z]/.test(password)) return '密码必须包含大写字母'
+  if (!/\d/.test(password)) return '密码必须包含数字'
+  if (!/[@$!%*?&#^()_+\-=\[\]{}|]/.test(password)) return '密码必须包含特殊字符'
+  return true
 }
 
 async function toggleUser(row: AdminUser) {

@@ -432,6 +432,24 @@ class RepositoryEngineeringGuardTest {
     }
 
     @Test
+    void frontendSourceDoesNotHardcodeDefaultAdminPassword() throws Exception {
+        Path frontendSource = root.resolve("frontend/admin-web/src");
+        try (Stream<Path> files = Files.walk(frontendSource)) {
+            List<Path> sourceFiles = files
+                    .filter(Files::isRegularFile)
+                    .filter(path -> path.toString().endsWith(".vue") || path.toString().endsWith(".ts"))
+                    .toList();
+
+            assertThat(sourceFiles).isNotEmpty();
+            for (Path file : sourceFiles) {
+                assertThat(read(file))
+                        .as(file + " must not embed the seeded default admin password")
+                        .doesNotContain("Admin@123");
+            }
+        }
+    }
+
+    @Test
     void sourceConfigurationDoesNotUseH2AsDefaultDatabase() throws Exception {
         try (Stream<Path> files = Files.walk(root)) {
             List<Path> sourceFiles = files
