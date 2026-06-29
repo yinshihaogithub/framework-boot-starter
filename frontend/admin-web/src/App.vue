@@ -895,6 +895,12 @@
                     <el-option label="LOGIN" value="LOGIN" />
                     <el-option label="EXCEPTION" value="EXCEPTION" />
                   </el-select>
+                  <el-input v-model="logQuery.module" clearable placeholder="模块" class="filter" />
+                  <el-select v-model="logQuery.success" clearable placeholder="结果" class="filter">
+                    <el-option label="成功" :value="true" />
+                    <el-option label="失败" :value="false" />
+                  </el-select>
+                  <el-input-number v-model="logQuery.operatorId" class="filter" :min="1" controls-position="right" placeholder="操作人ID" />
                   <el-input v-model="logQuery.traceId" clearable placeholder="Trace ID" class="filter" />
                   <el-button :icon="Search" circle type="primary" @click="loadLogs" />
                 </div>
@@ -906,11 +912,16 @@
               <el-table-column prop="module" label="模块" min-width="120" show-overflow-tooltip />
               <el-table-column prop="action" label="动作" min-width="160" show-overflow-tooltip />
               <el-table-column prop="uri" label="URI" min-width="180" show-overflow-tooltip />
+              <el-table-column prop="httpMethod" label="方法" width="92" />
+              <el-table-column prop="operatorName" label="操作人" min-width="120" show-overflow-tooltip />
+              <el-table-column prop="clientIp" label="客户端IP" min-width="140" show-overflow-tooltip />
               <el-table-column prop="elapsedMs" label="耗时" width="92" />
               <el-table-column prop="traceId" label="Trace ID" min-width="190" show-overflow-tooltip />
               <el-table-column label="状态" width="90">
                 <template #default="{ row }"><el-tag :type="row.success === false ? 'danger' : 'success'" size="small">{{ row.success === false ? 'FAIL' : 'OK' }}</el-tag></template>
               </el-table-column>
+              <el-table-column prop="errorMessage" label="错误" min-width="180" show-overflow-tooltip />
+              <el-table-column prop="createTime" label="时间" min-width="170" />
               <el-table-column label="操作" width="80" fixed="right">
                 <template #default="{ row }"><el-button :icon="View" circle size="small" @click="openDetail(row)" /></template>
               </el-table-column>
@@ -1566,7 +1577,15 @@ const notifyQuery = reactive({ keyword: '', channel: '', status: '', pageNum: 1,
 const notifyRecordQuery = reactive<{ channel: string; success: boolean | ''; pageNum: number; pageSize: number }>({ channel: '', success: '', pageNum: 1, pageSize: 20 })
 const excelQuery = reactive({ taskType: '', status: '', pageNum: 1, pageSize: 20 })
 const fileQuery = reactive({ keyword: '', businessType: '', businessKey: '', contentType: '', pageNum: 1, pageSize: 20 })
-const logQuery = reactive({ logType: '', traceId: '', pageNum: 1, pageSize: 20 })
+const logQuery = reactive<{ module: string; logType: string; operatorId?: number; success: boolean | ''; traceId: string; pageNum: number; pageSize: number }>({
+  module: '',
+  logType: '',
+  operatorId: undefined,
+  success: '',
+  traceId: '',
+  pageNum: 1,
+  pageSize: 20
+})
 const loginLogQuery = reactive<{ username: string; success: boolean | ''; pageNum: number; pageSize: number }>({ username: '', success: '', pageNum: 1, pageSize: 20 })
 const userQuery = reactive({ keyword: '', status: '', pageNum: 1, pageSize: 20 })
 const deptQuery = reactive({ tenantId: 1 as number | undefined })
@@ -1855,7 +1874,15 @@ async function loadFiles() {
 }
 
 async function loadLogs() {
-  const page = await api.logs(logQuery)
+  const page = await api.logs({
+    module: logQuery.module,
+    logType: logQuery.logType,
+    operatorId: logQuery.operatorId,
+    success: logQuery.success === '' ? undefined : logQuery.success,
+    traceId: logQuery.traceId,
+    pageNum: logQuery.pageNum,
+    pageSize: logQuery.pageSize
+  })
   Object.assign(logs, page)
 }
 

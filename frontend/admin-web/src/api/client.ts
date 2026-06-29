@@ -138,10 +138,14 @@ export interface OperationLog {
   uri?: string
   httpMethod?: string
   method?: string
+  params?: string
+  result?: string
   success?: boolean
   errorMessage?: string
   elapsedMs?: number
+  operatorId?: number
   operatorName?: string
+  clientIp?: string
   traceId?: string
   createTime?: string
 }
