@@ -142,6 +142,37 @@ class MqAdminControllerTest {
     }
 
     @Test
+    void batchRetryNormalizesOperatorAndAuditsResult() {
+        MqProperties properties = new MqProperties();
+        MqMessageSender sender = sender(MqProperties.Provider.RABBIT);
+        InMemoryMqFailedMessageRepository repository = new InMemoryMqFailedMessageRepository(List.of(
+                failedMessage(1L, "trace-a", MqFailedMessage.STATUS_EXHAUSTED)));
+        DeadLetterHandler handler = new DeadLetterHandler(repository, properties);
+        MqRetryScheduler scheduler = new MqRetryScheduler(
+                handler, new MqMessageSenderRegistry(properties, List.of(sender)), properties.getMaxRetry());
+        RecordingAuditService auditService = new RecordingAuditService();
+        MqAdminController controller = controller(handler, properties, sender, scheduler, auditService);
+        MqAdminDTO.ManualRetryRequest request = new MqAdminDTO.ManualRetryRequest()
+                .setIds(List.of(1L))
+                .setOperator(" ops ")
+                .setRemark("batch retry");
+
+        Result<MqAdminDTO.ManualRetryResult> result = controller.batchRetry(request, null);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getData().getSuccess()).isEqualTo(1);
+        MqFailedMessage saved = repository.findById(1L).orElseThrow();
+        assertThat(saved.getStatus()).isEqualTo(MqFailedMessage.STATUS_MANUAL);
+        assertThat(saved.getOperator()).isEqualTo("ops");
+        assertThat(auditService.action).isEqualTo("批量重发MQ消息");
+        assertThat(auditService.params)
+                .containsEntry("ids", List.of(1L))
+                .containsEntry("operator", "ops")
+                .containsEntry("success", 1)
+                .containsEntry("failure", 0);
+    }
+
+    @Test
     void singleMessageOperationsRejectInvalidIdsBeforeProviderLookup() {
         MqAdminController controller = controller(null, new MqProperties(), null);
 

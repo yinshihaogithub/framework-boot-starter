@@ -176,12 +176,13 @@ public class MqAdminService {
             return ActionResult.fail(ResultCode.SERVICE_ERROR, retryUnavailableMessage());
         }
         try {
+            String normalizedOperator = operator(request.getOperator());
             MqAdminDTO.ManualRetryResult result = scheduler.batchManualRetry(
                     request.getIds(),
-                    isBlank(request.getOperator()) ? "admin" : request.getOperator(),
+                    normalizedOperator,
                     request.getRemark());
             auditSuccess(servletRequest, "批量重发MQ消息", "UPDATE",
-                    auditService.params("ids", request.getIds(), "operator", request.getOperator(),
+                    auditService.params("ids", request.getIds(), "operator", normalizedOperator,
                             "remark", request.getRemark(), "success", result.getSuccess(),
                             "failure", result.getFailed()));
             return ActionResult.success(result);
