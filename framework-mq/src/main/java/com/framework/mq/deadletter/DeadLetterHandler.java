@@ -9,8 +9,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.core.MessageProperties;
 
-import java.util.ArrayList;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
@@ -229,16 +229,15 @@ public class DeadLetterHandler {
     }
 
     private String extractTraceId(MessageProperties props, String body) {
-        Object header = props.getHeader(FrameworkConstants.TRACE_ID_HEADER);
-        if (header != null) {
-            return header.toString();
-        }
+        String headerTraceId = normalizeTraceId(props.getHeader(FrameworkConstants.TRACE_ID_HEADER));
+        String wrapperTraceId = null;
         try {
             MessageWrapper<?> wrapper = objectMapper.readValue(body, MessageWrapper.class);
-            return wrapper.getTraceId();
+            wrapperTraceId = wrapper.getTraceId();
         } catch (Exception e) {
-            return null;
+            // Message body may be a raw payload for legacy senders.
         }
+        return firstTraceId(headerTraceId, wrapperTraceId);
     }
 
     private void fillWrapperMetadata(MqFailedMessage record, String body) {
@@ -247,7 +246,7 @@ public class DeadLetterHandler {
             if (record.getMessageId() == null) {
                 record.setMessageId(wrapper.getMessageId());
             }
-            record.setTraceId(firstText(record.getTraceId(), wrapper.getTraceId()));
+            record.setTraceId(firstTraceId(record.getTraceId(), wrapper.getTraceId()));
             record.setParentMessageId(wrapper.getParentMessageId());
             record.setBusinessKey(wrapper.getBusinessKey());
             record.setMessageType(wrapper.getType());
@@ -256,11 +255,21 @@ public class DeadLetterHandler {
         }
     }
 
-    private String firstText(String first, String second) {
-        if (first != null && !first.isBlank()) {
-            return first;
+    private String firstTraceId(String... values) {
+        for (String value : values) {
+            String traceId = TraceContext.normalizeTraceId(value);
+            if (traceId != null) {
+                return traceId;
+            }
         }
-        return second;
+        return null;
+    }
+
+    private String normalizeTraceId(Object value) {
+        if (value instanceof byte[] bytes) {
+            return TraceContext.normalizeTraceId(new String(bytes, StandardCharsets.UTF_8));
+        }
+        return value == null ? null : TraceContext.normalizeTraceId(value.toString());
     }
 
     private String getStackTrace(Throwable e) {

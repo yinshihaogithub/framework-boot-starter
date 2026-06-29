@@ -78,6 +78,54 @@ class DeadLetterHandlerTest {
     }
 
     @Test
+    void handleDeadLetterDecodesByteArrayTraceHeader() throws Exception {
+        InMemoryRepository repository = new InMemoryRepository();
+        DeadLetterHandler handler = new DeadLetterHandler(repository, new MqProperties());
+        MessageWrapper<String> wrapper = MessageWrapper.of("ORDER-10", "OrderCreated", "订单创建");
+        wrapper.setTraceId("wrapper-trace");
+        MessageProperties properties = new MessageProperties();
+        properties.setDeliveryTag(100L);
+        properties.setMessageId("rabbit-msg-2");
+        properties.setReceivedExchange("order.exchange");
+        properties.setReceivedRoutingKey("order.created");
+        properties.setHeader(FrameworkConstants.TRACE_ID_HEADER, "byte-trace-001".getBytes(StandardCharsets.UTF_8));
+        Message message = new Message(
+                objectMapper.writeValueAsString(wrapper).getBytes(StandardCharsets.UTF_8),
+                properties);
+        RecordingChannel channel = new RecordingChannel();
+
+        handler.handleDeadLetter(message, channel.proxy());
+
+        assertThat(channel.ackedDeliveryTag()).isEqualTo(100L);
+        assertThat(repository.saved()).hasSize(1);
+        assertThat(repository.saved().get(0).getTraceId()).isEqualTo("byte-trace-001");
+    }
+
+    @Test
+    void handleDeadLetterFallsBackToWrapperTraceWhenHeaderIsInvalid() throws Exception {
+        InMemoryRepository repository = new InMemoryRepository();
+        DeadLetterHandler handler = new DeadLetterHandler(repository, new MqProperties());
+        MessageWrapper<String> wrapper = MessageWrapper.of("ORDER-11", "OrderCreated", "订单创建");
+        wrapper.setTraceId("wrapper-trace-002");
+        MessageProperties properties = new MessageProperties();
+        properties.setDeliveryTag(101L);
+        properties.setMessageId("rabbit-msg-3");
+        properties.setReceivedExchange("order.exchange");
+        properties.setReceivedRoutingKey("order.created");
+        properties.setHeader(FrameworkConstants.TRACE_ID_HEADER, "bad\ntrace");
+        Message message = new Message(
+                objectMapper.writeValueAsString(wrapper).getBytes(StandardCharsets.UTF_8),
+                properties);
+        RecordingChannel channel = new RecordingChannel();
+
+        handler.handleDeadLetter(message, channel.proxy());
+
+        assertThat(channel.ackedDeliveryTag()).isEqualTo(101L);
+        assertThat(repository.saved()).hasSize(1);
+        assertThat(repository.saved().get(0).getTraceId()).isEqualTo("wrapper-trace-002");
+    }
+
+    @Test
     void recordConsumeFailureUsesExceptionClassWhenMessageIsBlank() {
         InMemoryRepository repository = new InMemoryRepository();
         DeadLetterHandler handler = new DeadLetterHandler(repository, new MqProperties());
