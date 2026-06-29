@@ -91,9 +91,8 @@ public class ExcelAdminService {
                     .setErrorMessage(errorMessage);
             try {
                 Long taskId = repository.createTask(failedTask);
-                auditService.failure(servletRequest, "Excel中心", "创建导出任务", "CREATE",
-                        auditService.params("taskId", taskId, "filename", filename, "rows", rows.size()),
-                        e);
+                auditFailure(servletRequest, "创建导出任务", "CREATE", e,
+                        "taskId", taskId, "filename", filename, "rows", rows.size());
                 return ActionResult.success(new ExcelAdminModels.TaskResult()
                         .setTaskId(taskId)
                         .setFilename(filename)
@@ -120,8 +119,8 @@ public class ExcelAdminService {
                 .setOperatorName(UserContextHolder.getUsername());
         try {
             Long taskId = repository.createTask(task);
-            auditService.success(servletRequest, "Excel中心", "创建导出任务", "CREATE",
-                    auditService.params("taskId", taskId, "filename", filename, "rows", rows.size()));
+            auditSuccess(servletRequest, "创建导出任务", "CREATE",
+                    "taskId", taskId, "filename", filename, "rows", rows.size());
             return ActionResult.success(new ExcelAdminModels.TaskResult()
                     .setTaskId(taskId)
                     .setFilename(filename)
@@ -154,8 +153,8 @@ public class ExcelAdminService {
             Long taskId = repository.createTask(task);
             repository.createError(taskId, 2, errorMessage, "{\"username\":\"\",\"nickname\":\"空用户名\"}");
             repository.createError(taskId, 3, "手机号格式错误", "{\"username\":\"ops\",\"mobile\":\"123\"}");
-            auditService.success(servletRequest, "Excel中心", "登记导入失败任务", "CREATE",
-                    auditService.params("taskId", taskId, "errorMessage", errorMessage));
+            auditSuccess(servletRequest, "登记导入失败任务", "CREATE",
+                    "taskId", taskId, "errorMessage", errorMessage);
             return ActionResult.success(new ExcelAdminModels.TaskResult()
                     .setTaskId(taskId)
                     .setFilename(task.getFilename())
@@ -200,6 +199,29 @@ public class ExcelAdminService {
     private String errorMessage(RuntimeException exception) {
         String message = exception.getMessage();
         return message == null || message.isBlank() ? exception.getClass().getSimpleName() : message;
+    }
+
+    private void auditSuccess(HttpServletRequest request, String action, String operationType, Object... params) {
+        if (auditService == null) {
+            return;
+        }
+        try {
+            auditService.success(request, "Excel中心", action, operationType, auditService.params(params));
+        } catch (RuntimeException e) {
+            log.warn("[Excel中心] 审计日志写入失败 action={}, error={}", action, e.getMessage());
+        }
+    }
+
+    private void auditFailure(HttpServletRequest request, String action, String operationType,
+                              Exception exception, Object... params) {
+        if (auditService == null) {
+            return;
+        }
+        try {
+            auditService.failure(request, "Excel中心", action, operationType, auditService.params(params), exception);
+        } catch (RuntimeException e) {
+            log.warn("[Excel中心] 审计日志写入失败 action={}, error={}", action, e.getMessage());
+        }
     }
 
     private Map<String, Long> zeroStats() {

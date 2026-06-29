@@ -67,6 +67,18 @@ class ExcelAdminServiceTest {
     }
 
     @Test
+    void exportTaskSucceedsWhenSuccessAuditFails() {
+        InMemoryExcelAdminRepository repository = new InMemoryExcelAdminRepository();
+        ExcelAdminService service = service(repository, new CapturingExcelExportService(), new ThrowingAuditService());
+
+        ExcelAdminService.ActionResult<ExcelAdminModels.TaskResult> result = service.createExportTask(null, null);
+
+        assertThat(result.success()).isTrue();
+        assertThat(result.data().getStatus()).isEqualTo("SUCCESS");
+        assertThat(repository.tasks).hasSize(1);
+    }
+
+    @Test
     void exportTaskPersistsFailedTaskWhenExportThrows() {
         InMemoryExcelAdminRepository repository = new InMemoryExcelAdminRepository();
         CapturingExcelExportService exportService = new CapturingExcelExportService();
@@ -91,6 +103,23 @@ class ExcelAdminServiceTest {
     }
 
     @Test
+    void exportTaskPersistsFailedTaskWhenFailureAuditFails() {
+        InMemoryExcelAdminRepository repository = new InMemoryExcelAdminRepository();
+        CapturingExcelExportService exportService = new CapturingExcelExportService();
+        exportService.failure = new IllegalStateException("template broken");
+        ExcelAdminService service = service(repository, exportService, new ThrowingAuditService());
+
+        ExcelAdminService.ActionResult<ExcelAdminModels.TaskResult> result = service.createExportTask(null, null);
+
+        assertThat(result.success()).isTrue();
+        assertThat(result.data().getStatus()).isEqualTo("FAILED");
+        assertThat(result.data().getFailureRows()).isEqualTo(2);
+        assertThat(repository.tasks)
+                .extracting(ExcelAdminModels.Task::getTaskType, ExcelAdminModels.Task::getStatus)
+                .containsExactly(org.assertj.core.groups.Tuple.tuple("EXPORT", "FAILED"));
+    }
+
+    @Test
     void importFailureTaskCreatesFailedTaskAndErrors() {
         InMemoryExcelAdminRepository repository = new InMemoryExcelAdminRepository();
         ExcelAdminModels.FailureRequest request = new ExcelAdminModels.FailureRequest();
@@ -109,6 +138,19 @@ class ExcelAdminServiceTest {
                 .containsExactly(
                         org.assertj.core.groups.Tuple.tuple(2, "手机号格式错误"),
                         org.assertj.core.groups.Tuple.tuple(3, "手机号格式错误"));
+    }
+
+    @Test
+    void importFailureTaskSucceedsWhenAuditFails() {
+        InMemoryExcelAdminRepository repository = new InMemoryExcelAdminRepository();
+        ExcelAdminService service = service(repository, null, new ThrowingAuditService());
+
+        ExcelAdminService.ActionResult<ExcelAdminModels.TaskResult> result = service.createImportFailureTask(null, null);
+
+        assertThat(result.success()).isTrue();
+        assertThat(result.data().getStatus()).isEqualTo("FAILED");
+        assertThat(repository.tasks).hasSize(1);
+        assertThat(repository.errorRecords).hasSize(2);
     }
 
     @Test
@@ -291,6 +333,23 @@ class ExcelAdminServiceTest {
                             Object params, Exception exception) {
             this.failureAction = action;
             this.failureMessage = exception == null ? null : exception.getMessage();
+        }
+    }
+
+    private static class ThrowingAuditService extends AdminAuditService {
+        private ThrowingAuditService() {
+            super(null, null);
+        }
+
+        @Override
+        public void success(HttpServletRequest request, String module, String action, String operationType, Object params) {
+            throw new IllegalStateException("audit unavailable");
+        }
+
+        @Override
+        public void failure(HttpServletRequest request, String module, String action, String operationType,
+                            Object params, Exception exception) {
+            throw new IllegalStateException("audit unavailable");
         }
     }
 
