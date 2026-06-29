@@ -94,6 +94,28 @@ class TraceAdminServiceTest {
     }
 
     @Test
+    void ordersTraceTimelineByNewestTimeWithNullsLast() {
+        TraceAdminService service = service(
+                List.of(
+                        operationLog("trace-a", true, "旧日志", "/old", new Date(1_000)),
+                        operationLog("trace-a", true, "空时间日志", "/null", null)),
+                List.of(mqMessage(1L, "trace-a", MqFailedMessage.STATUS_PENDING, new Date(3_000))),
+                List.of(localMessage(1L, "trace-a", LocalMessageStatus.PENDING,
+                        LocalDateTime.of(2026, 1, 1, 12, 0))));
+
+        TraceDetail detail = service.detail("trace-a");
+
+        assertThat(detail.getTimeline())
+                .extracting("source", "title")
+                .containsExactly(
+                        tuple("LOCAL_MESSAGE", "order.created"),
+                        tuple("MQ", "OrderCreated"),
+                        tuple("LOG", "旧日志"),
+                        tuple("LOG", "空时间日志"));
+        assertThat(detail.getTimeline().get(3).getTime()).isNull();
+    }
+
+    @Test
     void returnsEmptyDetailWhenOptionalRuntimesAreMissing() {
         TraceAdminService service = new TraceAdminService(provider(null), provider(null), provider(null));
 

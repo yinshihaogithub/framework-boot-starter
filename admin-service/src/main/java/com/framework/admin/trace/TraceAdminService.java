@@ -71,8 +71,7 @@ public class TraceAdminService {
         try {
             return handler.getFailedMessageStore().values().stream()
                     .filter(message -> traceId.equals(message.getTraceId()))
-                    .sorted(Comparator.comparing(MqFailedMessage::getCreateTime,
-                            Comparator.nullsLast(Comparator.naturalOrder())).reversed())
+                    .sorted(Comparator.comparing(MqFailedMessage::getCreateTime, newestFirst()))
                     .limit(TRACE_LIMIT)
                     .toList();
         } catch (Exception ignored) {
@@ -88,8 +87,7 @@ public class TraceAdminService {
         try {
             return service.findAll().stream()
                     .filter(message -> traceId.equals(message.getTraceId()))
-                    .sorted(Comparator.comparing(LocalMessage::getCreateTime,
-                            Comparator.nullsLast(Comparator.naturalOrder())).reversed())
+                    .sorted(Comparator.comparing(LocalMessage::getCreateTime, newestFirst()))
                     .limit(TRACE_LIMIT)
                     .toList();
         } catch (Exception ignored) {
@@ -145,9 +143,12 @@ public class TraceAdminService {
                 .setMessage(message.getErrorMessage())
                 .setBusinessKey(message.getBusinessKey())
                 .setTime(toDate(message.getCreateTime()))));
-        events.sort(Comparator.comparing(TraceEvent::getTime,
-                Comparator.nullsLast(Comparator.naturalOrder())).reversed());
+        events.sort(Comparator.comparing(TraceEvent::getTime, newestFirst()));
         return events;
+    }
+
+    private <T extends Comparable<? super T>> Comparator<T> newestFirst() {
+        return Comparator.nullsLast(Comparator.reverseOrder());
     }
 
     private Date toDate(LocalDateTime time) {
