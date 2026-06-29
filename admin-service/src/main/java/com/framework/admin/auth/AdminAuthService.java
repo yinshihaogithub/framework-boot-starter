@@ -2,6 +2,7 @@ package com.framework.admin.auth;
 
 import com.framework.admin.audit.AdminAuditService;
 import com.framework.admin.system.AdminSystemModels.AdminUser;
+import com.framework.admin.system.AdminSystemModels.Menu;
 import com.framework.admin.system.AdminSystemRepository;
 import com.framework.auth.context.LoginUser;
 import com.framework.auth.context.UserContextHolder;
@@ -18,6 +19,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+
+import java.util.List;
 
 /**
  * 后台认证服务。
@@ -61,16 +64,12 @@ public class AdminAuthService {
             AdminUser user = systemRepository.findUserByUsername(username).orElse(null);
             if (user == null || !"ENABLED".equals(user.getStatus())
                     || !PasswordUtils.verify(request.getPassword(), user.getPasswordHash())) {
-                if (loginSecurity != null) {
-                    loginSecurity.recordLoginFailure(username);
-                }
+                recordLoginFailure(loginSecurity, username);
                 insertLoginLog(username, user == null ? null : user.getId(),
                         clientIp, false, "账号或密码错误");
                 return Result.fail(ResultCode.LOGIN_FAIL);
             }
-            if (loginSecurity != null) {
-                loginSecurity.clearLoginFailure(username);
-            }
+            clearLoginFailure(loginSecurity, username);
             String deviceId = isBlank(request.getDeviceId()) ? "admin-web" : request.getDeviceId().trim();
             LoginUser loginUser = sessionManager.createSession(
                     user.getId(),
@@ -79,18 +78,19 @@ public class AdminAuthService {
                     deviceId,
                     user.getRoles().toArray(String[]::new),
                     user.getPermissions().toArray(String[]::new));
-            systemRepository.updateLastLogin(user.getId());
+            updateLastLogin(user.getId());
+            List<Menu> menus = systemRepository.listMenusByUserId(user.getId());
             insertLoginLog(username, user.getId(), clientIp, true, "登录成功");
             return Result.success(new AdminAuthController.LoginResponse()
                     .setAccessToken(loginUser.getAccessToken())
                     .setUser(toCurrentUser(user))
-                    .setMenus(systemRepository.listMenusByUserId(user.getId())));
+                    .setMenus(menus));
         } catch (BusinessException e) {
             insertLoginLog(username, null, clientIp, false, e.getMessage());
             return Result.fail(e.getCode(), e.getMessage());
-        } catch (Exception e) {
-            insertLoginLog(username, null, clientIp, false, e.getMessage());
-            return Result.fail(ResultCode.LOGIN_FAIL.getCode(), e.getMessage());
+        } catch (RuntimeException e) {
+            insertLoginLog(username, null, clientIp, false, "登录服务暂不可用");
+            return serviceError("登录", "登录服务暂不可用", e);
         }
     }
 
@@ -99,18 +99,26 @@ public class AdminAuthService {
         if (loginUser == null || loginUser.getUserId() == null) {
             return Result.fail(ResultCode.UNAUTHORIZED);
         }
-        AdminUser user = systemRepository.findUserById(loginUser.getUserId()).orElse(null);
-        if (user == null) {
-            return Result.fail(ResultCode.UNAUTHORIZED);
+        try {
+            AdminUser user = systemRepository.findUserById(loginUser.getUserId()).orElse(null);
+            if (user == null) {
+                return Result.fail(ResultCode.UNAUTHORIZED);
+            }
+            return Result.success(toCurrentUser(user).setMenus(systemRepository.listMenusByUserId(user.getId())));
+        } catch (RuntimeException e) {
+            return serviceError("查询当前用户", "当前用户查询失败", e);
         }
-        return Result.success(toCurrentUser(user).setMenus(systemRepository.listMenusByUserId(user.getId())));
     }
 
     public Result<String> logout(String authorization) {
-        if (authorization != null && authorization.startsWith(FrameworkConstants.TOKEN_PREFIX)) {
-            sessionManager.logout(authorization.substring(FrameworkConstants.TOKEN_PREFIX.length()).trim());
+        try {
+            if (authorization != null && authorization.startsWith(FrameworkConstants.TOKEN_PREFIX)) {
+                sessionManager.logout(authorization.substring(FrameworkConstants.TOKEN_PREFIX.length()).trim());
+            }
+            return Result.success("已退出");
+        } catch (RuntimeException e) {
+            return serviceError("退出登录", "退出登录失败", e);
         }
-        return Result.success("已退出");
     }
 
     public Result<String> changePassword(AdminAuthController.ChangePasswordRequest request,
@@ -126,24 +134,25 @@ public class AdminAuthService {
         if (passwordError != null) {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), passwordError);
         }
-        AdminUser user = systemRepository.findUserById(loginUser.getUserId()).orElse(null);
-        if (user == null || !"ENABLED".equals(user.getStatus())) {
-            return Result.fail(ResultCode.UNAUTHORIZED);
+        try {
+            AdminUser user = systemRepository.findUserById(loginUser.getUserId()).orElse(null);
+            if (user == null || !"ENABLED".equals(user.getStatus())) {
+                return Result.fail(ResultCode.UNAUTHORIZED);
+            }
+            if (!PasswordUtils.verify(request.getOldPassword(), user.getPasswordHash())) {
+                return Result.fail(ResultCode.LOGIN_FAIL.getCode(), "原密码不正确");
+            }
+            if (PasswordUtils.verify(request.getNewPassword(), user.getPasswordHash())) {
+                return Result.fail(ResultCode.PARAM_ERROR.getCode(), "新密码不能与原密码相同");
+            }
+            systemRepository.resetPassword(user.getId(), PasswordUtils.hash(request.getNewPassword()));
+            systemRepository.updateConfigValue("admin.default.password.changed", "true");
+            forceLogoutAll(user.getId());
+            auditChangePassword(servletRequest, user);
+            return Result.success("密码已修改，请重新登录");
+        } catch (RuntimeException e) {
+            return serviceError("修改密码", "密码修改失败", e);
         }
-        if (!PasswordUtils.verify(request.getOldPassword(), user.getPasswordHash())) {
-            return Result.fail(ResultCode.LOGIN_FAIL.getCode(), "原密码不正确");
-        }
-        if (PasswordUtils.verify(request.getNewPassword(), user.getPasswordHash())) {
-            return Result.fail(ResultCode.PARAM_ERROR.getCode(), "新密码不能与原密码相同");
-        }
-        systemRepository.resetPassword(user.getId(), PasswordUtils.hash(request.getNewPassword()));
-        systemRepository.updateConfigValue("admin.default.password.changed", "true");
-        sessionManager.forceLogoutAll(user.getId());
-        if (auditService != null) {
-            auditService.success(servletRequest, "账号安全", "修改密码", "UPDATE",
-                    auditService.params("userId", user.getId(), "username", user.getUsername()));
-        }
-        return Result.success("密码已修改，请重新登录");
     }
 
     private LoginSecurityService loginSecurityService() {
@@ -158,6 +167,36 @@ public class AdminAuthService {
         }
     }
 
+    private void recordLoginFailure(LoginSecurityService loginSecurity, String username) {
+        if (loginSecurity == null) {
+            return;
+        }
+        try {
+            loginSecurity.recordLoginFailure(username);
+        } catch (RuntimeException e) {
+            log.warn("[后台认证] 登录失败次数记录失败 username={}, error={}", username, e.getMessage());
+        }
+    }
+
+    private void clearLoginFailure(LoginSecurityService loginSecurity, String username) {
+        if (loginSecurity == null) {
+            return;
+        }
+        try {
+            loginSecurity.clearLoginFailure(username);
+        } catch (RuntimeException e) {
+            log.warn("[后台认证] 登录失败次数清理失败 username={}, error={}", username, e.getMessage());
+        }
+    }
+
+    private void updateLastLogin(Long userId) {
+        try {
+            systemRepository.updateLastLogin(userId);
+        } catch (RuntimeException e) {
+            log.warn("[后台认证] 最近登录时间更新失败 userId={}, error={}", userId, e.getMessage());
+        }
+    }
+
     private void insertLoginLog(String username, Long userId, String clientIp, boolean success, String message) {
         try {
             systemRepository.insertLoginLog(username, userId, clientIp, success, message);
@@ -165,6 +204,31 @@ public class AdminAuthService {
             log.warn("[后台认证] 登录日志写入失败 username={}, success={}, error={}",
                     username, success, e.getMessage());
         }
+    }
+
+    private void forceLogoutAll(Long userId) {
+        try {
+            sessionManager.forceLogoutAll(userId);
+        } catch (RuntimeException e) {
+            log.warn("[后台认证] 修改密码后强制下线失败 userId={}, error={}", userId, e.getMessage());
+        }
+    }
+
+    private void auditChangePassword(HttpServletRequest servletRequest, AdminUser user) {
+        if (auditService == null) {
+            return;
+        }
+        try {
+            auditService.success(servletRequest, "账号安全", "修改密码", "UPDATE",
+                    auditService.params("userId", user.getId(), "username", user.getUsername()));
+        } catch (RuntimeException e) {
+            log.warn("[后台认证] 修改密码审计日志写入失败 userId={}, error={}", user.getId(), e.getMessage());
+        }
+    }
+
+    private <T> Result<T> serviceError(String action, String message, RuntimeException exception) {
+        log.warn("[后台认证] {}失败 error={}", action, exception.getMessage());
+        return Result.fail(ResultCode.SERVICE_ERROR.getCode(), message);
     }
 
     private AdminAuthController.CurrentUser toCurrentUser(AdminUser user) {

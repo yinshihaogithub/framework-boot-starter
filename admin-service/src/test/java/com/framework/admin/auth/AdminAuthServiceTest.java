@@ -141,6 +141,55 @@ class AdminAuthServiceTest {
     }
 
     @Test
+    void loginReturnsServiceErrorWhenRepositoryFails() {
+        repository.findByUsernameFailure = new RuntimeException("database down");
+        AdminAuthController.LoginRequest request = new AdminAuthController.LoginRequest();
+        request.setUsername("admin");
+        request.setPassword("Admin@123");
+
+        Result<AdminAuthController.LoginResponse> result = service.login(request, "10.0.0.8");
+
+        assertThat(result.getCode()).isEqualTo(ResultCode.SERVICE_ERROR.getCode());
+        assertThat(result.getMessage()).isEqualTo("登录服务暂不可用");
+        assertThat(sessionManager.createdDeviceId).isNull();
+        assertThat(repository.loginLogs)
+                .extracting(LoginLogRecord::username, LoginLogRecord::success, LoginLogRecord::message)
+                .containsExactly(tuple("admin", false, "登录服务暂不可用"));
+    }
+
+    @Test
+    void loginReturnsServiceErrorWhenSessionCreateFails() {
+        repository.user = enabledUser();
+        sessionManager.createSessionFailure = new RuntimeException("redis down");
+        AdminAuthController.LoginRequest request = new AdminAuthController.LoginRequest();
+        request.setUsername("admin");
+        request.setPassword("Admin@123");
+
+        Result<AdminAuthController.LoginResponse> result = service.login(request, "10.0.0.8");
+
+        assertThat(result.getCode()).isEqualTo(ResultCode.SERVICE_ERROR.getCode());
+        assertThat(result.getMessage()).isEqualTo("登录服务暂不可用");
+        assertThat(repository.lastLoginUserId).isNull();
+    }
+
+    @Test
+    void loginContinuesWhenLastLoginUpdateFails() {
+        repository.user = enabledUser();
+        repository.lastLoginFailure = new RuntimeException("database down");
+        AdminAuthController.LoginRequest request = new AdminAuthController.LoginRequest();
+        request.setUsername("admin");
+        request.setPassword("Admin@123");
+
+        Result<AdminAuthController.LoginResponse> result = service.login(request, "10.0.0.8");
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getData().getAccessToken()).isEqualTo("access-token");
+        assertThat(repository.loginLogs)
+                .extracting(LoginLogRecord::username, LoginLogRecord::success, LoginLogRecord::message)
+                .containsExactly(tuple("admin", true, "登录成功"));
+    }
+
+    @Test
     void meReturnsCurrentUserMenus() {
         repository.user = enabledUser();
         repository.menus = List.of(menu(1L, "dashboard"));
@@ -154,11 +203,32 @@ class AdminAuthServiceTest {
     }
 
     @Test
+    void meReturnsServiceErrorWhenRepositoryFails() {
+        repository.findByIdFailure = new RuntimeException("database down");
+        UserContextHolder.set(new LoginUser().setUserId(1L));
+
+        Result<AdminAuthController.CurrentUser> result = service.me();
+
+        assertThat(result.getCode()).isEqualTo(ResultCode.SERVICE_ERROR.getCode());
+        assertThat(result.getMessage()).isEqualTo("当前用户查询失败");
+    }
+
+    @Test
     void logoutPassesPureBearerTokenToSessionManager() {
         Result<String> result = service.logout(FrameworkConstants.TOKEN_PREFIX + "abc.def");
 
         assertThat(result.isSuccess()).isTrue();
         assertThat(sessionManager.logoutToken).isEqualTo("abc.def");
+    }
+
+    @Test
+    void logoutReturnsServiceErrorWhenSessionManagerFails() {
+        sessionManager.logoutFailure = new RuntimeException("redis down");
+
+        Result<String> result = service.logout(FrameworkConstants.TOKEN_PREFIX + "abc.def");
+
+        assertThat(result.getCode()).isEqualTo(ResultCode.SERVICE_ERROR.getCode());
+        assertThat(result.getMessage()).isEqualTo("退出登录失败");
     }
 
     @Test
@@ -199,6 +269,64 @@ class AdminAuthServiceTest {
         assertThat(repository.configUpdates)
                 .containsExactly(new ConfigUpdate("admin.default.password.changed", "true"));
         assertThat(sessionManager.forceLogoutAllUserId).isEqualTo(1L);
+    }
+
+    @Test
+    void changePasswordReturnsServiceErrorWhenRepositoryFails() {
+        repository.findByIdFailure = new RuntimeException("database down");
+        UserContextHolder.set(new LoginUser().setUserId(1L));
+        AdminAuthController.ChangePasswordRequest request = changePasswordRequest("Admin@123", "NewAdmin@123");
+
+        Result<String> result = service.changePassword(request, null);
+
+        assertThat(result.getCode()).isEqualTo(ResultCode.SERVICE_ERROR.getCode());
+        assertThat(result.getMessage()).isEqualTo("密码修改失败");
+        assertThat(repository.resetPasswordUserId).isNull();
+    }
+
+    @Test
+    void changePasswordReturnsServiceErrorWhenResetPasswordFails() {
+        repository.user = enabledUser();
+        repository.resetPasswordFailure = new RuntimeException("database down");
+        UserContextHolder.set(new LoginUser().setUserId(1L));
+        AdminAuthController.ChangePasswordRequest request = changePasswordRequest("Admin@123", "NewAdmin@123");
+
+        Result<String> result = service.changePassword(request, null);
+
+        assertThat(result.getCode()).isEqualTo(ResultCode.SERVICE_ERROR.getCode());
+        assertThat(result.getMessage()).isEqualTo("密码修改失败");
+        assertThat(repository.configUpdates).isEmpty();
+        assertThat(sessionManager.forceLogoutAllUserId).isNull();
+    }
+
+    @Test
+    void changePasswordReturnsServiceErrorWhenConfigUpdateFails() {
+        repository.user = enabledUser();
+        repository.configUpdateFailure = new RuntimeException("database down");
+        UserContextHolder.set(new LoginUser().setUserId(1L));
+        AdminAuthController.ChangePasswordRequest request = changePasswordRequest("Admin@123", "NewAdmin@123");
+
+        Result<String> result = service.changePassword(request, null);
+
+        assertThat(result.getCode()).isEqualTo(ResultCode.SERVICE_ERROR.getCode());
+        assertThat(result.getMessage()).isEqualTo("密码修改失败");
+        assertThat(repository.resetPasswordUserId).isEqualTo(1L);
+        assertThat(sessionManager.forceLogoutAllUserId).isNull();
+    }
+
+    @Test
+    void changePasswordSucceedsWhenForceLogoutFails() {
+        repository.user = enabledUser();
+        sessionManager.forceLogoutFailure = new RuntimeException("redis down");
+        UserContextHolder.set(new LoginUser().setUserId(1L));
+        AdminAuthController.ChangePasswordRequest request = changePasswordRequest("Admin@123", "NewAdmin@123");
+
+        Result<String> result = service.changePassword(request, null);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(repository.resetPasswordUserId).isEqualTo(1L);
+        assertThat(repository.configUpdates)
+                .containsExactly(new ConfigUpdate("admin.default.password.changed", "true"));
     }
 
     private static AdminUser enabledUser() {
@@ -299,6 +427,12 @@ class AdminAuthServiceTest {
         private String resetPasswordHash;
         private final List<ConfigUpdate> configUpdates = new ArrayList<>();
         private RuntimeException loginLogFailure;
+        private RuntimeException findByUsernameFailure;
+        private RuntimeException findByIdFailure;
+        private RuntimeException lastLoginFailure;
+        private RuntimeException menusFailure;
+        private RuntimeException resetPasswordFailure;
+        private RuntimeException configUpdateFailure;
 
         private FakeRepository() {
             super(null);
@@ -306,16 +440,25 @@ class AdminAuthServiceTest {
 
         @Override
         public Optional<AdminUser> findUserByUsername(String username) {
+            if (findByUsernameFailure != null) {
+                throw findByUsernameFailure;
+            }
             return user != null && user.getUsername().equals(username) ? Optional.of(user) : Optional.empty();
         }
 
         @Override
         public Optional<AdminUser> findUserById(Long id) {
+            if (findByIdFailure != null) {
+                throw findByIdFailure;
+            }
             return user != null && user.getId().equals(id) ? Optional.of(user) : Optional.empty();
         }
 
         @Override
         public void updateLastLogin(Long userId) {
+            if (lastLoginFailure != null) {
+                throw lastLoginFailure;
+            }
             this.lastLoginUserId = userId;
         }
 
@@ -329,17 +472,26 @@ class AdminAuthServiceTest {
 
         @Override
         public List<Menu> listMenusByUserId(Long userId) {
+            if (menusFailure != null) {
+                throw menusFailure;
+            }
             return menus;
         }
 
         @Override
         public void resetPassword(Long userId, String passwordHash) {
+            if (resetPasswordFailure != null) {
+                throw resetPasswordFailure;
+            }
             this.resetPasswordUserId = userId;
             this.resetPasswordHash = passwordHash;
         }
 
         @Override
         public void updateConfigValue(String configKey, String configValue) {
+            if (configUpdateFailure != null) {
+                throw configUpdateFailure;
+            }
             configUpdates.add(new ConfigUpdate(configKey, configValue));
         }
     }
@@ -348,6 +500,9 @@ class AdminAuthServiceTest {
         private String createdDeviceId;
         private String logoutToken;
         private Long forceLogoutAllUserId;
+        private RuntimeException createSessionFailure;
+        private RuntimeException logoutFailure;
+        private RuntimeException forceLogoutFailure;
 
         private FakeSessionManager() {
             super(null, null, 0);
@@ -356,6 +511,9 @@ class AdminAuthServiceTest {
         @Override
         public LoginUser createSession(Long userId, String username, String tenantId, String deviceId,
                                        String[] roles, String[] permissions) {
+            if (createSessionFailure != null) {
+                throw createSessionFailure;
+            }
             this.createdDeviceId = deviceId;
             return new LoginUser()
                     .setUserId(userId)
@@ -369,11 +527,17 @@ class AdminAuthServiceTest {
 
         @Override
         public void logout(String accessToken) {
+            if (logoutFailure != null) {
+                throw logoutFailure;
+            }
             this.logoutToken = accessToken;
         }
 
         @Override
         public void forceLogoutAll(Long userId) {
+            if (forceLogoutFailure != null) {
+                throw forceLogoutFailure;
+            }
             this.forceLogoutAllUserId = userId;
         }
     }
