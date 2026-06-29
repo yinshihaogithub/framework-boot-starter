@@ -41,6 +41,20 @@ class LoginSecurityServiceTest {
     }
 
     @Test
+    void returnsLoginSecurityStatus() {
+        RecordingRedisTemplate redis = new RecordingRedisTemplate();
+        LoginSecurityService service = new LoginSecurityService(redis, 5, 30);
+        redis.values.put("framework:login:fail:alice", "2");
+        redis.values.put("framework:login:lock:alice", "1");
+
+        LoginSecurityService.LoginSecurityStatus status = service.getStatus(" alice ");
+
+        assertThat(status.failCount()).isEqualTo(2);
+        assertThat(status.locked()).isTrue();
+        assertThat(status.lockTtlMinutes()).isEqualTo(5);
+    }
+
+    @Test
     void rejectsBlankUsernameBeforeUsingRedis() {
         RecordingRedisTemplate redis = new RecordingRedisTemplate();
         LoginSecurityService service = new LoginSecurityService(redis, 5, 30);
@@ -55,6 +69,9 @@ class LoginSecurityServiceTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("username must not be blank");
         assertThatThrownBy(() -> service.getFailCount(" "))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("username must not be blank");
+        assertThatThrownBy(() -> service.getStatus(" "))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("username must not be blank");
         assertThatThrownBy(() -> service.unlock(" "))

@@ -148,6 +148,13 @@ public class AdminSystemController {
         return systemService.resetPassword(id, request, servletRequest);
     }
 
+    @Operation(summary = "解锁用户")
+    @PutMapping("/users/{id}/unlock")
+    @RequirePermission("system:user:unlock")
+    public Result<String> unlockUser(@PathVariable Long id, HttpServletRequest servletRequest) {
+        return systemService.unlockUser(id, servletRequest);
+    }
+
     @Operation(summary = "删除用户")
     @DeleteMapping("/users/{id}")
     @RequirePermission("system:user:delete")

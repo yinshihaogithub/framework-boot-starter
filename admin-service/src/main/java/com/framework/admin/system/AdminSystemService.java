@@ -24,6 +24,7 @@ import com.framework.admin.system.AdminSystemModels.UserUpdateRequest;
 import com.framework.core.result.PageResult;
 import com.framework.core.result.Result;
 import com.framework.core.result.ResultCode;
+import com.framework.auth.service.LoginSecurityService;
 import com.framework.auth.util.PasswordValidator;
 import com.framework.auth.service.SessionManager;
 import com.framework.crypto.util.PasswordUtils;
@@ -51,19 +52,22 @@ public class AdminSystemService {
     private final AdminAuditService auditService;
     private final ObjectProvider<PermissionCacheService> permissionCacheServiceProvider;
     private final ObjectProvider<SessionManager> sessionManagerProvider;
+    private final ObjectProvider<LoginSecurityService> loginSecurityServiceProvider;
 
     public AdminSystemService(AdminSystemRepository repository, AdminAuditService auditService) {
-        this(repository, auditService, null, null);
+        this(repository, auditService, null, null, null);
     }
 
     @Autowired
     public AdminSystemService(AdminSystemRepository repository, AdminAuditService auditService,
                               ObjectProvider<PermissionCacheService> permissionCacheServiceProvider,
-                              ObjectProvider<SessionManager> sessionManagerProvider) {
+                              ObjectProvider<SessionManager> sessionManagerProvider,
+                              ObjectProvider<LoginSecurityService> loginSecurityServiceProvider) {
         this.repository = repository;
         this.auditService = auditService;
         this.permissionCacheServiceProvider = permissionCacheServiceProvider;
         this.sessionManagerProvider = sessionManagerProvider;
+        this.loginSecurityServiceProvider = loginSecurityServiceProvider;
     }
 
     public List<Tenant> tenants() {
@@ -149,7 +153,10 @@ public class AdminSystemService {
         int safePageNum = safePageNum(pageNum);
         int safePageSize = safePageSize(pageSize);
         List<AdminUser> records = repository.listUsers(keyword, status, safePageNum, safePageSize);
-        records.forEach(user -> user.setPasswordHash(null));
+        records.forEach(user -> {
+            enrichLoginSecurity(user);
+            user.setPasswordHash(null);
+        });
         return PageResult.of(records, repository.countUsers(keyword, status), safePageNum, safePageSize);
     }
 
@@ -222,6 +229,24 @@ public class AdminSystemService {
         auditService.success(servletRequest, "系统管理", "删除用户", "DELETE",
                 auditService.params("userId", id));
         return Result.success("已删除");
+    }
+
+    public Result<String> unlockUser(Long id, HttpServletRequest servletRequest) {
+        if (id == null) {
+            return Result.fail(ResultCode.PARAM_ERROR.getCode(), "用户ID不能为空");
+        }
+        AdminUser user = repository.findUserById(id).orElse(null);
+        if (user == null) {
+            return Result.fail(ResultCode.NOT_FOUND.getCode(), "用户不存在");
+        }
+        LoginSecurityService loginSecurityService = loginSecurityService();
+        if (loginSecurityService == null) {
+            return Result.fail(ResultCode.SERVICE_ERROR.getCode(), "登录安全服务不可用");
+        }
+        loginSecurityService.unlock(user.getUsername());
+        auditService.success(servletRequest, "系统管理", "解锁用户", "UPDATE",
+                auditService.params("userId", id, "username", user.getUsername()));
+        return Result.success("已解锁");
     }
 
     public List<Role> roles() {
@@ -530,6 +555,28 @@ public class AdminSystemService {
 
     private SessionManager sessionManager() {
         return sessionManagerProvider == null ? null : sessionManagerProvider.getIfAvailable();
+    }
+
+    private LoginSecurityService loginSecurityService() {
+        return loginSecurityServiceProvider == null ? null : loginSecurityServiceProvider.getIfAvailable();
+    }
+
+    private void enrichLoginSecurity(AdminUser user) {
+        if (user == null || isBlank(user.getUsername())) {
+            return;
+        }
+        try {
+            LoginSecurityService loginSecurityService = loginSecurityService();
+            if (loginSecurityService == null) {
+                return;
+            }
+            LoginSecurityService.LoginSecurityStatus status = loginSecurityService.getStatus(user.getUsername());
+            user.setLoginFailCount(status.failCount())
+                    .setLoginLocked(status.locked())
+                    .setLoginLockTtlMinutes(status.lockTtlMinutes());
+        } catch (RuntimeException e) {
+            log.warn("[登录安全] 查询用户登录安全状态失败 username={}", user.getUsername(), e);
+        }
     }
 
     private Result<String> validateRole(RoleRequest request) {

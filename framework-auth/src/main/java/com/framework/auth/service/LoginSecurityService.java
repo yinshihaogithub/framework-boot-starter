@@ -79,6 +79,20 @@ public class LoginSecurityService {
     }
 
     /**
+     * 获取账号登录安全状态。
+     */
+    public LoginSecurityStatus getStatus(String username) {
+        String normalizedUsername = normalizeUsername(username);
+        String lockKey = ACCOUNT_LOCK_PREFIX + normalizedUsername;
+        boolean locked = Boolean.TRUE.equals(redis.hasKey(lockKey));
+        Long ttl = locked ? redis.getExpire(lockKey, TimeUnit.MINUTES) : 0L;
+        return new LoginSecurityStatus(
+                getFailCount(normalizedUsername),
+                locked,
+                ttl == null || ttl < 0 ? 0L : ttl);
+    }
+
+    /**
      * 强制解锁账号
      */
     public void unlock(String username) {
@@ -94,5 +108,8 @@ public class LoginSecurityService {
             throw new IllegalArgumentException("username must not be blank");
         }
         return normalized;
+    }
+
+    public record LoginSecurityStatus(long failCount, boolean locked, long lockTtlMinutes) {
     }
 }

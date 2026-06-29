@@ -251,6 +251,7 @@ VALUES
     (113, 3, 'BUTTON', '更新用户', NULL, NULL, 'system:user:update', NULL, 3, 0),
     (114, 3, 'BUTTON', '更新用户状态', NULL, NULL, 'system:user:update-status', NULL, 4, 0),
     (115, 3, 'BUTTON', '删除用户', NULL, NULL, 'system:user:delete', NULL, 5, 0),
+    (130, 3, 'BUTTON', '解锁用户', NULL, NULL, 'system:user:unlock', NULL, 6, 0),
     (116, 4, 'BUTTON', '新增角色', NULL, NULL, 'system:role:create', NULL, 1, 0),
     (117, 4, 'BUTTON', '更新角色', NULL, NULL, 'system:role:update', NULL, 2, 0),
     (118, 4, 'BUTTON', '删除角色', NULL, NULL, 'system:role:delete', NULL, 3, 0),

@@ -7,15 +7,19 @@ import com.framework.admin.system.AdminSystemModels.ResetPasswordRequest;
 import com.framework.admin.system.AdminSystemModels.RoleRequest;
 import com.framework.admin.system.AdminSystemModels.TenantRequest;
 import com.framework.admin.system.AdminSystemModels.UserCreateRequest;
+import com.framework.auth.service.LoginSecurityService;
 import com.framework.core.result.PageResult;
 import com.framework.core.result.Result;
 import com.framework.core.result.ResultCode;
 import com.framework.crypto.util.PasswordUtils;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.beans.factory.ObjectProvider;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -41,6 +45,27 @@ class AdminSystemServiceTest {
         assertThat(page.getRecords().get(0).getPasswordHash()).isNull();
         assertThat(repository.listUserPageNum).isEqualTo(1);
         assertThat(repository.listUserPageSize).isEqualTo(200);
+    }
+
+    @Test
+    void usersIncludesLoginSecurityStatus() {
+        FakeLoginSecurityService loginSecurityService = new FakeLoginSecurityService();
+        loginSecurityService.status = new LoginSecurityService.LoginSecurityStatus(2L, true, 18L);
+        AdminSystemService serviceWithLoginSecurity = new AdminSystemService(
+                repository, auditService, null, null, provider(loginSecurityService));
+        repository.users = List.of(new AdminUser()
+                .setId(2L)
+                .setUsername("alice")
+                .setPasswordHash("secret"));
+        repository.userCount = 1;
+
+        PageResult<AdminUser> page = serviceWithLoginSecurity.users(null, null, 1, 20);
+
+        AdminUser user = page.getRecords().get(0);
+        assertThat(user.getLoginFailCount()).isEqualTo(2L);
+        assertThat(user.getLoginLocked()).isTrue();
+        assertThat(user.getLoginLockTtlMinutes()).isEqualTo(18L);
+        assertThat(user.getPasswordHash()).isNull();
     }
 
     @Test
@@ -84,6 +109,23 @@ class AdminSystemServiceTest {
         assertThat(result.getCode()).isEqualTo(ResultCode.PARAM_ERROR.getCode());
         assertThat(result.getMessage()).isEqualTo("密码必须包含小写字母");
         assertThat(repository.resetPasswordUserId).isNull();
+    }
+
+    @Test
+    void unlockUserClearsLoginSecurityAndWritesAudit() {
+        FakeLoginSecurityService loginSecurityService = new FakeLoginSecurityService();
+        AdminSystemService serviceWithLoginSecurity = new AdminSystemService(
+                repository, auditService, null, null, provider(loginSecurityService));
+        repository.userById = new AdminUser()
+                .setId(9L)
+                .setUsername("alice");
+
+        Result<String> result = serviceWithLoginSecurity.unlockUser(9L, null);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getData()).isEqualTo("已解锁");
+        assertThat(loginSecurityService.unlockedUsername).isEqualTo("alice");
+        assertThat(auditService.actions).containsExactly("解锁用户");
     }
 
     @Test
@@ -157,6 +199,7 @@ class AdminSystemServiceTest {
         private RoleRequest createdRole;
         private Long resetPasswordUserId;
         private String resetPasswordHash;
+        private AdminUser userById;
 
         private FakeRepository() {
             super(null);
@@ -172,6 +215,11 @@ class AdminSystemServiceTest {
         @Override
         public long countUsers(String keyword, String status) {
             return userCount;
+        }
+
+        @Override
+        public Optional<AdminUser> findUserById(Long id) {
+            return Optional.ofNullable(userById);
         }
 
         @Override
@@ -204,6 +252,25 @@ class AdminSystemServiceTest {
         }
     }
 
+    private static class FakeLoginSecurityService extends LoginSecurityService {
+        private LoginSecurityStatus status = new LoginSecurityStatus(0L, false, 0L);
+        private String unlockedUsername;
+
+        private FakeLoginSecurityService() {
+            super(null, 5, 30);
+        }
+
+        @Override
+        public LoginSecurityStatus getStatus(String username) {
+            return status;
+        }
+
+        @Override
+        public void unlock(String username) {
+            unlockedUsername = username;
+        }
+    }
+
     private static class FakeAuditService extends AdminAuditService {
         private final List<String> actions = new ArrayList<>();
 
@@ -215,5 +282,34 @@ class AdminSystemServiceTest {
         public void success(HttpServletRequest request, String module, String action, String operationType, Object params) {
             actions.add(action);
         }
+    }
+
+    private static <T> ObjectProvider<T> provider(T value) {
+        return new ObjectProvider<>() {
+            @Override
+            public T getObject(Object... args) {
+                return value;
+            }
+
+            @Override
+            public T getIfAvailable() {
+                return value;
+            }
+
+            @Override
+            public T getIfUnique() {
+                return value;
+            }
+
+            @Override
+            public T getObject() {
+                return value;
+            }
+
+            @Override
+            public Stream<T> stream() {
+                return value == null ? Stream.empty() : Stream.of(value);
+            }
+        };
     }
 }

@@ -198,6 +198,9 @@ export interface AdminUser {
   roles?: string[]
   lastLoginTime?: string
   createTime?: string
+  loginFailCount?: number
+  loginLocked?: boolean
+  loginLockTtlMinutes?: number
 }
 
 export interface Role {
@@ -521,5 +524,6 @@ export const api = {
   updateUser: (id: number, data: Record<string, unknown>) => putData<string>(`/admin/system/users/${id}`, data),
   updateUserStatus: (id: number, status: string) => putData<string>(`/admin/system/users/${id}/status`, { status }),
   resetPassword: (id: number, password: string) => putData<string>(`/admin/system/users/${id}/password`, { password }),
+  unlockUser: (id: number) => putData<string>(`/admin/system/users/${id}/unlock`),
   deleteUser: (id: number) => deleteData<string>(`/admin/system/users/${id}`)
 }

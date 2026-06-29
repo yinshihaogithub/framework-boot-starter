@@ -536,6 +536,52 @@ class RepositoryEngineeringGuardTest {
     }
 
     @Test
+    void adminUserLoginLockManagementIsExposedEndToEnd() throws Exception {
+        String loginSecurityService = read(root.resolve(
+                "framework-auth/src/main/java/com/framework/auth/service/LoginSecurityService.java"));
+        String models = read(root.resolve(
+                "admin-service/src/main/java/com/framework/admin/system/AdminSystemModels.java"));
+        String controller = read(root.resolve(
+                "admin-service/src/main/java/com/framework/admin/system/AdminSystemController.java"));
+        String service = read(root.resolve(
+                "admin-service/src/main/java/com/framework/admin/system/AdminSystemService.java"));
+        String client = read(root.resolve("frontend/admin-web/src/api/client.ts"));
+        String app = read(root.resolve("frontend/admin-web/src/App.vue"));
+        String adminServiceScript = read(root.resolve("admin-service/src/main/resources/db/mysql/admin_service.sql"));
+        String aggregateScript = read(root.resolve("sql/mysql/framework_boot_starter_init.sql"));
+
+        assertThat(loginSecurityService)
+                .contains("public LoginSecurityStatus getStatus(String username)")
+                .contains("public record LoginSecurityStatus");
+        assertThat(models)
+                .contains("private Long loginFailCount")
+                .contains("private Boolean loginLocked")
+                .contains("private Long loginLockTtlMinutes");
+        assertThat(controller)
+                .contains("@PutMapping(\"/users/{id}/unlock\")")
+                .contains("@RequirePermission(\"system:user:unlock\")");
+        assertThat(service)
+                .contains("ObjectProvider<LoginSecurityService>")
+                .contains("enrichLoginSecurity")
+                .contains("unlockUser")
+                .contains("loginSecurityService.unlock(user.getUsername())")
+                .contains("setLoginLocked");
+        assertThat(client)
+                .contains("loginFailCount?: number")
+                .contains("unlockUser:");
+        assertThat(app)
+                .contains("登录安全")
+                .contains("system:user:unlock")
+                .contains("api.unlockUser(row.id)");
+        assertThat(adminServiceScript)
+                .contains("'解锁用户'")
+                .contains("'system:user:unlock'");
+        assertThat(aggregateScript)
+                .contains("'解锁用户'")
+                .contains("'system:user:unlock'");
+    }
+
+    @Test
     void adminCurrentUserCanChangeOwnPasswordEndToEnd() throws Exception {
         String controller = read(root.resolve(
                 "admin-service/src/main/java/com/framework/admin/auth/AdminAuthController.java"));

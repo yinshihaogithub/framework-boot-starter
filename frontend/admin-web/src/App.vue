@@ -210,15 +210,27 @@
                 <template #default="{ row }">{{ row.roles?.join(', ') }}</template>
               </el-table-column>
               <el-table-column prop="lastLoginTime" label="最后登录" min-width="170" />
+              <el-table-column label="登录安全" width="132">
+                <template #default="{ row }">
+                  <el-tag v-if="row.loginLocked" type="danger" size="small">
+                    锁定 {{ row.loginLockTtlMinutes || 0 }}m
+                  </el-tag>
+                  <el-tag v-else-if="row.loginFailCount" type="warning" size="small">
+                    失败 {{ row.loginFailCount }}
+                  </el-tag>
+                  <el-tag v-else type="success" size="small">正常</el-tag>
+                </template>
+              </el-table-column>
               <el-table-column prop="status" label="状态" width="100">
                 <template #default="{ row }">
                   <el-tag :type="row.status === 'ENABLED' ? 'success' : 'danger'" size="small">{{ row.status }}</el-tag>
                 </template>
               </el-table-column>
-              <el-table-column label="操作" width="190" fixed="right">
+              <el-table-column label="操作" width="232" fixed="right">
                 <template #default="{ row }">
                   <el-button v-if="can('system:user:update')" :icon="Edit" circle size="small" @click="openEditUser(row)" />
                   <el-button v-if="can('system:user:reset-password')" :icon="RefreshRight" circle size="small" @click="resetUserPassword(row.id)" />
+                  <el-button v-if="can('system:user:unlock') && row.loginLocked" :icon="Unlock" circle size="small" @click="unlockUser(row)" />
                   <el-button v-if="can('system:user:update-status')" :icon="Switch" circle size="small" @click="toggleUser(row)" />
                   <el-button v-if="can('system:user:delete')" :icon="Delete" circle size="small" @click="deleteUser(row)" />
                 </template>
@@ -1157,6 +1169,7 @@ import {
   SwitchButton,
   Tickets,
   Tools,
+  Unlock,
   User,
   View
 } from '@element-plus/icons-vue'
@@ -1809,6 +1822,13 @@ async function resetUserPassword(id: number) {
   })
   await api.resetPassword(id, String(result.value || ''))
   ElMessage.success('密码已重置')
+}
+
+async function unlockUser(row: AdminUser) {
+  await confirmAction(`解锁用户 ${row.username}？`, '解锁用户')
+  const message = await api.unlockUser(row.id)
+  ElMessage.success(message)
+  await loadUsers()
 }
 
 function validateStrongPassword(value: string) {

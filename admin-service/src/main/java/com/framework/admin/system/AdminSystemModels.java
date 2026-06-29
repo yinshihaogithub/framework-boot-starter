@@ -24,6 +24,9 @@ public class AdminSystemModels {
         private String passwordHash;
         private String lastLoginTime;
         private String createTime;
+        private Long loginFailCount;
+        private Boolean loginLocked;
+        private Long loginLockTtlMinutes;
         private List<Long> roleIds;
         private List<String> roles;
         private List<String> permissions;
