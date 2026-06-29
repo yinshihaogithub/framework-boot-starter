@@ -52,7 +52,7 @@ public class TraceAdminService {
     }
 
     private List<OperationLogEntity> findLogs(String traceId) {
-        OperationLogMapper mapper = operationLogMapperProvider.getIfAvailable();
+        OperationLogMapper mapper = available(operationLogMapperProvider);
         if (mapper == null) {
             return List.of();
         }
@@ -64,29 +64,48 @@ public class TraceAdminService {
     }
 
     private List<MqFailedMessage> findMqMessages(String traceId) {
-        DeadLetterHandler handler = deadLetterHandlerProvider.getIfAvailable();
+        DeadLetterHandler handler = available(deadLetterHandlerProvider);
         if (handler == null) {
             return List.of();
         }
-        return handler.getFailedMessageStore().values().stream()
-                .filter(message -> traceId.equals(message.getTraceId()))
-                .sorted(Comparator.comparing(MqFailedMessage::getCreateTime,
-                        Comparator.nullsLast(Comparator.naturalOrder())).reversed())
-                .limit(TRACE_LIMIT)
-                .toList();
+        try {
+            return handler.getFailedMessageStore().values().stream()
+                    .filter(message -> traceId.equals(message.getTraceId()))
+                    .sorted(Comparator.comparing(MqFailedMessage::getCreateTime,
+                            Comparator.nullsLast(Comparator.naturalOrder())).reversed())
+                    .limit(TRACE_LIMIT)
+                    .toList();
+        } catch (Exception ignored) {
+            return List.of();
+        }
     }
 
     private List<LocalMessage> findLocalMessages(String traceId) {
-        LocalMessageService service = localMessageServiceProvider.getIfAvailable();
+        LocalMessageService service = available(localMessageServiceProvider);
         if (service == null) {
             return List.of();
         }
-        return service.findAll().stream()
-                .filter(message -> traceId.equals(message.getTraceId()))
-                .sorted(Comparator.comparing(LocalMessage::getCreateTime,
-                        Comparator.nullsLast(Comparator.naturalOrder())).reversed())
-                .limit(TRACE_LIMIT)
-                .toList();
+        try {
+            return service.findAll().stream()
+                    .filter(message -> traceId.equals(message.getTraceId()))
+                    .sorted(Comparator.comparing(LocalMessage::getCreateTime,
+                            Comparator.nullsLast(Comparator.naturalOrder())).reversed())
+                    .limit(TRACE_LIMIT)
+                    .toList();
+        } catch (Exception ignored) {
+            return List.of();
+        }
+    }
+
+    private <T> T available(ObjectProvider<T> provider) {
+        if (provider == null) {
+            return null;
+        }
+        try {
+            return provider.getIfAvailable();
+        } catch (RuntimeException ignored) {
+            return null;
+        }
     }
 
     private Map<String, Long> summary(List<OperationLogEntity> logs,

@@ -89,6 +89,23 @@ class TraceAdminServiceTest {
         assertThat(detail.getLocalMessages()).isEmpty();
     }
 
+    @Test
+    void returnsEmptyDetailWhenOptionalProvidersFail() {
+        TraceAdminService service = new TraceAdminService(failingProvider(), failingProvider(), failingProvider());
+
+        TraceDetail detail = service.detail("trace-provider-failed");
+
+        assertThat(detail.getSummary())
+                .containsEntry("logs", 0L)
+                .containsEntry("mqMessages", 0L)
+                .containsEntry("localMessages", 0L)
+                .containsEntry("failed", 0L);
+        assertThat(detail.getTimeline()).isEmpty();
+        assertThat(detail.getLogs()).isEmpty();
+        assertThat(detail.getMqMessages()).isEmpty();
+        assertThat(detail.getLocalMessages()).isEmpty();
+    }
+
     private static TraceAdminService service(List<OperationLogEntity> logs,
                                              List<MqFailedMessage> mqMessages,
                                              List<LocalMessage> localMessages) {
@@ -224,6 +241,35 @@ class TraceAdminServiceTest {
             @Override
             public Stream<T> stream() {
                 return value == null ? Stream.empty() : Stream.of(value);
+            }
+        };
+    }
+
+    private static <T> ObjectProvider<T> failingProvider() {
+        return new ObjectProvider<>() {
+            @Override
+            public T getObject(Object... args) {
+                throw new IllegalStateException("trace optional provider unavailable");
+            }
+
+            @Override
+            public T getIfAvailable() {
+                throw new IllegalStateException("trace optional provider unavailable");
+            }
+
+            @Override
+            public T getIfUnique() {
+                throw new IllegalStateException("trace optional provider unavailable");
+            }
+
+            @Override
+            public T getObject() {
+                throw new IllegalStateException("trace optional provider unavailable");
+            }
+
+            @Override
+            public Stream<T> stream() {
+                return Stream.empty();
             }
         };
     }
