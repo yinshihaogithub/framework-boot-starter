@@ -127,7 +127,7 @@
                 <span>租户管理</span>
                 <div class="actions">
                   <el-tag size="small">{{ tenants.length }}</el-tag>
-                  <el-button :icon="Plus" circle @click="openCreateTenant" />
+                  <el-button v-if="can('system:tenant:create')" :icon="Plus" circle @click="openCreateTenant" />
                 </div>
               </div>
             </template>
@@ -159,7 +159,7 @@
                     <el-option v-for="tenant in tenants" :key="tenant.id" :label="tenant.tenantName" :value="tenant.id" />
                   </el-select>
                   <el-tag size="small">{{ flattenDepts(depts).length }}</el-tag>
-                  <el-button :icon="Plus" circle @click="openCreateDept()" />
+                  <el-button v-if="can('system:dept:create')" :icon="Plus" circle @click="openCreateDept()" />
                 </div>
               </div>
             </template>
@@ -173,7 +173,7 @@
               <el-table-column prop="createTime" label="创建时间" min-width="170" />
               <el-table-column label="操作" width="148" fixed="right">
                 <template #default="{ row }">
-                  <el-button :icon="Plus" circle size="small" @click="openCreateDept(row)" />
+                  <el-button v-if="can('system:dept:create')" :icon="Plus" circle size="small" @click="openCreateDept(row)" />
                   <el-button :icon="Edit" circle size="small" @click="openEditDept(row)" />
                   <el-button :icon="Delete" circle size="small" @click="deleteDept(row)" />
                 </template>
@@ -194,7 +194,7 @@
                     <el-option label="禁用" value="DISABLED" />
                   </el-select>
                   <el-button :icon="Search" circle type="primary" @click="loadUsers" />
-                  <el-button :icon="Plus" circle @click="openCreateUser" />
+                  <el-button v-if="can('system:user:create')" :icon="Plus" circle @click="openCreateUser" />
                 </div>
               </div>
             </template>
@@ -215,7 +215,7 @@
               <el-table-column label="操作" width="190" fixed="right">
                 <template #default="{ row }">
                   <el-button :icon="Edit" circle size="small" @click="openEditUser(row)" />
-                  <el-button :icon="RefreshRight" circle size="small" @click="resetUserPassword(row.id)" />
+                  <el-button v-if="can('system:user:reset-password')" :icon="RefreshRight" circle size="small" @click="resetUserPassword(row.id)" />
                   <el-button :icon="Switch" circle size="small" @click="toggleUser(row)" />
                   <el-button :icon="Delete" circle size="small" @click="deleteUser(row)" />
                 </template>
@@ -445,8 +445,8 @@
                   </el-select>
                   <el-input v-model="mqQuery.traceId" clearable placeholder="Trace ID" class="filter" />
                   <el-button :icon="Search" circle type="primary" @click="loadMq" />
-                  <el-button :icon="RefreshRight" circle :disabled="!mqStats?.runtime?.retryAvailable || selectedMqMessageIds.length === 0" @click="batchRetryMq" />
-                  <el-button :icon="Delete" circle @click="cleanMq" />
+                  <el-button v-if="can('mq:retry')" :icon="RefreshRight" circle :disabled="!mqStats?.runtime?.retryAvailable || selectedMqMessageIds.length === 0" @click="batchRetryMq" />
+                  <el-button v-if="can('mq:retry')" :icon="Delete" circle @click="cleanMq" />
                 </div>
               </div>
             </template>
@@ -463,10 +463,10 @@
               <el-table-column prop="errorMessage" label="错误" min-width="220" show-overflow-tooltip />
               <el-table-column label="操作" width="220" fixed="right">
                 <template #default="{ row }">
-                  <el-button :icon="RefreshRight" circle size="small" :disabled="!mqStats?.runtime?.retryAvailable" @click="retryMq(row.id)" />
-                  <el-button :icon="Check" circle size="small" @click="manualSuccessMq(row)" />
-                  <el-button :icon="Close" circle size="small" @click="manualFailureMq(row)" />
-                  <el-button :icon="Delete" circle size="small" @click="deleteMq(row)" />
+                  <el-button v-if="can('mq:retry')" :icon="RefreshRight" circle size="small" :disabled="!mqStats?.runtime?.retryAvailable" @click="retryMq(row.id)" />
+                  <el-button v-if="can('mq:retry')" :icon="Check" circle size="small" @click="manualSuccessMq(row)" />
+                  <el-button v-if="can('mq:retry')" :icon="Close" circle size="small" @click="manualFailureMq(row)" />
+                  <el-button v-if="can('mq:retry')" :icon="Delete" circle size="small" @click="deleteMq(row)" />
                   <el-button :icon="View" circle size="small" @click="openDetail(row)" />
                 </template>
               </el-table-column>
@@ -489,7 +489,7 @@
                   </el-select>
                   <el-input v-model="localQuery.topic" clearable placeholder="Topic" class="filter" />
                   <el-button :icon="Search" circle type="primary" @click="loadLocal" />
-                  <el-button :icon="RefreshRight" circle @click="retryLocal" />
+                  <el-button v-if="can('local-message:retry')" :icon="RefreshRight" circle @click="retryLocal" />
                 </div>
               </div>
             </template>
@@ -505,9 +505,9 @@
               <el-table-column prop="errorMessage" label="错误" min-width="220" show-overflow-tooltip />
               <el-table-column label="操作" width="166" fixed="right">
                 <template #default="{ row }">
-                  <el-button :icon="Check" circle size="small" @click="markLocalSuccess(row)" />
-                  <el-button :icon="Close" circle size="small" @click="markLocalFailure(row)" />
-                  <el-button :icon="Delete" circle size="small" @click="deleteLocal(row)" />
+                  <el-button v-if="can('local-message:retry')" :icon="Check" circle size="small" @click="markLocalSuccess(row)" />
+                  <el-button v-if="can('local-message:retry')" :icon="Close" circle size="small" @click="markLocalFailure(row)" />
+                  <el-button v-if="can('local-message:retry')" :icon="Delete" circle size="small" @click="deleteLocal(row)" />
                   <el-button :icon="View" circle size="small" @click="openDetail(row)" />
                 </template>
               </el-table-column>
@@ -555,7 +555,7 @@
               <el-table-column label="操作" width="176" fixed="right">
                 <template #default="{ row }">
                   <el-button :icon="Edit" circle size="small" @click="openEditNotify(row)" />
-                  <el-button :icon="Bell" circle size="small" @click="sendTestNotify(row)" />
+                  <el-button v-if="can('notify:send-test')" :icon="Bell" circle size="small" @click="sendTestNotify(row)" />
                   <el-button :icon="Delete" circle size="small" @click="deleteNotify(row)" />
                   <el-button :icon="View" circle size="small" @click="openDetail(row)" />
                 </template>
@@ -623,8 +623,8 @@
                     <el-option label="PROCESSING" value="PROCESSING" />
                   </el-select>
                   <el-button :icon="Search" circle type="primary" @click="loadExcel" />
-                  <el-button :icon="Files" circle @click="createExportTask" />
-                  <el-button :icon="Close" circle @click="createImportFailureTask" />
+                  <el-button v-if="can('excel:task:create')" :icon="Files" circle @click="createExportTask" />
+                  <el-button v-if="can('excel:task:create')" :icon="Close" circle @click="createImportFailureTask" />
                 </div>
               </div>
             </template>
@@ -1340,6 +1340,10 @@ const greetingTitle = computed(() => {
 })
 
 const menuCount = computed(() => flattenMenus(menus.value).length)
+
+function can(permission: string) {
+  return currentUser.value?.permissions?.includes(permission) ?? false
+}
 
 onMounted(async () => {
   if (!getToken()) {
