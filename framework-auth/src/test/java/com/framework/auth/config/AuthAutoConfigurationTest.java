@@ -53,6 +53,7 @@ class AuthAutoConfigurationTest {
         assertInvalidProperty("framework.auth.sms.code-expire-seconds=0", "framework.auth.sms.code-expire-seconds");
         assertInvalidProperty("framework.auth.sms.resend-interval-seconds=0", "framework.auth.sms.resend-interval-seconds");
         assertInvalidProperty("framework.auth.password.expire-days=-1", "framework.auth.password.expire-days");
+        assertInvalidProperty("framework.auth.white-list[0]=auth/**", "framework.auth.white-list paths must start with /");
     }
 
     @Test

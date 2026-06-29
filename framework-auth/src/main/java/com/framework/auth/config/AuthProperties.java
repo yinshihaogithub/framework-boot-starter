@@ -65,6 +65,9 @@ public class AuthProperties implements InitializingBean {
             if (!hasText(path)) {
                 throw new IllegalArgumentException("framework.auth.white-list must not contain blank paths");
             }
+            if (!path.trim().startsWith("/")) {
+                throw new IllegalArgumentException("framework.auth.white-list paths must start with /");
+            }
         }
     }
 
