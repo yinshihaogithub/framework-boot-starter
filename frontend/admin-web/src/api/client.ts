@@ -113,11 +113,16 @@ export interface LocalMessage {
   id: number
   messageId: string
   traceId?: string
+  parentMessageId?: string
   topic?: string
   businessKey?: string
+  tenantId?: string
+  operator?: string
+  source?: string
   status?: string
   retryCount?: number
   maxRetry?: number
+  nextRetryTime?: string
   payload?: string
   errorMessage?: string
   createTime?: string

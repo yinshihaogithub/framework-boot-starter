@@ -554,6 +554,8 @@
                     <el-option label="FAILED" value="FAILED" />
                   </el-select>
                   <el-input v-model="localQuery.topic" clearable placeholder="Topic" class="filter" />
+                  <el-input v-model="localQuery.businessKey" clearable placeholder="业务键" class="filter" />
+                  <el-input v-model="localQuery.traceId" clearable placeholder="Trace ID" class="filter" />
                   <el-button :icon="Search" circle type="primary" @click="loadLocal" />
                   <el-button v-if="can('local-message:retry')" :icon="RefreshRight" circle @click="retryLocal" />
                 </div>
@@ -565,9 +567,16 @@
                 <template #default="{ row }"><el-tag :type="localStatusType(row.status)" size="small">{{ row.status }}</el-tag></template>
               </el-table-column>
               <el-table-column prop="topic" label="Topic" min-width="150" show-overflow-tooltip />
+              <el-table-column prop="messageId" label="消息ID" min-width="170" show-overflow-tooltip />
+              <el-table-column prop="parentMessageId" label="父消息" min-width="160" show-overflow-tooltip />
               <el-table-column prop="businessKey" label="业务键" min-width="150" show-overflow-tooltip />
               <el-table-column prop="traceId" label="Trace ID" min-width="190" show-overflow-tooltip />
-              <el-table-column prop="retryCount" label="重试" width="82" />
+              <el-table-column label="重试" width="92">
+                <template #default="{ row }">{{ row.retryCount ?? 0 }}/{{ row.maxRetry ?? '-' }}</template>
+              </el-table-column>
+              <el-table-column prop="nextRetryTime" label="下次重试" min-width="170" show-overflow-tooltip />
+              <el-table-column prop="operator" label="操作人" min-width="120" show-overflow-tooltip />
+              <el-table-column prop="source" label="来源" min-width="130" show-overflow-tooltip />
               <el-table-column prop="errorMessage" label="错误" min-width="220" show-overflow-tooltip />
               <el-table-column label="操作" width="206" fixed="right">
                 <template #default="{ row }">
@@ -837,8 +846,13 @@
                   <el-table-column prop="id" label="ID" width="86" />
                   <el-table-column prop="status" label="状态" width="126" />
                   <el-table-column prop="topic" label="Topic" min-width="150" show-overflow-tooltip />
+                  <el-table-column prop="messageId" label="消息ID" min-width="170" show-overflow-tooltip />
+                  <el-table-column prop="parentMessageId" label="父消息" min-width="160" show-overflow-tooltip />
                   <el-table-column prop="businessKey" label="业务键" min-width="150" show-overflow-tooltip />
-                  <el-table-column prop="retryCount" label="重试" width="82" />
+                  <el-table-column prop="nextRetryTime" label="下次重试" min-width="170" show-overflow-tooltip />
+                  <el-table-column label="重试" width="92">
+                    <template #default="{ row }">{{ row.retryCount ?? 0 }}/{{ row.maxRetry ?? '-' }}</template>
+                  </el-table-column>
                   <el-table-column prop="errorMessage" label="错误" min-width="220" show-overflow-tooltip />
                   <el-table-column label="操作" width="80" fixed="right">
                     <template #default="{ row }"><el-button :icon="View" circle size="small" @click="openDetail(row)" /></template>
@@ -1527,7 +1541,7 @@ const changePasswordForm = reactive({
   confirmPassword: ''
 })
 const mqQuery = reactive({ status: '', traceId: '', pageNum: 1, pageSize: 20 })
-const localQuery = reactive({ status: '', topic: '', pageNum: 1, pageSize: 20 })
+const localQuery = reactive({ status: '', topic: '', businessKey: '', traceId: '', pageNum: 1, pageSize: 20 })
 const notifyQuery = reactive({ keyword: '', channel: '', status: '', pageNum: 1, pageSize: 20 })
 const notifyRecordQuery = reactive<{ channel: string; success: boolean | ''; pageNum: number; pageSize: number }>({ channel: '', success: '', pageNum: 1, pageSize: 20 })
 const excelQuery = reactive({ taskType: '', status: '', pageNum: 1, pageSize: 20 })
