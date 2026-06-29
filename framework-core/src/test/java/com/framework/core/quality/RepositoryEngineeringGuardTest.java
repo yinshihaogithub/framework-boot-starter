@@ -32,6 +32,9 @@ class RepositoryEngineeringGuardTest {
             "new\\s+String\\s*\\([^,\\n]*\\)(?!\\s*,)");
     private static final Pattern DEFAULT_GET_BYTES_PATTERN = Pattern.compile(
             "\\.getBytes\\s*\\(\\s*\\)");
+    private static final Pattern REQUIRE_PERMISSION_PATTERN = Pattern.compile(
+            "@RequirePermission\\s*\\(\\s*(?:\\{\\s*)?([^)]*?)(?:\\s*}\\s*)?\\)", Pattern.DOTALL);
+    private static final Pattern QUOTED_STRING_PATTERN = Pattern.compile("\"([^\"]+)\"");
 
     private final Path root = repositoryRoot();
 
@@ -469,6 +472,23 @@ class RepositoryEngineeringGuardTest {
     }
 
     @Test
+    void adminBackendPermissionsAreSeededInMysqlScripts() throws Exception {
+        Set<String> permissions = adminBackendPermissions();
+        String adminServiceScript = read(root.resolve("admin-service/src/main/resources/db/mysql/admin_service.sql"));
+        String aggregateScript = read(root.resolve("sql/mysql/framework_boot_starter_init.sql"));
+
+        assertThat(permissions).isNotEmpty();
+        for (String permission : permissions) {
+            assertThat(adminServiceScript)
+                    .as("admin-service SQL must seed backend permission " + permission)
+                    .contains("'" + permission + "'");
+            assertThat(aggregateScript)
+                    .as("aggregate SQL must seed backend permission " + permission)
+                    .contains("'" + permission + "'");
+        }
+    }
+
+    @Test
     void sourceConfigurationDoesNotUseH2AsDefaultDatabase() throws Exception {
         try (Stream<Path> files = Files.walk(root)) {
             List<Path> sourceFiles = files
@@ -544,6 +564,27 @@ class RepositoryEngineeringGuardTest {
             artifacts.add(matcher.group(1));
         }
         return artifacts;
+    }
+
+    private Set<String> adminBackendPermissions() throws IOException {
+        Set<String> permissions = new LinkedHashSet<>();
+        Path adminMain = root.resolve("admin-service/src/main/java/com/framework/admin");
+        try (Stream<Path> files = Files.walk(adminMain)) {
+            List<Path> javaFiles = files
+                    .filter(Files::isRegularFile)
+                    .filter(path -> path.toString().endsWith(".java"))
+                    .toList();
+            for (Path javaFile : javaFiles) {
+                Matcher annotationMatcher = REQUIRE_PERMISSION_PATTERN.matcher(read(javaFile));
+                while (annotationMatcher.find()) {
+                    Matcher permissionMatcher = QUOTED_STRING_PATTERN.matcher(annotationMatcher.group(1));
+                    while (permissionMatcher.find()) {
+                        permissions.add(permissionMatcher.group(1));
+                    }
+                }
+            }
+        }
+        return permissions;
     }
 
     private String fullyQualifiedClassName(Path javaFile) throws IOException {
