@@ -21,6 +21,15 @@ public class JwtUtils {
     private final long refreshTokenExpire;
 
     public JwtUtils(String secret, long accessTokenExpireSeconds, long refreshTokenExpireSeconds) {
+        if (secret == null || secret.isBlank() || secret.length() < 32) {
+            throw new IllegalArgumentException("jwt secret must be at least 32 characters");
+        }
+        if (accessTokenExpireSeconds <= 0) {
+            throw new IllegalArgumentException("access token expire seconds must be greater than 0");
+        }
+        if (refreshTokenExpireSeconds <= accessTokenExpireSeconds) {
+            throw new IllegalArgumentException("refresh token expire seconds must be greater than access token expire seconds");
+        }
         this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
         this.accessTokenExpire = accessTokenExpireSeconds * 1000;
         this.refreshTokenExpire = refreshTokenExpireSeconds * 1000;
@@ -90,6 +99,9 @@ public class JwtUtils {
      * 校验 token
      */
     public boolean validateToken(String token) {
+        if (token == null || token.isBlank()) {
+            return false;
+        }
         try {
             parseToken(token);
             return true;
