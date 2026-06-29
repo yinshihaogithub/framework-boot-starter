@@ -239,6 +239,29 @@ class DefaultLocalMessageServiceTest {
     }
 
     @Test
+    void manualOperationsRejectInvalidIdsBeforeRepositoryLookup() {
+        InMemoryLocalMessageRepository repository = new InMemoryLocalMessageRepository();
+        DefaultLocalMessageService service = new DefaultLocalMessageService(repository, properties(), List.of());
+
+        assertThatThrownBy(() -> service.retryNow(null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("local message id must be greater than 0");
+        assertThatThrownBy(() -> service.retryNow(0L))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("local message id must be greater than 0");
+        assertThatThrownBy(() -> service.markSuccess(-1L))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("local message id must be greater than 0");
+        assertThatThrownBy(() -> service.markFailure(null, new IllegalStateException("manual failure")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("local message id must be greater than 0");
+        assertThatThrownBy(() -> service.findById(0L))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("local message id must be greater than 0");
+        assertThat(repository.findByIdCalls).isZero();
+    }
+
+    @Test
     void retryDueMessagesNormalizesPersistedTopicBeforeHandlerLookup() {
         InMemoryLocalMessageRepository repository = new InMemoryLocalMessageRepository();
         AtomicInteger handled = new AtomicInteger();
@@ -346,6 +369,7 @@ class DefaultLocalMessageServiceTest {
 
         private final Map<Long, LocalMessage> messages = new LinkedHashMap<>();
         private long nextId = 1;
+        private int findByIdCalls;
 
         @Override
         public LocalMessage save(LocalMessage message) {
@@ -358,6 +382,7 @@ class DefaultLocalMessageServiceTest {
 
         @Override
         public Optional<LocalMessage> findById(Long id) {
+            findByIdCalls++;
             return Optional.ofNullable(messages.get(id));
         }
 

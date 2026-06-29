@@ -59,6 +59,7 @@ public class DefaultLocalMessageService implements LocalMessageService {
 
     @Override
     public boolean retryNow(Long id) {
+        requireId(id);
         Optional<LocalMessage> optionalMessage = repository.findById(id);
         if (optionalMessage.isEmpty()) {
             return false;
@@ -69,6 +70,7 @@ public class DefaultLocalMessageService implements LocalMessageService {
 
     @Override
     public void markSuccess(Long id) {
+        requireId(id);
         repository.findById(id).ifPresent(message -> {
             message.setStatus(LocalMessageStatus.SUCCESS);
             message.setErrorMessage(null);
@@ -79,11 +81,13 @@ public class DefaultLocalMessageService implements LocalMessageService {
 
     @Override
     public void markFailure(Long id, Exception exception) {
+        requireId(id);
         repository.findById(id).ifPresent(message -> markFailure(message, exception));
     }
 
     @Override
     public Optional<LocalMessage> findById(Long id) {
+        requireId(id);
         return repository.findById(id);
     }
 
@@ -181,6 +185,12 @@ public class DefaultLocalMessageService implements LocalMessageService {
                 || properties.getRetryInterval().isZero()
                 || properties.getRetryInterval().isNegative()) {
             throw new IllegalArgumentException("framework.local-message.retry-interval must be greater than 0");
+        }
+    }
+
+    private void requireId(Long id) {
+        if (id == null || id <= 0) {
+            throw new IllegalArgumentException("local message id must be greater than 0");
         }
     }
 
