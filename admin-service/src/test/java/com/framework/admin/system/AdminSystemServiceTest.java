@@ -2,9 +2,16 @@ package com.framework.admin.system;
 
 import com.framework.admin.audit.AdminAuditService;
 import com.framework.admin.system.AdminSystemModels.AdminUser;
+import com.framework.admin.system.AdminSystemModels.ConfigItem;
+import com.framework.admin.system.AdminSystemModels.DictItem;
+import com.framework.admin.system.AdminSystemModels.DictType;
+import com.framework.admin.system.AdminSystemModels.Dept;
+import com.framework.admin.system.AdminSystemModels.Menu;
 import com.framework.admin.system.AdminSystemModels.MenuRequest;
 import com.framework.admin.system.AdminSystemModels.ResetPasswordRequest;
+import com.framework.admin.system.AdminSystemModels.Role;
 import com.framework.admin.system.AdminSystemModels.RoleRequest;
+import com.framework.admin.system.AdminSystemModels.Tenant;
 import com.framework.admin.system.AdminSystemModels.TenantRequest;
 import com.framework.admin.system.AdminSystemModels.UserCreateRequest;
 import com.framework.admin.system.AdminSystemModels.UserStatusRequest;
@@ -70,6 +77,26 @@ class AdminSystemServiceTest {
         assertThat(user.getLoginLocked()).isTrue();
         assertThat(user.getLoginLockTtlMinutes()).isEqualTo(18L);
         assertThat(user.getPasswordHash()).isNull();
+    }
+
+    @Test
+    void queryEndpointsFallBackWhenRepositoryFails() {
+        repository.queryFailure = new RuntimeException("database down");
+
+        PageResult<AdminUser> users = service.users(null, null, 0, 0);
+
+        assertThat(service.tenants()).isEmpty();
+        assertThat(service.depts(1L)).isEmpty();
+        assertThat(users.getPageNum()).isEqualTo(1);
+        assertThat(users.getPageSize()).isEqualTo(20);
+        assertThat(users.getRecords()).isEmpty();
+        assertThat(users.getTotal()).isZero();
+        assertThat(service.roles()).isEmpty();
+        assertThat(service.roleMenuIds(1L)).isEmpty();
+        assertThat(service.menus()).isEmpty();
+        assertThat(service.dictTypes()).isEmpty();
+        assertThat(service.dictItems("sys_status")).isEmpty();
+        assertThat(service.configs()).isEmpty();
     }
 
     @Test
@@ -358,13 +385,27 @@ class AdminSystemServiceTest {
         private MenuRequest createdMenu;
         private Long updatedMenuId;
         private MenuRequest updatedMenu;
+        private RuntimeException queryFailure;
 
         private FakeRepository() {
             super(null);
         }
 
         @Override
+        public List<Tenant> listTenants() {
+            failQueryIfNeeded();
+            return List.of();
+        }
+
+        @Override
+        public List<Dept> listDeptTree(Long tenantId) {
+            failQueryIfNeeded();
+            return List.of();
+        }
+
+        @Override
         public List<AdminUser> listUsers(String keyword, String status, int pageNum, int pageSize) {
+            failQueryIfNeeded();
             this.listUserPageNum = pageNum;
             this.listUserPageSize = pageSize;
             return new ArrayList<>(users);
@@ -372,6 +413,7 @@ class AdminSystemServiceTest {
 
         @Override
         public long countUsers(String keyword, String status) {
+            failQueryIfNeeded();
             return userCount;
         }
 
@@ -422,6 +464,12 @@ class AdminSystemServiceTest {
         }
 
         @Override
+        public List<Role> listRoles() {
+            failQueryIfNeeded();
+            return List.of();
+        }
+
+        @Override
         public void updateRole(Long roleId, RoleRequest request) {
             this.updatedRoleId = roleId;
             this.updatedRole = request;
@@ -433,9 +481,21 @@ class AdminSystemServiceTest {
         }
 
         @Override
+        public List<Long> listMenuIdsByRoleId(Long roleId) {
+            failQueryIfNeeded();
+            return List.of();
+        }
+
+        @Override
         public void replaceRoleMenus(Long roleId, List<Long> menuIds) {
             this.replacedRoleMenuRoleId = roleId;
             this.replacedRoleMenuIds = menuIds == null ? List.of() : List.copyOf(menuIds);
+        }
+
+        @Override
+        public List<Menu> listMenuTree() {
+            failQueryIfNeeded();
+            return List.of();
         }
 
         @Override
@@ -448,6 +508,30 @@ class AdminSystemServiceTest {
         public void updateMenu(Long menuId, MenuRequest request) {
             this.updatedMenuId = menuId;
             this.updatedMenu = request;
+        }
+
+        @Override
+        public List<DictType> listDictTypes() {
+            failQueryIfNeeded();
+            return List.of();
+        }
+
+        @Override
+        public List<DictItem> listDictItems(String dictCode) {
+            failQueryIfNeeded();
+            return List.of();
+        }
+
+        @Override
+        public List<ConfigItem> listConfigs() {
+            failQueryIfNeeded();
+            return List.of();
+        }
+
+        private void failQueryIfNeeded() {
+            if (queryFailure != null) {
+                throw queryFailure;
+            }
         }
     }
 

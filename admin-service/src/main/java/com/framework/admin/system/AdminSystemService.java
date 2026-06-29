@@ -73,7 +73,12 @@ public class AdminSystemService {
     }
 
     public List<Tenant> tenants() {
-        return repository.listTenants();
+        try {
+            return repository.listTenants();
+        } catch (RuntimeException e) {
+            log.warn("[系统管理] 租户列表查询失败 error={}", e.getMessage());
+            return List.of();
+        }
     }
 
     public Result<Long> createTenant(TenantRequest request, HttpServletRequest servletRequest) {
@@ -112,7 +117,12 @@ public class AdminSystemService {
     }
 
     public List<Dept> depts(Long tenantId) {
-        return repository.listDeptTree(tenantId);
+        try {
+            return repository.listDeptTree(tenantId);
+        } catch (RuntimeException e) {
+            log.warn("[系统管理] 部门树查询失败 tenantId={}, error={}", tenantId, e.getMessage());
+            return List.of();
+        }
     }
 
     public Result<Long> createDept(DeptRequest request, HttpServletRequest servletRequest) {
@@ -154,12 +164,17 @@ public class AdminSystemService {
     public PageResult<AdminUser> users(String keyword, String status, int pageNum, int pageSize) {
         int safePageNum = safePageNum(pageNum);
         int safePageSize = safePageSize(pageSize);
-        List<AdminUser> records = repository.listUsers(keyword, status, safePageNum, safePageSize);
-        records.forEach(user -> {
-            enrichLoginSecurity(user);
-            user.setPasswordHash(null);
-        });
-        return PageResult.of(records, repository.countUsers(keyword, status), safePageNum, safePageSize);
+        try {
+            List<AdminUser> records = repository.listUsers(keyword, status, safePageNum, safePageSize);
+            records.forEach(user -> {
+                enrichLoginSecurity(user);
+                user.setPasswordHash(null);
+            });
+            return PageResult.of(records, repository.countUsers(keyword, status), safePageNum, safePageSize);
+        } catch (RuntimeException e) {
+            log.warn("[系统管理] 用户列表查询失败 error={}", e.getMessage());
+            return PageResult.empty(safePageNum, safePageSize);
+        }
     }
 
     public Result<Long> createUser(UserCreateRequest request, HttpServletRequest servletRequest) {
@@ -258,7 +273,12 @@ public class AdminSystemService {
     }
 
     public List<Role> roles() {
-        return repository.listRoles();
+        try {
+            return repository.listRoles();
+        } catch (RuntimeException e) {
+            log.warn("[系统管理] 角色列表查询失败 error={}", e.getMessage());
+            return List.of();
+        }
     }
 
     public Result<Long> createRole(RoleRequest request, HttpServletRequest servletRequest) {
@@ -303,7 +323,12 @@ public class AdminSystemService {
     }
 
     public List<Long> roleMenuIds(Long id) {
-        return repository.listMenuIdsByRoleId(id);
+        try {
+            return repository.listMenuIdsByRoleId(id);
+        } catch (RuntimeException e) {
+            log.warn("[系统管理] 角色菜单ID查询失败 roleId={}, error={}", id, e.getMessage());
+            return List.of();
+        }
     }
 
     public Result<String> updateRoleMenus(Long id, RoleMenuRequest request, HttpServletRequest servletRequest) {
@@ -317,7 +342,12 @@ public class AdminSystemService {
     }
 
     public List<Menu> menus() {
-        return repository.listMenuTree();
+        try {
+            return repository.listMenuTree();
+        } catch (RuntimeException e) {
+            log.warn("[系统管理] 菜单树查询失败 error={}", e.getMessage());
+            return List.of();
+        }
     }
 
     public Result<Long> createMenu(MenuRequest request, HttpServletRequest servletRequest) {
@@ -359,7 +389,12 @@ public class AdminSystemService {
     }
 
     public List<DictType> dictTypes() {
-        return repository.listDictTypes();
+        try {
+            return repository.listDictTypes();
+        } catch (RuntimeException e) {
+            log.warn("[系统管理] 字典类型查询失败 error={}", e.getMessage());
+            return List.of();
+        }
     }
 
     public Result<Long> createDictType(DictTypeRequest request, HttpServletRequest servletRequest) {
@@ -392,7 +427,12 @@ public class AdminSystemService {
     }
 
     public List<DictItem> dictItems(String dictCode) {
-        return repository.listDictItems(dictCode);
+        try {
+            return repository.listDictItems(dictCode);
+        } catch (RuntimeException e) {
+            log.warn("[系统管理] 字典项查询失败 dictCode={}, error={}", dictCode, e.getMessage());
+            return List.of();
+        }
     }
 
     public Result<Long> createDictItem(DictItemRequest request, HttpServletRequest servletRequest) {
@@ -427,7 +467,12 @@ public class AdminSystemService {
     }
 
     public List<ConfigItem> configs() {
-        return repository.listConfigs();
+        try {
+            return repository.listConfigs();
+        } catch (RuntimeException e) {
+            log.warn("[系统管理] 系统参数查询失败 error={}", e.getMessage());
+            return List.of();
+        }
     }
 
     public Result<Long> createConfig(ConfigRequest request, HttpServletRequest servletRequest) {
