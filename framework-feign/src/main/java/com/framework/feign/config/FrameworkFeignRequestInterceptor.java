@@ -9,7 +9,6 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
@@ -47,19 +46,7 @@ public class FrameworkFeignRequestInterceptor implements RequestInterceptor {
 
     private List<String> relayHeaders() {
         List<String> relayHeaders = properties.getRelayHeaders();
-        if (relayHeaders == null || relayHeaders.isEmpty()) {
-            return List.of(FrameworkConstants.TRACE_ID_HEADER);
-        }
-        List<String> normalizedHeaders = new ArrayList<>();
-        for (String header : relayHeaders) {
-            if (!StringUtils.hasText(header)) {
-                continue;
-            }
-            normalizedHeaders.add(FeignProperties.validateRelayHeaderName(header));
-        }
-        return normalizedHeaders.isEmpty()
-                ? List.of(FrameworkConstants.TRACE_ID_HEADER)
-                : normalizedHeaders;
+        return FeignProperties.normalizeRelayHeaders(relayHeaders);
     }
 
     private HttpServletRequest currentRequest() {

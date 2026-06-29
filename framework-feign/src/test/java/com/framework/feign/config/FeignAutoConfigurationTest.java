@@ -86,6 +86,23 @@ class FeignAutoConfigurationTest {
     }
 
     @Test
+    void interceptorAlwaysRelaysTraceIdWhenCustomHeadersAreConfigured() {
+        FeignProperties properties = new FeignProperties();
+        properties.setRelayHeaders(List.of(FrameworkConstants.TENANT_HEADER));
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader(FrameworkConstants.TENANT_HEADER, "tenant-a");
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
+        TraceContext.putTraceId("custom-config-trace");
+        RequestTemplate template = new RequestTemplate();
+
+        new FrameworkFeignRequestInterceptor(properties).apply(template);
+
+        assertThat(template.headers())
+                .containsEntry(FrameworkConstants.TENANT_HEADER, List.of("tenant-a"))
+                .containsEntry(FrameworkConstants.TRACE_ID_HEADER, List.of("custom-config-trace"));
+    }
+
+    @Test
     void interceptorAddsTraceIdFromMdcWhenThereIsNoServletRequest() {
         TraceContext.putTraceId("background-trace");
         RequestTemplate template = new RequestTemplate();
@@ -125,11 +142,11 @@ class FeignAutoConfigurationTest {
     @Test
     void propertiesNormalizeRelayHeaderNamesAtStartup() {
         FeignProperties properties = new FeignProperties();
-        properties.setRelayHeaders(Arrays.asList(" X-Custom-Trace ", " ", null));
+        properties.setRelayHeaders(Arrays.asList(" X-Custom-Trace ", "x-trace-id", "X-Trace-Id", " ", null));
 
         properties.afterPropertiesSet();
 
-        assertThat(properties.getRelayHeaders()).containsExactly("X-Custom-Trace");
+        assertThat(properties.getRelayHeaders()).containsExactly("X-Custom-Trace", FrameworkConstants.TRACE_ID_HEADER);
     }
 
     @Test

@@ -6,7 +6,10 @@ import org.springframework.beans.factory.InitializingBean;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
@@ -32,16 +35,36 @@ public class FeignProperties implements InitializingBean {
     @Override
     public void afterPropertiesSet() {
         if (relayHeaders == null || relayHeaders.isEmpty()) {
+            relayHeaders = new ArrayList<>(List.of(FrameworkConstants.TRACE_ID_HEADER));
             return;
         }
+        relayHeaders = normalizeRelayHeaders(relayHeaders);
+    }
+
+    static List<String> normalizeRelayHeaders(List<String> relayHeaders) {
+        if (relayHeaders == null || relayHeaders.isEmpty()) {
+            return List.of(FrameworkConstants.TRACE_ID_HEADER);
+        }
         List<String> normalizedHeaders = new ArrayList<>();
+        Set<String> seen = new LinkedHashSet<>();
+        boolean hasTraceHeader = false;
         for (String header : relayHeaders) {
             if (header == null || header.isBlank()) {
                 continue;
             }
-            normalizedHeaders.add(validateRelayHeaderName(header));
+            String normalizedHeader = validateRelayHeaderName(header);
+            if (FrameworkConstants.TRACE_ID_HEADER.equalsIgnoreCase(normalizedHeader)) {
+                hasTraceHeader = true;
+                normalizedHeader = FrameworkConstants.TRACE_ID_HEADER;
+            }
+            if (seen.add(normalizedHeader.toLowerCase(Locale.ROOT))) {
+                normalizedHeaders.add(normalizedHeader);
+            }
         }
-        relayHeaders = normalizedHeaders;
+        if (!hasTraceHeader) {
+            normalizedHeaders.add(FrameworkConstants.TRACE_ID_HEADER);
+        }
+        return normalizedHeaders;
     }
 
     static String validateRelayHeaderName(String header) {
