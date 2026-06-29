@@ -49,6 +49,7 @@ public class NotifyAdminController {
 
     @Operation(summary = "新增通知模板")
     @PostMapping("/templates")
+    @RequirePermission("notify:template:create")
     public Result<Long> createTemplate(@RequestBody NotifyAdminModels.TemplateRequest request,
                                        HttpServletRequest servletRequest) {
         return Result.success(notifyAdminService.createTemplate(request, servletRequest));
@@ -56,6 +57,7 @@ public class NotifyAdminController {
 
     @Operation(summary = "更新通知模板")
     @PutMapping("/templates/{id}")
+    @RequirePermission("notify:template:update")
     public Result<String> updateTemplate(@PathVariable Long id,
                                          @RequestBody NotifyAdminModels.TemplateRequest request,
                                          HttpServletRequest servletRequest) {
@@ -66,6 +68,7 @@ public class NotifyAdminController {
 
     @Operation(summary = "删除通知模板")
     @DeleteMapping("/templates/{id}")
+    @RequirePermission("notify:template:delete")
     public Result<String> deleteTemplate(@PathVariable Long id, HttpServletRequest servletRequest) {
         notifyAdminService.deleteTemplate(id, servletRequest);
         return Result.success("已删除");

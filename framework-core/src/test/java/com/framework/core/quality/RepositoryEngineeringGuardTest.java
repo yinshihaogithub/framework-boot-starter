@@ -37,6 +37,8 @@ class RepositoryEngineeringGuardTest {
     private static final Pattern QUOTED_STRING_PATTERN = Pattern.compile("\"([^\"]+)\"");
     private static final Pattern FRONTEND_CAN_PERMISSION_PATTERN = Pattern.compile(
             "can\\(\\s*'([^']+)'\\s*\\)");
+    private static final Pattern WRITE_MAPPING_METHOD_BLOCK_PATTERN = Pattern.compile(
+            "@(?:Post|Put|Delete)Mapping[^\\n]*(?:\\R\\s*@[A-Za-z][^\\n]*)*\\R\\s*public\\s+Result");
     private static final Pattern WRITE_MAPPING_WITH_VIEW_PERMISSION_PATTERN = Pattern.compile(
             "@(?:Post|Put|Delete)Mapping[^\\n]*(?:\\R\\s*@[A-Za-z][^\\n]*)*\\R\\s*@RequirePermission\\(\"[^\"]*:view\"\\)");
 
@@ -747,7 +749,14 @@ class RepositoryEngineeringGuardTest {
 
             assertThat(controllerFiles).isNotEmpty();
             for (Path file : controllerFiles) {
-                assertThat(WRITE_MAPPING_WITH_VIEW_PERMISSION_PATTERN.matcher(read(file)).find())
+                String source = read(file);
+                Matcher writeMatcher = WRITE_MAPPING_METHOD_BLOCK_PATTERN.matcher(source);
+                while (writeMatcher.find()) {
+                    assertThat(writeMatcher.group())
+                            .as(file + " write endpoints must declare method-level action permissions")
+                            .contains("@RequirePermission");
+                }
+                assertThat(WRITE_MAPPING_WITH_VIEW_PERMISSION_PATTERN.matcher(source).find())
                         .as(file + " write endpoints must use create/update/delete/action permissions")
                         .isFalse();
             }

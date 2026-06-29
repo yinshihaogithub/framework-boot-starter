@@ -587,7 +587,7 @@
                     <el-option label="禁用" value="DISABLED" />
                   </el-select>
                   <el-button :icon="Search" circle type="primary" @click="loadNotify" />
-                  <el-button :icon="Plus" circle @click="openCreateNotify" />
+                  <el-button v-if="can('notify:template:create')" :icon="Plus" circle @click="openCreateNotify" />
                 </div>
               </div>
             </template>
@@ -601,9 +601,9 @@
               </el-table-column>
               <el-table-column label="操作" width="176" fixed="right">
                 <template #default="{ row }">
-                  <el-button :icon="Edit" circle size="small" @click="openEditNotify(row)" />
+                  <el-button v-if="can('notify:template:update')" :icon="Edit" circle size="small" @click="openEditNotify(row)" />
                   <el-button v-if="can('notify:send-test')" :icon="Bell" circle size="small" @click="sendTestNotify(row)" />
-                  <el-button :icon="Delete" circle size="small" @click="deleteNotify(row)" />
+                  <el-button v-if="can('notify:template:delete')" :icon="Delete" circle size="small" @click="deleteNotify(row)" />
                   <el-button :icon="View" circle size="small" @click="openDetail(row)" />
                 </template>
               </el-table-column>
