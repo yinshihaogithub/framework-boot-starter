@@ -165,6 +165,7 @@ public class MqAdminService {
         if (message == null) {
             return ActionResult.fail(ResultCode.NOT_FOUND, "消息不存在");
         }
+        String beforeStatus = message.getStatus();
         message.setStatus(MqFailedMessage.STATUS_MANUAL);
         message.setNextRetryTime(null);
         message.setOperator(operator(operator));
@@ -172,7 +173,8 @@ public class MqAdminService {
         handler.updateRecord(message);
         auditService.success(servletRequest, "MQ管理", "人工补偿完成MQ消息", "UPDATE",
                 auditService.params("id", id, "messageId", message.getMessageId(), "traceId", message.getTraceId(),
-                        "operator", message.getOperator(), "remark", message.getCompensateRemark()));
+                        "operator", message.getOperator(), "remark", message.getCompensateRemark(),
+                        "beforeStatus", beforeStatus, "afterStatus", message.getStatus()));
         return ActionResult.success("已人工补偿完成");
     }
 
@@ -185,6 +187,7 @@ public class MqAdminService {
         if (message == null) {
             return ActionResult.fail(ResultCode.NOT_FOUND, "消息不存在");
         }
+        String beforeStatus = message.getStatus();
         message.setStatus(MqFailedMessage.STATUS_EXHAUSTED);
         message.setNextRetryTime(null);
         message.setOperator(operator(operator));
@@ -192,7 +195,8 @@ public class MqAdminService {
         handler.updateRecord(message);
         auditService.success(servletRequest, "MQ管理", "人工终止MQ消息", "UPDATE",
                 auditService.params("id", id, "messageId", message.getMessageId(), "traceId", message.getTraceId(),
-                        "operator", message.getOperator(), "remark", message.getCompensateRemark()));
+                        "operator", message.getOperator(), "remark", message.getCompensateRemark(),
+                        "beforeStatus", beforeStatus, "afterStatus", message.getStatus()));
         return ActionResult.success("已人工终止");
     }
 

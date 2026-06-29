@@ -134,6 +134,90 @@ class MqAdminControllerTest {
         assertThat(result.getMessage()).isEqualTo("消息不存在");
     }
 
+    @Test
+    void manualSuccessMarksMessageAsCompensatedAndAuditsStatusTransition() {
+        InMemoryMqFailedMessageRepository repository = new InMemoryMqFailedMessageRepository(List.of(
+                withNextRetryTime(failedMessage(1L, "trace-a", MqFailedMessage.STATUS_EXHAUSTED))));
+        DeadLetterHandler handler = new DeadLetterHandler(repository, new MqProperties());
+        RecordingAuditService auditService = new RecordingAuditService();
+        MqAdminController.ManualCompensationRequest request = new MqAdminController.ManualCompensationRequest();
+        request.setOperator(" ops ");
+        request.setRemark(" order checked ");
+        MqAdminController controller = controller(handler, new MqProperties(), null, null, auditService);
+
+        Result<String> result = controller.manualSuccess(1L, request, null);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getData()).isEqualTo("已人工补偿完成");
+        MqFailedMessage saved = repository.findById(1L).orElseThrow();
+        assertThat(saved.getStatus()).isEqualTo(MqFailedMessage.STATUS_MANUAL);
+        assertThat(saved.getNextRetryTime()).isNull();
+        assertThat(saved.getOperator()).isEqualTo("ops");
+        assertThat(saved.getCompensateRemark()).isEqualTo("order checked");
+        assertThat(auditService.action).isEqualTo("人工补偿完成MQ消息");
+        assertThat(auditService.params)
+                .containsEntry("traceId", "trace-a")
+                .containsEntry("beforeStatus", MqFailedMessage.STATUS_EXHAUSTED)
+                .containsEntry("afterStatus", MqFailedMessage.STATUS_MANUAL);
+    }
+
+    @Test
+    void manualFailureTerminatesMessageAndAuditsStatusTransition() {
+        InMemoryMqFailedMessageRepository repository = new InMemoryMqFailedMessageRepository(List.of(
+                withNextRetryTime(failedMessage(2L, "trace-b", MqFailedMessage.STATUS_PENDING))));
+        DeadLetterHandler handler = new DeadLetterHandler(repository, new MqProperties());
+        RecordingAuditService auditService = new RecordingAuditService();
+        MqAdminController controller = controller(handler, new MqProperties(), null, null, auditService);
+
+        Result<String> result = controller.manualFailure(2L, null, null);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getData()).isEqualTo("已人工终止");
+        MqFailedMessage saved = repository.findById(2L).orElseThrow();
+        assertThat(saved.getStatus()).isEqualTo(MqFailedMessage.STATUS_EXHAUSTED);
+        assertThat(saved.getNextRetryTime()).isNull();
+        assertThat(saved.getOperator()).isEqualTo("admin");
+        assertThat(saved.getCompensateRemark()).isEqualTo("人工终止");
+        assertThat(auditService.action).isEqualTo("人工终止MQ消息");
+        assertThat(auditService.params)
+                .containsEntry("traceId", "trace-b")
+                .containsEntry("beforeStatus", MqFailedMessage.STATUS_PENDING)
+                .containsEntry("afterStatus", MqFailedMessage.STATUS_EXHAUSTED);
+    }
+
+    @Test
+    void deleteFailedMessageRemovesStoreAndRepositoryRecord() {
+        InMemoryMqFailedMessageRepository repository = new InMemoryMqFailedMessageRepository(List.of(
+                failedMessage(3L, "trace-c", MqFailedMessage.STATUS_EXHAUSTED)));
+        DeadLetterHandler handler = new DeadLetterHandler(repository, new MqProperties());
+        MqAdminController controller = controller(handler, new MqProperties(), null);
+
+        Result<String> result = controller.deleteFailedMessage(3L, null);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getData()).isEqualTo("删除成功");
+        assertThat(handler.getById(3L)).isNull();
+        assertThat(repository.findById(3L)).isEmpty();
+    }
+
+    @Test
+    void cleanProcessedKeepsPendingMessages() {
+        InMemoryMqFailedMessageRepository repository = new InMemoryMqFailedMessageRepository(List.of(
+                failedMessage(4L, "trace-d", MqFailedMessage.STATUS_PENDING),
+                failedMessage(5L, "trace-e", MqFailedMessage.STATUS_SUCCESS),
+                failedMessage(6L, "trace-f", MqFailedMessage.STATUS_MANUAL),
+                failedMessage(7L, "trace-g", MqFailedMessage.STATUS_EXHAUSTED)));
+        DeadLetterHandler handler = new DeadLetterHandler(repository, new MqProperties());
+        MqAdminController controller = controller(handler, new MqProperties(), null);
+
+        Result<String> result = controller.cleanProcessed(null);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getData()).isEqualTo("已清理 3 条记录");
+        assertThat(handler.getFailedMessageStore().keySet()).containsExactly(4L);
+        assertThat(repository.findAll()).extracting(MqFailedMessage::getId).containsExactly(4L);
+    }
+
     private static MqAdminController controller(DeadLetterHandler handler,
                                                 MqProperties properties,
                                                 MqMessageSender sender) {
@@ -144,6 +228,14 @@ class MqAdminControllerTest {
                                                 MqProperties properties,
                                                 MqMessageSender sender,
                                                 MqRetryScheduler scheduler) {
+        return controller(handler, properties, sender, scheduler, auditService());
+    }
+
+    private static MqAdminController controller(DeadLetterHandler handler,
+                                                MqProperties properties,
+                                                MqMessageSender sender,
+                                                MqRetryScheduler scheduler,
+                                                AdminAuditService auditService) {
         MqAdminService service = new MqAdminService(
                 provider(handler),
                 provider(scheduler),
@@ -151,7 +243,7 @@ class MqAdminControllerTest {
                 provider(sender),
                 provider(null),
                 new StaticApplicationContext(),
-                auditService());
+                auditService);
         return new MqAdminController(service);
     }
 
@@ -171,6 +263,11 @@ class MqAdminControllerTest {
         message.setStatus(status);
         message.setCreateTime(new Date());
         message.setUpdateTime(new Date());
+        return message;
+    }
+
+    private static MqFailedMessage withNextRetryTime(MqFailedMessage message) {
+        message.setNextRetryTime(new Date());
         return message;
     }
 
@@ -227,6 +324,22 @@ class MqAdminControllerTest {
                                 Object params, Exception exception) {
             }
         };
+    }
+
+    private static class RecordingAuditService extends AdminAuditService {
+        private String action;
+        private Map<String, Object> params;
+
+        private RecordingAuditService() {
+            super(null, null);
+        }
+
+        @Override
+        @SuppressWarnings("unchecked")
+        public void success(HttpServletRequest request, String module, String action, String operationType, Object params) {
+            this.action = action;
+            this.params = (Map<String, Object>) params;
+        }
     }
 
     private static class InMemoryMqFailedMessageRepository implements MqFailedMessageRepository {
