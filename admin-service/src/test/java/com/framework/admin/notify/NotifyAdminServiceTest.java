@@ -123,6 +123,24 @@ class NotifyAdminServiceTest {
     }
 
     @Test
+    void sendTestDoesNotDispatchDisabledTemplateAndPersistsFailureRecord() {
+        InMemoryNotifyAdminRepository repository = new InMemoryNotifyAdminRepository();
+        NotifyAdminModels.TemplateRequest templateRequest = templateRequest();
+        templateRequest.setStatus("DISABLED");
+        Long templateId = repository.createTemplate(templateRequest);
+        CapturingNotifyService notifyService = new CapturingNotifyService(true, "sent");
+        NotifyAdminService service = service(repository, notifyService);
+
+        Optional<NotifyAdminModels.Record> record = service.sendTest(templateId, null, null);
+
+        assertThat(record).isPresent();
+        assertThat(record.get().getSuccess()).isFalse();
+        assertThat(record.get().getResultMessage()).isEqualTo("模板已禁用");
+        assertThat(notifyService.message).isNull();
+        assertThat(repository.countRecordsBySuccess(false)).isEqualTo(1);
+    }
+
+    @Test
     void updateTemplateReturnsFalseWhenTemplateDoesNotExist() {
         NotifyAdminService service = service(new InMemoryNotifyAdminRepository(), null);
 

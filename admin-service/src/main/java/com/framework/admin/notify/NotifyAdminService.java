@@ -91,7 +91,9 @@ public class NotifyAdminService {
             return Optional.empty();
         }
         String renderedContent = render(template.getContent(), request);
-        NotifyResult result = send(template, request, renderedContent);
+        NotifyResult result = "ENABLED".equalsIgnoreCase(template.getStatus())
+                ? send(template, request, renderedContent)
+                : NotifyResult.failure(channel(template.getChannel()), "模板已禁用");
         NotifyAdminModels.Record record = new NotifyAdminModels.Record()
                 .setTemplateCode(template.getTemplateCode())
                 .setChannel(template.getChannel())
