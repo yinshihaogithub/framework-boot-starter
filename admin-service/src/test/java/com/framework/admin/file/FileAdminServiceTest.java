@@ -129,6 +129,75 @@ class FileAdminServiceTest {
         assertThat(auditService.params).containsEntry("physicalDeleted", false);
     }
 
+    @Test
+    void queryEndpointsFallBackWhenRepositoryFails() {
+        repository.statsFailure = new RuntimeException("database down");
+        repository.listFailure = new RuntimeException("database down");
+
+        assertThat(service.stats())
+                .containsEntry("active", 0L)
+                .containsEntry("deleted", 0L)
+                .containsEntry("totalSize", 0L);
+
+        PageResult<FileAdminModels.FileRecord> page = service.list(null, null, null, null, 0, 0);
+
+        assertThat(page.getPageNum()).isEqualTo(1);
+        assertThat(page.getPageSize()).isEqualTo(20);
+        assertThat(page.getRecords()).isEmpty();
+        assertThat(page.getTotal()).isZero();
+    }
+
+    @Test
+    void uploadReportsUnavailableWhenStorageProviderFails() {
+        FileAdminService unavailableService = new FileAdminService(repository, failingProvider(), auditService);
+        MockMultipartFile file = new MockMultipartFile("file", "hello.txt", "text/plain", "abc".getBytes());
+
+        Result<FileAdminModels.FileRecord> result = unavailableService.upload(file, null, null, null);
+
+        assertThat(result.getCode()).isEqualTo(ResultCode.SERVICE_ERROR.getCode());
+        assertThat(result.getMessage()).isEqualTo("文件存储服务未启用");
+        assertThat(repository.created).isNull();
+    }
+
+    @Test
+    void uploadReportsServiceErrorWhenMetadataCreateFails() {
+        repository.createFailure = new RuntimeException("database down");
+        MockMultipartFile file = new MockMultipartFile("file", "hello.txt", "text/plain", "abc".getBytes());
+
+        Result<FileAdminModels.FileRecord> result = service.upload(file, null, null, null);
+
+        assertThat(result.getCode()).isEqualTo(ResultCode.SERVICE_ERROR.getCode());
+        assertThat(result.getMessage()).isEqualTo("文件上传失败");
+        assertThat(storageService.storedFilename).isEqualTo("hello.txt");
+        assertThat(storageService.deletedKey).isEqualTo("file-key");
+    }
+
+    @Test
+    void downloadReportsServiceErrorWhenRepositoryFails() {
+        repository.findFailure = new RuntimeException("database down");
+
+        Result<ResponseEntity<Resource>> result = service.download(9L);
+
+        assertThat(result.getCode()).isEqualTo(ResultCode.SERVICE_ERROR.getCode());
+        assertThat(result.getMessage()).isEqualTo("文件读取失败");
+    }
+
+    @Test
+    void deleteReportsServiceErrorWhenMarkDeletedFails() {
+        repository.record = new FileAdminModels.FileRecord()
+                .setId(9L)
+                .setFileKey("file-key")
+                .setOriginalFilename("hello.txt");
+        repository.markFailure = new RuntimeException("database down");
+
+        Result<String> result = service.delete(9L, null);
+
+        assertThat(result.getCode()).isEqualTo(ResultCode.SERVICE_ERROR.getCode());
+        assertThat(result.getMessage()).isEqualTo("文件删除失败");
+        assertThat(storageService.deletedKey).isNull();
+        assertThat(auditService.actions).isEmpty();
+    }
+
     private static class FakeRepository extends FileAdminRepository {
         private List<FileAdminModels.FileRecord> records = List.of();
         private long count;
@@ -142,6 +211,11 @@ class FileAdminServiceTest {
         private FileAdminModels.FileRecord created;
         private FileAdminModels.FileRecord record;
         private Long deletedId;
+        private RuntimeException statsFailure;
+        private RuntimeException listFailure;
+        private RuntimeException createFailure;
+        private RuntimeException findFailure;
+        private RuntimeException markFailure;
 
         private FakeRepository() {
             super(null);
@@ -150,6 +224,9 @@ class FileAdminServiceTest {
         @Override
         public List<FileAdminModels.FileRecord> list(String keyword, String businessType, String businessKey,
                                                      String contentType, int pageNum, int pageSize) {
+            if (listFailure != null) {
+                throw listFailure;
+            }
             this.listKeyword = keyword;
             this.listBusinessType = businessType;
             this.listBusinessKey = businessKey;
@@ -166,22 +243,34 @@ class FileAdminServiceTest {
 
         @Override
         public Map<String, Long> stats() {
+            if (statsFailure != null) {
+                throw statsFailure;
+            }
             return stats;
         }
 
         @Override
         public FileAdminModels.FileRecord create(FileAdminModels.FileRecord record) {
+            if (createFailure != null) {
+                throw createFailure;
+            }
             this.created = record.setId(9L);
             return created;
         }
 
         @Override
         public Optional<FileAdminModels.FileRecord> findById(Long id) {
+            if (findFailure != null) {
+                throw findFailure;
+            }
             return Optional.ofNullable(record);
         }
 
         @Override
         public void markDeleted(Long id) {
+            if (markFailure != null) {
+                throw markFailure;
+            }
             this.deletedId = id;
         }
     }
@@ -254,6 +343,35 @@ class FileAdminServiceTest {
             @Override
             public Stream<T> stream() {
                 return value == null ? Stream.empty() : Stream.of(value);
+            }
+        };
+    }
+
+    private static <T> ObjectProvider<T> failingProvider() {
+        return new ObjectProvider<>() {
+            @Override
+            public T getObject(Object... args) {
+                throw new IllegalStateException("provider failed");
+            }
+
+            @Override
+            public T getIfAvailable() {
+                throw new IllegalStateException("provider failed");
+            }
+
+            @Override
+            public T getIfUnique() {
+                throw new IllegalStateException("provider failed");
+            }
+
+            @Override
+            public T getObject() {
+                throw new IllegalStateException("provider failed");
+            }
+
+            @Override
+            public Stream<T> stream() {
+                throw new IllegalStateException("provider failed");
             }
         };
     }
