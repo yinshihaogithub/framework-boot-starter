@@ -11,11 +11,15 @@ import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.HttpMediaTypeNotAcceptableException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.BindException;
 import org.springframework.validation.FieldError;
+import org.springframework.validation.ObjectError;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -48,9 +52,9 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MethodArgumentNotValidException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public Result<Void> handleMethodArgumentNotValid(MethodArgumentNotValidException e) {
-        String msg = e.getBindingResult().getFieldErrors().stream()
-                .map(fe -> fe.getField() + ": " + fe.getDefaultMessage())
-                .collect(Collectors.joining("; "));
+        String msg = validationMessage(e.getBindingResult().getAllErrors().stream()
+                .map(this::formatObjectError)
+                .collect(Collectors.joining("; ")));
         log.warn("[参数校验失败] {}", msg);
         return Result.fail(ResultCode.PARAM_ERROR.getCode(), msg);
     }
@@ -61,9 +65,9 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ConstraintViolationException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public Result<Void> handleConstraintViolation(ConstraintViolationException e) {
-        String msg = e.getConstraintViolations().stream()
+        String msg = validationMessage(e.getConstraintViolations().stream()
                 .map(ConstraintViolation::getMessage)
-                .collect(Collectors.joining("; "));
+                .collect(Collectors.joining("; ")));
         log.warn("[参数校验失败] {}", msg);
         return Result.fail(ResultCode.PARAM_ERROR.getCode(), msg);
     }
@@ -74,9 +78,9 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(BindException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public Result<Void> handleBindException(BindException e) {
-        String msg = e.getFieldErrors().stream()
-                .map(fe -> fe.getField() + ": " + fe.getDefaultMessage())
-                .collect(Collectors.joining("; "));
+        String msg = validationMessage(e.getAllErrors().stream()
+                .map(this::formatObjectError)
+                .collect(Collectors.joining("; ")));
         return Result.fail(ResultCode.PARAM_ERROR.getCode(), msg);
     }
 
@@ -87,6 +91,15 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public Result<Void> handleMissingParam(MissingServletRequestParameterException e) {
         return Result.fail(ResultCode.PARAM_ERROR.getCode(), "缺少必需参数: " + e.getParameterName());
+    }
+
+    /**
+     * 缺少请求头。
+     */
+    @ExceptionHandler(MissingRequestHeaderException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public Result<Void> handleMissingHeader(MissingRequestHeaderException e) {
+        return Result.fail(ResultCode.PARAM_ERROR.getCode(), "缺少必需请求头: " + e.getHeaderName());
     }
 
     /**
@@ -116,6 +129,24 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public Result<Void> handleHttpMessageNotReadable(HttpMessageNotReadableException e) {
         return Result.fail(ResultCode.BAD_REQUEST.getCode(), "请求体格式错误");
+    }
+
+    /**
+     * Content-Type 不支持。
+     */
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    @ResponseStatus(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
+    public Result<Void> handleMediaTypeNotSupported(HttpMediaTypeNotSupportedException e) {
+        return Result.fail(ResultCode.BAD_REQUEST.getCode(), "Content-Type 不支持");
+    }
+
+    /**
+     * Accept 不支持。
+     */
+    @ExceptionHandler(HttpMediaTypeNotAcceptableException.class)
+    @ResponseStatus(HttpStatus.NOT_ACCEPTABLE)
+    public Result<Void> handleMediaTypeNotAcceptable(HttpMediaTypeNotAcceptableException e) {
+        return Result.fail(ResultCode.BAD_REQUEST.getCode(), "Accept 不支持");
     }
 
     /**
@@ -180,5 +211,17 @@ public class GlobalExceptionHandler {
             return path;
         }
         return "/" + path;
+    }
+
+    private String formatObjectError(ObjectError error) {
+        String message = error.getDefaultMessage();
+        if (error instanceof FieldError fieldError) {
+            return fieldError.getField() + ": " + (message == null ? ResultCode.PARAM_ERROR.getMessage() : message);
+        }
+        return message == null ? ResultCode.PARAM_ERROR.getMessage() : message;
+    }
+
+    private String validationMessage(String message) {
+        return message == null || message.isBlank() ? ResultCode.PARAM_ERROR.getMessage() : message;
     }
 }
