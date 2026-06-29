@@ -142,6 +142,23 @@ class MqAdminControllerTest {
     }
 
     @Test
+    void singleMessageOperationsRejectInvalidIdsBeforeProviderLookup() {
+        MqAdminController controller = controller(null, new MqProperties(), null);
+
+        Result<MqAdminDTO.MqFailedMessageVO> detail = controller.getFailedMessage(0L);
+        Result<String> retry = controller.retryOne(null, "admin", null, null);
+        Result<String> success = controller.manualSuccess(-1L, null, null);
+        Result<String> failure = controller.manualFailure(0L, null, null);
+        Result<String> delete = controller.deleteFailedMessage(null, null);
+
+        assertInvalidId(detail);
+        assertInvalidId(retry);
+        assertInvalidId(success);
+        assertInvalidId(failure);
+        assertInvalidId(delete);
+    }
+
+    @Test
     void queryEndpointsFallBackWhenMqProvidersFail() {
         MqAdminController controller = failingController();
 
@@ -305,6 +322,12 @@ class MqAdminControllerTest {
                                                 MqProperties properties,
                                                 MqMessageSender sender) {
         return controller(handler, properties, sender, null);
+    }
+
+    private static void assertInvalidId(Result<?> result) {
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getCode()).isEqualTo(ResultCode.PARAM_ERROR.getCode());
+        assertThat(result.getMessage()).isEqualTo("消息ID必须大于0");
     }
 
     private static MqAdminController controller(DeadLetterHandler handler,

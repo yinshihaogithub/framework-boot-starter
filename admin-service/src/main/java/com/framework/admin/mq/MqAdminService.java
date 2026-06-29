@@ -128,6 +128,10 @@ public class MqAdminService {
     }
 
     public ActionResult<MqAdminDTO.MqFailedMessageVO> getFailedMessage(Long id) {
+        ActionResult<MqAdminDTO.MqFailedMessageVO> invalidId = invalidIdResult(id);
+        if (invalidId != null) {
+            return invalidId;
+        }
         DeadLetterHandler handler = available(deadLetterHandlerProvider);
         if (handler == null) {
             return ActionResult.fail(ResultCode.SERVICE_ERROR, "MQ死信存储未启用");
@@ -142,6 +146,10 @@ public class MqAdminService {
     }
 
     public ActionResult<String> retryOne(Long id, String operator, String remark, HttpServletRequest servletRequest) {
+        ActionResult<String> invalidId = invalidIdResult(id);
+        if (invalidId != null) {
+            return invalidId;
+        }
         MqRetryScheduler scheduler = available(retrySchedulerProvider);
         if (scheduler == null) {
             return ActionResult.fail(ResultCode.SERVICE_ERROR, retryUnavailableMessage());
@@ -184,6 +192,10 @@ public class MqAdminService {
     }
 
     public ActionResult<String> manualSuccess(Long id, String operator, String remark, HttpServletRequest servletRequest) {
+        ActionResult<String> invalidId = invalidIdResult(id);
+        if (invalidId != null) {
+            return invalidId;
+        }
         DeadLetterHandler handler = available(deadLetterHandlerProvider);
         if (handler == null) {
             return ActionResult.fail(ResultCode.SERVICE_ERROR, "MQ死信存储未启用");
@@ -211,6 +223,10 @@ public class MqAdminService {
     }
 
     public ActionResult<String> manualFailure(Long id, String operator, String remark, HttpServletRequest servletRequest) {
+        ActionResult<String> invalidId = invalidIdResult(id);
+        if (invalidId != null) {
+            return invalidId;
+        }
         DeadLetterHandler handler = available(deadLetterHandlerProvider);
         if (handler == null) {
             return ActionResult.fail(ResultCode.SERVICE_ERROR, "MQ死信存储未启用");
@@ -238,6 +254,10 @@ public class MqAdminService {
     }
 
     public ActionResult<String> deleteFailedMessage(Long id, HttpServletRequest servletRequest) {
+        ActionResult<String> invalidId = invalidIdResult(id);
+        if (invalidId != null) {
+            return invalidId;
+        }
         DeadLetterHandler handler = available(deadLetterHandlerProvider);
         if (handler == null) {
             return ActionResult.fail(ResultCode.SERVICE_ERROR, "MQ死信存储未启用");
@@ -417,6 +437,13 @@ public class MqAdminService {
 
     private String retryUnavailableMessage() {
         return "未接入可用 MQ 发送器，无法重发消息";
+    }
+
+    private <T> ActionResult<T> invalidIdResult(Long id) {
+        if (id == null || id <= 0) {
+            return ActionResult.fail(ResultCode.PARAM_ERROR, "消息ID必须大于0");
+        }
+        return null;
     }
 
     private void auditSuccess(HttpServletRequest servletRequest, String action, String operationType, Object params) {
