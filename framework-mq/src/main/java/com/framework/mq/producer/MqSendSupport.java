@@ -23,6 +23,7 @@ final class MqSendSupport {
         if (!hasText(wrapper.getType())) {
             throw new IllegalArgumentException("message type must not be blank");
         }
+        normalizeMetadata(wrapper);
         return wrapper;
     }
 
@@ -53,5 +54,17 @@ final class MqSendSupport {
 
     private static boolean hasText(String value) {
         return value != null && !value.isBlank();
+    }
+
+    private static <T> void normalizeMetadata(MessageWrapper<T> wrapper) {
+        wrapper.setMessageId(wrapper.getMessageId().trim());
+        wrapper.setType(wrapper.getType().trim());
+        wrapper.setBusinessKey(trimToNull(wrapper.getBusinessKey()));
+        wrapper.setParentMessageId(trimToNull(wrapper.getParentMessageId()));
+        wrapper.setSource(trimToNull(wrapper.getSource()));
+    }
+
+    private static String trimToNull(String value) {
+        return hasText(value) ? value.trim() : null;
     }
 }

@@ -61,6 +61,36 @@ class MqProducerValidationTest {
     }
 
     @Test
+    void senderSupportNormalizesMessageMetadataBeforeSending() {
+        MessageWrapper<String> wrapper = MessageWrapper.of(" ORD-1 ", " OrderCreated ", "payload");
+        wrapper.setMessageId(" msg-1 ");
+        wrapper.setParentMessageId(" parent-1 ");
+        wrapper.setSource(" order-service ");
+
+        MqSendSupport.fillTrace(wrapper);
+
+        assertThat(wrapper.getMessageId()).isEqualTo("msg-1");
+        assertThat(wrapper.getType()).isEqualTo("OrderCreated");
+        assertThat(wrapper.getBusinessKey()).isEqualTo("ORD-1");
+        assertThat(wrapper.getParentMessageId()).isEqualTo("parent-1");
+        assertThat(wrapper.getSource()).isEqualTo("order-service");
+    }
+
+    @Test
+    void senderSupportClearsBlankOptionalMetadataBeforeSending() {
+        MessageWrapper<String> wrapper = MessageWrapper.of("payload");
+        wrapper.setBusinessKey(" ");
+        wrapper.setParentMessageId(" ");
+        wrapper.setSource(" ");
+
+        MqSendSupport.fillTrace(wrapper);
+
+        assertThat(wrapper.getBusinessKey()).isNull();
+        assertThat(wrapper.getParentMessageId()).isNull();
+        assertThat(wrapper.getSource()).isNull();
+    }
+
+    @Test
     void senderSupportReplacesUnsafeTraceIdFromCurrentContextBeforeSending() {
         TraceContext.putTraceId("caller-trace");
         MessageWrapper<String> wrapper = MessageWrapper.of("payload");
