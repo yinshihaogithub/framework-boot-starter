@@ -66,9 +66,9 @@ public class LocalFileStorageService implements FileStorageService {
         if (value == null || value.isBlank()) {
             return "file";
         }
-        String normalized = value.replace('\\', '/');
+        String normalized = value.trim().replace('\\', '/');
         int index = normalized.lastIndexOf('/');
-        String filename = index < 0 ? normalized : normalized.substring(index + 1);
+        String filename = index < 0 ? normalized : normalized.substring(index + 1).trim();
         if (filename.isBlank() || ".".equals(filename) || "..".equals(filename)) {
             return "file";
         }
@@ -109,7 +109,10 @@ public class LocalFileStorageService implements FileStorageService {
 
     private String extension(String filename) {
         int index = filename.lastIndexOf('.');
-        return index < 0 ? "" : filename.substring(index + 1).toLowerCase(Locale.ROOT);
+        if (index <= 0 || index == filename.length() - 1) {
+            return "";
+        }
+        return filename.substring(index + 1).toLowerCase(Locale.ROOT);
     }
 
     private String normalizeExtension(String extension) {

@@ -90,6 +90,41 @@ class LocalFileStorageServiceTest {
     }
 
     @Test
+    void trimsOriginalFilenameBeforeSanitizingAndValidatingExtension() throws Exception {
+        FileProperties properties = properties();
+        properties.setAllowedExtensions(List.of("jpg"));
+        LocalFileStorageService storageService = new LocalFileStorageService(properties);
+
+        StoredFile storedFile = storageService.store(
+                " avatar photo.JPG ",
+                new ByteArrayInputStream("hello".getBytes(StandardCharsets.UTF_8))
+        );
+
+        assertThat(storedFile.getOriginalFilename()).isEqualTo("avatar_photo.JPG");
+        assertThat(storedFile.getKey()).doesNotContain(" ");
+    }
+
+    @Test
+    void rejectsHiddenOrTrailingDotFilenamesWhenExtensionWhitelistIsConfigured() {
+        FileProperties properties = properties();
+        properties.setAllowedExtensions(List.of("env", "txt"));
+        LocalFileStorageService storageService = new LocalFileStorageService(properties);
+
+        assertThatThrownBy(() -> storageService.store(
+                        ".env",
+                        new ByteArrayInputStream("hello".getBytes(StandardCharsets.UTF_8))
+                ))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("file extension is not allowed");
+        assertThatThrownBy(() -> storageService.store(
+                        "report.",
+                        new ByteArrayInputStream("hello".getBytes(StandardCharsets.UTF_8))
+                ))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("file extension is not allowed");
+    }
+
+    @Test
     void rejectsNullInputStreamWithClearMessage() {
         LocalFileStorageService storageService = new LocalFileStorageService(properties());
 
