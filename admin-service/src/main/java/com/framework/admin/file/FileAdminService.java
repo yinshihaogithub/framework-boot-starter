@@ -114,6 +114,10 @@ public class FileAdminService {
     }
 
     public Result<ResponseEntity<Resource>> download(Long id) {
+        Result<ResponseEntity<Resource>> invalidId = invalidFileId(id);
+        if (invalidId != null) {
+            return invalidId;
+        }
         FileAdminModels.FileRecord record;
         try {
             record = repository.findById(id).orElse(null);
@@ -151,6 +155,10 @@ public class FileAdminService {
     }
 
     public Result<String> delete(Long id, HttpServletRequest servletRequest) {
+        Result<String> invalidId = invalidFileId(id);
+        if (invalidId != null) {
+            return invalidId;
+        }
         FileAdminModels.FileRecord record;
         try {
             record = repository.findById(id).orElse(null);
@@ -221,6 +229,13 @@ public class FileAdminService {
             log.warn("[文件中心] 上传失败回滚物理文件失败 fileKey={}, error={}",
                     storedFile.getKey(), cleanupFailure.getMessage());
         }
+    }
+
+    private <T> Result<T> invalidFileId(Long id) {
+        if (id == null || id <= 0) {
+            return Result.fail(ResultCode.PARAM_ERROR.getCode(), "文件ID必须大于0");
+        }
+        return null;
     }
 
     private int safePageNum(int pageNum) {

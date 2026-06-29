@@ -111,6 +111,15 @@ class FileAdminServiceTest {
     }
 
     @Test
+    void downloadRejectsInvalidIdBeforeRepositoryLookup() {
+        repository.findFailure = new RuntimeException("database down");
+
+        Result<ResponseEntity<Resource>> result = service.download(0L);
+
+        assertInvalidFileId(result);
+    }
+
+    @Test
     void deleteRemovesStorageAndMarksMetadataDeleted() {
         repository.record = new FileAdminModels.FileRecord()
                 .setId(9L)
@@ -158,6 +167,17 @@ class FileAdminServiceTest {
         assertThat(repository.deletedId).isEqualTo(10L);
         assertThat(storageService.deletedKey).isEqualTo("missing-file-key");
         assertThat(auditService.params).containsEntry("physicalDeleted", false);
+    }
+
+    @Test
+    void deleteRejectsInvalidIdBeforeRepositoryLookup() {
+        repository.findFailure = new RuntimeException("database down");
+
+        Result<String> result = service.delete(0L, null);
+
+        assertInvalidFileId(result);
+        assertThat(storageService.deletedKey).isNull();
+        assertThat(repository.deletedId).isNull();
     }
 
     @Test
@@ -227,6 +247,12 @@ class FileAdminServiceTest {
         assertThat(result.getMessage()).isEqualTo("文件删除失败");
         assertThat(storageService.deletedKey).isNull();
         assertThat(auditService.actions).isEmpty();
+    }
+
+    private static void assertInvalidFileId(Result<?> result) {
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getCode()).isEqualTo(ResultCode.PARAM_ERROR.getCode());
+        assertThat(result.getMessage()).isEqualTo("文件ID必须大于0");
     }
 
     private static class FakeRepository extends FileAdminRepository {
