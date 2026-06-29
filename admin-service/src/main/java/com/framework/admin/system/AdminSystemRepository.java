@@ -389,6 +389,10 @@ public class AdminSystemRepository {
                 isMaskedSensitiveValue(request));
     }
 
+    public void updateConfigValue(String configKey, String configValue) {
+        mapper.updateConfigValue(configKey, configValue);
+    }
+
     public void deleteConfig(Long id) {
         mapper.deleteConfig(id);
     }

@@ -9,6 +9,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import lombok.Data;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -45,6 +46,13 @@ public class AdminAuthController {
         return authService.logout(authorization);
     }
 
+    @Operation(summary = "修改当前用户密码")
+    @PutMapping("/password")
+    public Result<String> changePassword(@RequestBody ChangePasswordRequest request,
+                                         HttpServletRequest servletRequest) {
+        return authService.changePassword(request, servletRequest);
+    }
+
     private String clientIp(HttpServletRequest request) {
         String forwarded = request.getHeader("X-Forwarded-For");
         if (!isBlank(forwarded)) {
@@ -62,6 +70,12 @@ public class AdminAuthController {
         private String username;
         private String password;
         private String deviceId;
+    }
+
+    @Data
+    public static class ChangePasswordRequest {
+        private String oldPassword;
+        private String newPassword;
     }
 
     @Data

@@ -50,6 +50,9 @@
         <el-tooltip content="语言">
           <el-button circle>文</el-button>
         </el-tooltip>
+        <el-tooltip content="修改密码">
+          <el-button :icon="Lock" circle @click="openChangePassword" />
+        </el-tooltip>
         <el-tooltip content="退出">
           <el-button :icon="SwitchButton" circle @click="logout" />
         </el-tooltip>
@@ -1106,6 +1109,18 @@
     </template>
   </el-dialog>
 
+  <el-dialog v-model="changePasswordVisible" title="修改密码" width="460px">
+    <el-form label-width="88px">
+      <el-form-item label="原密码"><el-input v-model="changePasswordForm.oldPassword" type="password" show-password /></el-form-item>
+      <el-form-item label="新密码"><el-input v-model="changePasswordForm.newPassword" type="password" show-password /></el-form-item>
+      <el-form-item label="确认密码"><el-input v-model="changePasswordForm.confirmPassword" type="password" show-password /></el-form-item>
+    </el-form>
+    <template #footer>
+      <el-button @click="changePasswordVisible = false">取消</el-button>
+      <el-button type="primary" @click="changeOwnPassword">保存</el-button>
+    </template>
+  </el-dialog>
+
   <el-drawer v-model="detailVisible" title="详情" size="46%">
     <pre class="detail">{{ JSON.stringify(detailRecord, null, 2) }}</pre>
   </el-drawer>
@@ -1128,6 +1143,7 @@ import {
   Document,
   Edit,
   Files,
+  Lock,
   Menu as MenuIcon,
   Monitor,
   MostlyCloudy,
@@ -1330,6 +1346,7 @@ const editingConfigId = ref<number>()
 const notifyDialogVisible = ref(false)
 const editingNotifyId = ref<number>()
 const selectedDictCode = ref('')
+const changePasswordVisible = ref(false)
 
 const tenantForm = reactive({ tenantCode: '', tenantName: '', status: 'ENABLED' })
 const deptForm = reactive({
@@ -1373,6 +1390,11 @@ const notifyForm = reactive({
   receiversText: '',
   webhookUrl: '',
   status: 'ENABLED'
+})
+const changePasswordForm = reactive({
+  oldPassword: '',
+  newPassword: '',
+  confirmPassword: ''
 })
 const mqQuery = reactive({ status: '', traceId: '', pageNum: 1, pageSize: 20 })
 const localQuery = reactive({ status: '', topic: '', pageNum: 1, pageSize: 20 })
@@ -1456,6 +1478,33 @@ async function logout() {
     authExpiredNotified.value = false
     authed.value = false
   }
+}
+
+function openChangePassword() {
+  Object.assign(changePasswordForm, { oldPassword: '', newPassword: '', confirmPassword: '' })
+  changePasswordVisible.value = true
+}
+
+async function changeOwnPassword() {
+  const passwordError = validateStrongPassword(changePasswordForm.newPassword)
+  if (passwordError !== true) {
+    ElMessage.warning(passwordError)
+    return
+  }
+  if (changePasswordForm.newPassword !== changePasswordForm.confirmPassword) {
+    ElMessage.warning('两次输入的新密码不一致')
+    return
+  }
+  const message = await api.changePassword({
+    oldPassword: changePasswordForm.oldPassword,
+    newPassword: changePasswordForm.newPassword
+  })
+  ElMessage.success(message)
+  changePasswordVisible.value = false
+  clearToken()
+  authExpiredNotified.value = false
+  currentUser.value = undefined
+  authed.value = false
 }
 
 async function refreshCurrent() {

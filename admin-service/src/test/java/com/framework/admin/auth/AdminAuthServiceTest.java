@@ -106,6 +106,46 @@ class AdminAuthServiceTest {
         assertThat(sessionManager.logoutToken).isEqualTo("abc.def");
     }
 
+    @Test
+    void changePasswordRejectsWrongOldPassword() {
+        repository.user = enabledUser();
+        UserContextHolder.set(new LoginUser().setUserId(1L));
+        AdminAuthController.ChangePasswordRequest request = changePasswordRequest("wrong", "NewAdmin@123");
+
+        Result<String> result = service.changePassword(request, null);
+
+        assertThat(result.getCode()).isEqualTo(ResultCode.LOGIN_FAIL.getCode());
+        assertThat(repository.resetPasswordUserId).isNull();
+        assertThat(sessionManager.forceLogoutAllUserId).isNull();
+    }
+
+    @Test
+    void changePasswordRejectsWeakNewPassword() {
+        UserContextHolder.set(new LoginUser().setUserId(1L));
+        AdminAuthController.ChangePasswordRequest request = changePasswordRequest("Admin@123", "weak");
+
+        Result<String> result = service.changePassword(request, null);
+
+        assertThat(result.getCode()).isEqualTo(ResultCode.PARAM_ERROR.getCode());
+        assertThat(repository.resetPasswordUserId).isNull();
+    }
+
+    @Test
+    void changePasswordUpdatesPasswordMarksDefaultPasswordChangedAndLogsOutSessions() {
+        repository.user = enabledUser();
+        UserContextHolder.set(new LoginUser().setUserId(1L));
+        AdminAuthController.ChangePasswordRequest request = changePasswordRequest("Admin@123", "NewAdmin@123");
+
+        Result<String> result = service.changePassword(request, null);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(repository.resetPasswordUserId).isEqualTo(1L);
+        assertThat(PasswordUtils.verify("NewAdmin@123", repository.resetPasswordHash)).isTrue();
+        assertThat(repository.configUpdates)
+                .containsExactly(new ConfigUpdate("admin.default.password.changed", "true"));
+        assertThat(sessionManager.forceLogoutAllUserId).isEqualTo(1L);
+    }
+
     private static AdminUser enabledUser() {
         return new AdminUser()
                 .setId(1L)
@@ -127,6 +167,14 @@ class AdminAuthServiceTest {
                 .setRoutePath(routePath)
                 .setVisible(true)
                 .setChildren(List.of());
+    }
+
+    private static AdminAuthController.ChangePasswordRequest changePasswordRequest(String oldPassword,
+                                                                                  String newPassword) {
+        AdminAuthController.ChangePasswordRequest request = new AdminAuthController.ChangePasswordRequest();
+        request.setOldPassword(oldPassword);
+        request.setNewPassword(newPassword);
+        return request;
     }
 
     private static <T> ObjectProvider<T> provider(T value) {
@@ -163,6 +211,9 @@ class AdminAuthServiceTest {
         private List<Menu> menus = List.of();
         private Long lastLoginUserId;
         private final List<LoginLogRecord> loginLogs = new ArrayList<>();
+        private Long resetPasswordUserId;
+        private String resetPasswordHash;
+        private final List<ConfigUpdate> configUpdates = new ArrayList<>();
 
         private FakeRepository() {
             super(null);
@@ -192,11 +243,23 @@ class AdminAuthServiceTest {
         public List<Menu> listMenusByUserId(Long userId) {
             return menus;
         }
+
+        @Override
+        public void resetPassword(Long userId, String passwordHash) {
+            this.resetPasswordUserId = userId;
+            this.resetPasswordHash = passwordHash;
+        }
+
+        @Override
+        public void updateConfigValue(String configKey, String configValue) {
+            configUpdates.add(new ConfigUpdate(configKey, configValue));
+        }
     }
 
     private static class FakeSessionManager extends SessionManager {
         private String createdDeviceId;
         private String logoutToken;
+        private Long forceLogoutAllUserId;
 
         private FakeSessionManager() {
             super(null, null, 0);
@@ -220,8 +283,16 @@ class AdminAuthServiceTest {
         public void logout(String accessToken) {
             this.logoutToken = accessToken;
         }
+
+        @Override
+        public void forceLogoutAll(Long userId) {
+            this.forceLogoutAllUserId = userId;
+        }
     }
 
     private record LoginLogRecord(String username, Long userId, String clientIp, boolean success, String message) {
+    }
+
+    private record ConfigUpdate(String configKey, String configValue) {
     }
 }

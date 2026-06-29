@@ -1,16 +1,20 @@
 package com.framework.admin.auth;
 
+import com.framework.admin.audit.AdminAuditService;
 import com.framework.admin.system.AdminSystemModels.AdminUser;
 import com.framework.admin.system.AdminSystemRepository;
 import com.framework.auth.context.LoginUser;
 import com.framework.auth.context.UserContextHolder;
 import com.framework.auth.service.LoginSecurityService;
 import com.framework.auth.service.SessionManager;
+import com.framework.auth.util.PasswordValidator;
 import com.framework.core.constant.FrameworkConstants;
 import com.framework.core.result.Result;
 import com.framework.core.result.ResultCode;
 import com.framework.crypto.util.PasswordUtils;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 /**
@@ -22,13 +26,23 @@ public class AdminAuthService {
     private final AdminSystemRepository systemRepository;
     private final SessionManager sessionManager;
     private final ObjectProvider<LoginSecurityService> loginSecurityServiceProvider;
+    private final AdminAuditService auditService;
 
     public AdminAuthService(AdminSystemRepository systemRepository,
                             SessionManager sessionManager,
                             ObjectProvider<LoginSecurityService> loginSecurityServiceProvider) {
+        this(systemRepository, sessionManager, loginSecurityServiceProvider, null);
+    }
+
+    @Autowired
+    public AdminAuthService(AdminSystemRepository systemRepository,
+                            SessionManager sessionManager,
+                            ObjectProvider<LoginSecurityService> loginSecurityServiceProvider,
+                            AdminAuditService auditService) {
         this.systemRepository = systemRepository;
         this.sessionManager = sessionManager;
         this.loginSecurityServiceProvider = loginSecurityServiceProvider;
+        this.auditService = auditService;
     }
 
     public Result<AdminAuthController.LoginResponse> login(AdminAuthController.LoginRequest request, String clientIp) {
@@ -91,6 +105,39 @@ public class AdminAuthService {
             sessionManager.logout(authorization.substring(FrameworkConstants.TOKEN_PREFIX.length()).trim());
         }
         return Result.success("已退出");
+    }
+
+    public Result<String> changePassword(AdminAuthController.ChangePasswordRequest request,
+                                         HttpServletRequest servletRequest) {
+        LoginUser loginUser = UserContextHolder.get();
+        if (loginUser == null || loginUser.getUserId() == null) {
+            return Result.fail(ResultCode.UNAUTHORIZED);
+        }
+        if (request == null || isBlank(request.getOldPassword()) || isBlank(request.getNewPassword())) {
+            return Result.fail(ResultCode.PARAM_ERROR.getCode(), "原密码和新密码不能为空");
+        }
+        String passwordError = PasswordValidator.validateStrong(request.getNewPassword());
+        if (passwordError != null) {
+            return Result.fail(ResultCode.PARAM_ERROR.getCode(), passwordError);
+        }
+        AdminUser user = systemRepository.findUserById(loginUser.getUserId()).orElse(null);
+        if (user == null || !"ENABLED".equals(user.getStatus())) {
+            return Result.fail(ResultCode.UNAUTHORIZED);
+        }
+        if (!PasswordUtils.verify(request.getOldPassword(), user.getPasswordHash())) {
+            return Result.fail(ResultCode.LOGIN_FAIL.getCode(), "原密码不正确");
+        }
+        if (PasswordUtils.verify(request.getNewPassword(), user.getPasswordHash())) {
+            return Result.fail(ResultCode.PARAM_ERROR.getCode(), "新密码不能与原密码相同");
+        }
+        systemRepository.resetPassword(user.getId(), PasswordUtils.hash(request.getNewPassword()));
+        systemRepository.updateConfigValue("admin.default.password.changed", "true");
+        sessionManager.forceLogoutAll(user.getId());
+        if (auditService != null) {
+            auditService.success(servletRequest, "账号安全", "修改密码", "UPDATE",
+                    auditService.params("userId", user.getId(), "username", user.getUsername()));
+        }
+        return Result.success("密码已修改，请重新登录");
     }
 
     private AdminAuthController.CurrentUser toCurrentUser(AdminUser user) {

@@ -435,6 +435,8 @@ export const api = {
     postData<LoginResponse>('/admin/auth/login', data),
   me: () => getData<CurrentUser>('/admin/auth/me'),
   logout: () => postData<string>('/admin/auth/logout'),
+  changePassword: (data: { oldPassword: string; newPassword: string }) =>
+    putData<string>('/admin/auth/password', data),
   dashboard: () => getData<DashboardSummary>('/admin/dashboard'),
   mqStats: () => getData<MqStats>('/admin/mq/stats'),
   mqFailedMessages: (params: Record<string, unknown>) =>

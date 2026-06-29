@@ -447,6 +447,13 @@ public interface AdminSystemMapper {
             """)
     int updateConfig(@Param("config") ConfigItem config, @Param("preserveValue") boolean preserveValue);
 
+    @Update("""
+            UPDATE sys_config
+            SET config_value = #{configValue}, update_time = CURRENT_TIMESTAMP
+            WHERE config_key = #{configKey}
+            """)
+    int updateConfigValue(@Param("configKey") String configKey, @Param("configValue") String configValue);
+
     @Delete("DELETE FROM sys_config WHERE id = #{id}")
     int deleteConfig(@Param("id") Long id);
 

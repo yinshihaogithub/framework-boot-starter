@@ -536,6 +536,51 @@ class RepositoryEngineeringGuardTest {
     }
 
     @Test
+    void adminCurrentUserCanChangeOwnPasswordEndToEnd() throws Exception {
+        String controller = read(root.resolve(
+                "admin-service/src/main/java/com/framework/admin/auth/AdminAuthController.java"));
+        String service = read(root.resolve(
+                "admin-service/src/main/java/com/framework/admin/auth/AdminAuthService.java"));
+        String repository = read(root.resolve(
+                "admin-service/src/main/java/com/framework/admin/system/AdminSystemRepository.java"));
+        String mapper = read(root.resolve(
+                "admin-service/src/main/java/com/framework/admin/system/AdminSystemMapper.java"));
+        String client = read(root.resolve("frontend/admin-web/src/api/client.ts"));
+        String app = read(root.resolve("frontend/admin-web/src/App.vue"));
+        String adminServiceScript = read(root.resolve("admin-service/src/main/resources/db/mysql/admin_service.sql"));
+
+        assertThat(controller)
+                .contains("@PutMapping(\"/password\")")
+                .contains("ChangePasswordRequest")
+                .contains("oldPassword")
+                .contains("newPassword");
+        assertThat(service)
+                .contains("PasswordValidator.validateStrong(request.getNewPassword())")
+                .contains("PasswordUtils.verify(request.getOldPassword(), user.getPasswordHash())")
+                .contains("新密码不能与原密码相同")
+                .contains("updateConfigValue(\"admin.default.password.changed\", \"true\")")
+                .contains("sessionManager.forceLogoutAll(user.getId())")
+                .contains("密码已修改，请重新登录");
+        assertThat(repository)
+                .contains("public void updateConfigValue(String configKey, String configValue)");
+        assertThat(mapper)
+                .contains("UPDATE sys_config")
+                .contains("WHERE config_key = #{configKey}");
+        assertThat(client)
+                .contains("changePassword:")
+                .contains("putData<string>('/admin/auth/password'");
+        assertThat(app)
+                .contains("changePasswordVisible")
+                .contains("openChangePassword")
+                .contains("changeOwnPassword")
+                .contains("两次输入的新密码不一致")
+                .contains("clearToken()");
+        assertThat(adminServiceScript)
+                .contains("'admin.default.password.changed'")
+                .contains("'生产环境应强制修改默认管理员密码'");
+    }
+
+    @Test
     void adminWriteEndpointsUseActionPermissionsInsteadOfViewPermissions() throws Exception {
         Path adminMain = root.resolve("admin-service/src/main/java/com/framework/admin");
         try (Stream<Path> files = Files.walk(adminMain)) {
