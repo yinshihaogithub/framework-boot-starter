@@ -2,6 +2,7 @@ package com.framework.admin.trace;
 
 import com.framework.admin.trace.TraceAdminModels.TraceDetail;
 import com.framework.core.result.Result;
+import com.framework.core.result.ResultCode;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -24,7 +25,7 @@ public class TraceAdminController {
     @GetMapping("/{traceId}")
     public Result<TraceDetail> detail(@PathVariable String traceId) {
         if (traceId == null || traceId.isBlank()) {
-            return Result.fail("traceId 不能为空");
+            return Result.fail(ResultCode.PARAM_ERROR.getCode(), "traceId 不能为空");
         }
         return Result.success(traceAdminService.detail(traceId.trim()));
     }

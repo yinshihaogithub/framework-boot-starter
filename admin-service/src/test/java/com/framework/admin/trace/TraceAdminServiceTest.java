@@ -2,6 +2,7 @@ package com.framework.admin.trace;
 
 import com.framework.admin.trace.TraceAdminModels.TraceDetail;
 import com.framework.core.result.Result;
+import com.framework.core.result.ResultCode;
 import com.framework.localmessage.model.LocalMessage;
 import com.framework.localmessage.model.LocalMessageStatus;
 import com.framework.localmessage.service.LocalMessageService;
@@ -34,6 +35,7 @@ class TraceAdminServiceTest {
         Result<TraceDetail> result = controller.detail(" ");
 
         assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getCode()).isEqualTo(ResultCode.PARAM_ERROR.getCode());
         assertThat(result.getMessage()).isEqualTo("traceId 不能为空");
     }
 

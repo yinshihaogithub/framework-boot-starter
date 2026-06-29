@@ -371,6 +371,23 @@ class RepositoryEngineeringGuardTest {
     }
 
     @Test
+    void adminControllersUseExplicitFailureCodes() throws Exception {
+        try (Stream<Path> files = Files.walk(root.resolve("admin-service/src/main/java"))) {
+            List<Path> controllerFiles = files
+                    .filter(Files::isRegularFile)
+                    .filter(path -> path.getFileName().toString().endsWith("Controller.java"))
+                    .toList();
+
+            assertThat(controllerFiles).isNotEmpty();
+            for (Path file : controllerFiles) {
+                assertThat(read(file))
+                        .as(file + " must not use Result.fail(String), because it defaults to 500")
+                        .doesNotContain("Result.fail(\"");
+            }
+        }
+    }
+
+    @Test
     void sourceConfigurationDoesNotUseH2AsDefaultDatabase() throws Exception {
         try (Stream<Path> files = Files.walk(root)) {
             List<Path> sourceFiles = files

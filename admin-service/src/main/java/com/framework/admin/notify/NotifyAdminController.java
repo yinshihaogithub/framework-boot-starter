@@ -2,6 +2,7 @@ package com.framework.admin.notify;
 
 import com.framework.core.result.PageResult;
 import com.framework.core.result.Result;
+import com.framework.core.result.ResultCode;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
@@ -58,7 +59,7 @@ public class NotifyAdminController {
                                          HttpServletRequest servletRequest) {
         return notifyAdminService.updateTemplate(id, request, servletRequest)
                 ? Result.success("已更新")
-                : Result.fail("模板不存在");
+                : Result.fail(ResultCode.NOT_FOUND.getCode(), "模板不存在");
     }
 
     @Operation(summary = "删除通知模板")
@@ -75,7 +76,7 @@ public class NotifyAdminController {
                                                      HttpServletRequest servletRequest) {
         return notifyAdminService.sendTest(id, request, servletRequest)
                 .map(Result::success)
-                .orElseGet(() -> Result.fail("模板不存在"));
+                .orElseGet(() -> Result.fail(ResultCode.NOT_FOUND.getCode(), "模板不存在"));
     }
 
     @Operation(summary = "通知发送记录")

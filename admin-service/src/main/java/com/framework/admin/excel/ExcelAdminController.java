@@ -2,6 +2,7 @@ package com.framework.admin.excel;
 
 import com.framework.core.result.PageResult;
 import com.framework.core.result.Result;
+import com.framework.core.result.ResultCode;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
@@ -48,7 +49,7 @@ public class ExcelAdminController {
                                                                HttpServletRequest servletRequest) {
         return excelAdminService.createExportTask(request, servletRequest)
                 .map(Result::success)
-                .orElseGet(() -> Result.fail("Excel导出服务未启用"));
+                .orElseGet(() -> Result.fail(ResultCode.SERVICE_ERROR.getCode(), "Excel导出服务未启用"));
     }
 
     @Operation(summary = "登记导入失败任务")
