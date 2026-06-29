@@ -1,6 +1,7 @@
 package com.framework.admin.auth;
 
 import com.framework.admin.system.AdminSystemModels.Menu;
+import com.framework.admin.support.AdminClientIpResolver;
 import com.framework.core.constant.FrameworkConstants;
 import com.framework.core.result.Result;
 import io.swagger.v3.oas.annotations.Operation;
@@ -31,7 +32,7 @@ public class AdminAuthController {
     @Operation(summary = "后台登录")
     @PostMapping("/login")
     public Result<LoginResponse> login(@RequestBody LoginRequest request, HttpServletRequest servletRequest) {
-        return authService.login(request, clientIp(servletRequest));
+        return authService.login(request, AdminClientIpResolver.resolve(servletRequest));
     }
 
     @Operation(summary = "当前登录用户")
@@ -51,18 +52,6 @@ public class AdminAuthController {
     public Result<String> changePassword(@RequestBody ChangePasswordRequest request,
                                          HttpServletRequest servletRequest) {
         return authService.changePassword(request, servletRequest);
-    }
-
-    private String clientIp(HttpServletRequest request) {
-        String forwarded = request.getHeader("X-Forwarded-For");
-        if (!isBlank(forwarded)) {
-            return forwarded.split(",")[0].trim();
-        }
-        return request.getRemoteAddr();
-    }
-
-    private boolean isBlank(String value) {
-        return value == null || value.isBlank();
     }
 
     @Data

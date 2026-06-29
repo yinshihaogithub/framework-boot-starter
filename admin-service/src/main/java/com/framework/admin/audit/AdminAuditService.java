@@ -1,6 +1,7 @@
 package com.framework.admin.audit;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.framework.admin.support.AdminClientIpResolver;
 import com.framework.auth.context.UserContextHolder;
 import com.framework.core.trace.TraceContext;
 import com.framework.log.entity.OperationLogEntity;
@@ -68,7 +69,7 @@ public class AdminAuditService {
             entity.setElapsedMs(0L);
             entity.setOperatorId(UserContextHolder.getUserId());
             entity.setOperatorName(UserContextHolder.getUsername());
-            entity.setClientIp(clientIp(request));
+            entity.setClientIp(AdminClientIpResolver.resolve(request));
             entity.setTraceId(TraceContext.ensureTraceId());
             entity.setCreateTime(new Date());
             if (operationLogMapper == null) {
@@ -135,17 +136,6 @@ public class AdminAuditService {
     private boolean isSensitiveKey(String key) {
         String normalized = key.toLowerCase(Locale.ROOT).replace("_", "").replace("-", "");
         return SENSITIVE_KEYWORDS.stream().anyMatch(normalized::contains);
-    }
-
-    private String clientIp(HttpServletRequest request) {
-        if (request == null) {
-            return null;
-        }
-        String forwarded = request.getHeader("X-Forwarded-For");
-        if (forwarded != null && !forwarded.isBlank()) {
-            return forwarded.split(",")[0].trim();
-        }
-        return request.getRemoteAddr();
     }
 
     public Map<String, Object> params(Object... values) {

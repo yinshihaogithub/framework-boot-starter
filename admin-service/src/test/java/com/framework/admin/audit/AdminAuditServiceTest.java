@@ -69,6 +69,17 @@ class AdminAuditServiceTest {
     }
 
     @Test
+    void unsafeForwardedClientIpFallsBackToRemoteAddress() {
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/admin/system/users");
+        request.setRemoteAddr("127.0.0.1");
+        request.addHeader("X-Forwarded-For", "bad\nip, unknown");
+
+        service.success(request, "系统管理", "创建用户", "INSERT", null);
+
+        assertThat(mapper.inserted.getClientIp()).isEqualTo("127.0.0.1");
+    }
+
+    @Test
     void paramsMaskSensitiveValuesBeforeWritingOperationLog() {
         service.success(null, "系统管理", "创建用户", "INSERT",
                 service.params("username", "bob",
