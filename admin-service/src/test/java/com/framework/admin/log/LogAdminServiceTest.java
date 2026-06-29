@@ -45,6 +45,18 @@ class LogAdminServiceTest {
     }
 
     @Test
+    void returnsEmptyPageWhenOperationLogQueryFails() {
+        LogAdminService service = new LogAdminService(provider(failingMapper()), systemRepository(List.of()));
+
+        PageResult<OperationLogEntity> page = service.list(null, null, null, null, null, -1, 500);
+
+        assertThat(page.getPageNum()).isEqualTo(1);
+        assertThat(page.getPageSize()).isEqualTo(200);
+        assertThat(page.getTotal()).isZero();
+        assertThat(page.getRecords()).isEmpty();
+    }
+
+    @Test
     void traceFiltersOperationLogsByTraceId() {
         LogAdminService service = new LogAdminService(provider(mapper(List.of(
                 operationLog(1L, "system", "OPERATION", true, "trace-a"),
@@ -104,6 +116,34 @@ class LogAdminServiceTest {
             @Override
             public long count(String module, String logType, Long operatorId, Boolean success, String traceId) {
                 return selectList(module, logType, operatorId, success, traceId, 0, Integer.MAX_VALUE).size();
+            }
+
+            @Override
+            public int deleteBefore(Date beforeDate) {
+                return 0;
+            }
+        };
+    }
+
+    private static OperationLogMapper failingMapper() {
+        return new OperationLogMapper() {
+            @Override
+            public void createTableIfNotExists() {
+            }
+
+            @Override
+            public void insert(OperationLogEntity entity) {
+            }
+
+            @Override
+            public List<OperationLogEntity> selectList(String module, String logType, Long operatorId,
+                                                       Boolean success, String traceId, int offset, int pageSize) {
+                throw new IllegalStateException("operation log table unavailable");
+            }
+
+            @Override
+            public long count(String module, String logType, Long operatorId, Boolean success, String traceId) {
+                throw new IllegalStateException("operation log table unavailable");
             }
 
             @Override

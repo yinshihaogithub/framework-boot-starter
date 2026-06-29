@@ -47,10 +47,14 @@ public class LogAdminService {
             return PageResult.empty(safePageNum, safePageSize);
         }
         int offset = (safePageNum - 1) * safePageSize;
-        List<OperationLogEntity> records = mapper.selectList(
-                module, logType, operatorId, success, traceId, offset, safePageSize);
-        long total = mapper.count(module, logType, operatorId, success, traceId);
-        return PageResult.of(records, total, safePageNum, safePageSize);
+        try {
+            List<OperationLogEntity> records = mapper.selectList(
+                    module, logType, operatorId, success, traceId, offset, safePageSize);
+            long total = mapper.count(module, logType, operatorId, success, traceId);
+            return PageResult.of(records, total, safePageNum, safePageSize);
+        } catch (Exception ignored) {
+            return PageResult.empty(safePageNum, safePageSize);
+        }
     }
 
     public PageResult<OperationLogEntity> trace(String traceId, int pageNum, int pageSize) {
