@@ -8,6 +8,7 @@ import com.framework.mq.producer.MqMessageSenderRegistry;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -20,6 +21,24 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class MqRetrySchedulerTest {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
+
+    @Test
+    void constructorRejectsInvalidDependenciesAndRetryLimit() {
+        DeadLetterHandler deadLetterHandler = new DeadLetterHandler(
+                new InMemoryMqFailedMessageRepository(List.of()), new MqProperties());
+        MqMessageSenderRegistry senderRegistry = new MqMessageSenderRegistry(
+                properties(MqProperties.Provider.RABBIT), List.of(new RecordingSender()));
+
+        assertThatThrownBy(() -> new MqRetryScheduler(null, senderRegistry, 3))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessageContaining("deadLetterHandler");
+        assertThatThrownBy(() -> new MqRetryScheduler(deadLetterHandler, null, 3))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessageContaining("senderRegistry");
+        assertThatThrownBy(() -> new MqRetryScheduler(deadLetterHandler, senderRegistry, 0))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("maxRetry must be greater than 0");
+    }
 
     @Test
     void manualRetryPreservesOriginalWrapperMetadataAndRecordsOperator() throws Exception {
@@ -59,6 +78,22 @@ class MqRetrySchedulerTest {
     }
 
     @Test
+    void manualRetryRejectsInvalidIdBeforeLookup() {
+        MqRetryScheduler scheduler = new MqRetryScheduler(
+                new DeadLetterHandler(new InMemoryMqFailedMessageRepository(List.of()), new MqProperties()),
+                new MqMessageSenderRegistry(properties(MqProperties.Provider.RABBIT), List.of(new RecordingSender())),
+                3
+        );
+
+        assertThatThrownBy(() -> scheduler.manualRetry(null, "ops-user"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("failed message id must be greater than 0");
+        assertThatThrownBy(() -> scheduler.manualRetry(0L, "ops-user"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("failed message id must be greater than 0");
+    }
+
+    @Test
     void manualRetryFailurePersistsAttemptAndSchedulesNextRetry() {
         MqFailedMessage failedMessage = failedMessage("{\"legacy\":true}");
         failedMessage.setRetryCount(1);
@@ -92,6 +127,26 @@ class MqRetrySchedulerTest {
                 deadLetterHandler,
                 new MqMessageSenderRegistry(properties(MqProperties.Provider.RABBIT),
                         List.of(new EmptyMessageFailingSender())),
+                3
+        );
+
+        boolean result = scheduler.manualRetry(1L, "ops-user", "retry now");
+
+        assertThat(result).isFalse();
+        MqFailedMessage saved = repository.findById(1L).orElseThrow();
+        assertThat(saved.getErrorMessage()).contains("手动重发失败: IllegalStateException");
+        assertThat(saved.getErrorMessage()).doesNotContain("null");
+    }
+
+    @Test
+    void manualRetryFailureUsesExceptionClassNameWhenMessageIsBlank() {
+        MqFailedMessage failedMessage = failedMessage("{\"legacy\":true}");
+        InMemoryMqFailedMessageRepository repository = new InMemoryMqFailedMessageRepository(List.of(failedMessage));
+        DeadLetterHandler deadLetterHandler = new DeadLetterHandler(repository, new MqProperties());
+        MqRetryScheduler scheduler = new MqRetryScheduler(
+                deadLetterHandler,
+                new MqMessageSenderRegistry(properties(MqProperties.Provider.RABBIT),
+                        List.of(new FailingSender(" "))),
                 3
         );
 
@@ -205,6 +260,29 @@ class MqRetrySchedulerTest {
         assertThatThrownBy(() -> scheduler.batchManualRetry(null, "ops-user"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("ids");
+    }
+
+    @Test
+    void batchManualRetryRecordsInvalidIdsAndContinuesValidMessages() {
+        MqFailedMessage failedMessage = failedMessage("{\"legacy\":true}");
+        InMemoryMqFailedMessageRepository repository = new InMemoryMqFailedMessageRepository(List.of(failedMessage));
+        DeadLetterHandler deadLetterHandler = new DeadLetterHandler(repository, new MqProperties());
+        RecordingSender sender = new RecordingSender();
+        MqRetryScheduler scheduler = new MqRetryScheduler(
+                deadLetterHandler,
+                new MqMessageSenderRegistry(properties(MqProperties.Provider.RABBIT), List.of(sender)),
+                3
+        );
+
+        MqAdminDTO.ManualRetryResult result = scheduler.batchManualRetry(Arrays.asList(null, 0L, 1L, 404L), "ops-user");
+
+        assertThat(result.getTotal()).isEqualTo(4);
+        assertThat(result.getSuccess()).isEqualTo(1);
+        assertThat(result.getFailed()).isEqualTo(3);
+        assertThat(result.getFailedMessages())
+                .containsExactly("ID=null 无效", "ID=0 无效", "ID=404 重发失败");
+        assertThat(repository.findById(1L).orElseThrow().getStatus()).isEqualTo(MqFailedMessage.STATUS_MANUAL);
+        assertThat(sender.wrapper).isNotNull();
     }
 
     private static MqFailedMessage failedMessage(String payload) {

@@ -10,6 +10,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import java.util.Date;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * MQ 失败消息重试调度器
@@ -34,8 +35,11 @@ public class MqRetryScheduler {
     public MqRetryScheduler(DeadLetterHandler deadLetterHandler,
                             MqMessageSenderRegistry senderRegistry,
                             int maxRetry) {
-        this.deadLetterHandler = deadLetterHandler;
-        this.senderRegistry = senderRegistry;
+        this.deadLetterHandler = Objects.requireNonNull(deadLetterHandler, "deadLetterHandler must not be null");
+        this.senderRegistry = Objects.requireNonNull(senderRegistry, "senderRegistry must not be null");
+        if (maxRetry <= 0) {
+            throw new IllegalArgumentException("maxRetry must be greater than 0");
+        }
         this.maxRetry = maxRetry;
     }
 
@@ -143,6 +147,7 @@ public class MqRetryScheduler {
      * 手动重发（管理后台调用）
      */
     public boolean manualRetry(Long id, String operator, String remark) {
+        requireId(id);
         MqFailedMessage msg = deadLetterHandler.getById(id);
         if (msg == null) {
             return false;
@@ -209,6 +214,11 @@ public class MqRetryScheduler {
         int failed = 0;
 
         for (Long id : ids) {
+            if (!validId(id)) {
+                failed++;
+                failedMessages.add("ID=" + id + " 无效");
+                continue;
+            }
             if (manualRetry(id, operator, remark)) {
                 success++;
             } else {
@@ -306,7 +316,15 @@ public class MqRetryScheduler {
     }
 
     private String failureMessage(Exception exception) {
-        return exception.getMessage() != null ? exception.getMessage() : exception.getClass().getSimpleName();
+        if (exception == null) {
+            return "unknown error";
+        }
+        String message = exception.getMessage();
+        if (message != null && !message.isBlank()) {
+            return message;
+        }
+        String simpleName = exception.getClass().getSimpleName();
+        return simpleName.isBlank() ? exception.getClass().getName() : simpleName;
     }
 
     private String normalize(String value) {
@@ -315,5 +333,15 @@ public class MqRetryScheduler {
         }
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private void requireId(Long id) {
+        if (!validId(id)) {
+            throw new IllegalArgumentException("failed message id must be greater than 0");
+        }
+    }
+
+    private boolean validId(Long id) {
+        return id != null && id > 0;
     }
 }
