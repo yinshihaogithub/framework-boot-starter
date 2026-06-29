@@ -2,6 +2,7 @@ package com.framework.auth.config;
 
 import com.framework.auth.filter.TokenAuthFilter;
 import com.framework.auth.jwt.JwtUtils;
+import com.framework.auth.service.LoginUserValidator;
 import com.framework.auth.service.LoginSecurityService;
 import com.framework.auth.service.LoggingSmsSender;
 import com.framework.auth.service.OAuth2LoginService;
@@ -19,6 +20,7 @@ import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.Ordered;
 import org.springframework.core.env.Environment;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.util.StringUtils;
 
@@ -97,9 +99,10 @@ public class AuthAutoConfiguration {
     @ConditionalOnBean(SessionManager.class)
     @ConditionalOnMissingBean(name = "tokenAuthFilterRegistration")
     public FilterRegistrationBean<TokenAuthFilter> tokenAuthFilterRegistration(
-            JwtUtils jwtUtils, SessionManager sessionManager, AuthProperties properties) {
+            JwtUtils jwtUtils, SessionManager sessionManager, AuthProperties properties,
+            ObjectProvider<LoginUserValidator> loginUserValidators) {
         Set<String> whiteList = new HashSet<>(properties.getWhiteList());
-        TokenAuthFilter filter = new TokenAuthFilter(jwtUtils, sessionManager, whiteList);
+        TokenAuthFilter filter = new TokenAuthFilter(sessionManager, whiteList, loginUserValidators.orderedStream().toList());
         FilterRegistrationBean<TokenAuthFilter> registration = new FilterRegistrationBean<>(filter);
         registration.setOrder(Ordered.HIGHEST_PRECEDENCE + 10);
         return registration;

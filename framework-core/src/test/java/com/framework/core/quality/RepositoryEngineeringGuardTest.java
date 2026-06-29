@@ -546,6 +546,27 @@ class RepositoryEngineeringGuardTest {
     }
 
     @Test
+    void adminSessionsAreRevalidatedAgainstCurrentAccountStatus() throws Exception {
+        String tokenFilter = read(root.resolve("framework-auth/src/main/java/com/framework/auth/filter/TokenAuthFilter.java"));
+        String authAutoConfiguration = read(root.resolve("framework-auth/src/main/java/com/framework/auth/config/AuthAutoConfiguration.java"));
+        String adminValidator = read(root.resolve("admin-service/src/main/java/com/framework/admin/auth/AdminLoginUserValidator.java"));
+
+        assertThat(tokenFilter)
+                .as("restored Redis sessions must be revalidated before injecting UserContextHolder")
+                .contains("LoginUserValidator")
+                .contains("isLoginUserValid(user)")
+                .contains("sessionManager.forceLogoutAll(user.getUserId())");
+        assertThat(authAutoConfiguration)
+                .as("auth auto-configuration must pass all LoginUserValidator beans into TokenAuthFilter")
+                .contains("ObjectProvider<LoginUserValidator>")
+                .contains("loginUserValidators.orderedStream().toList()");
+        assertThat(adminValidator)
+                .as("admin-service must reject disabled or deleted accounts even when Redis sessions still exist")
+                .contains("implements LoginUserValidator")
+                .contains("\"ENABLED\".equals(adminUser.getStatus())");
+    }
+
+    @Test
     void sourceConfigurationDoesNotUseH2AsDefaultDatabase() throws Exception {
         try (Stream<Path> files = Files.walk(root)) {
             List<Path> sourceFiles = files

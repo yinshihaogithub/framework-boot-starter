@@ -68,6 +68,24 @@ class AdminAuthServiceTest {
     }
 
     @Test
+    void loginRejectsDisabledUser() {
+        repository.user = enabledUser().setStatus("DISABLED");
+        AdminAuthController.LoginRequest request = new AdminAuthController.LoginRequest();
+        request.setUsername("admin");
+        request.setPassword("Admin@123");
+
+        Result<AdminAuthController.LoginResponse> result = service.login(request, "10.0.0.8");
+
+        assertThat(result.getCode()).isEqualTo(ResultCode.LOGIN_FAIL.getCode());
+        assertThat(sessionManager.createdDeviceId).isNull();
+        assertThat(repository.lastLoginUserId).isNull();
+        assertThat(repository.loginLogs)
+                .extracting(LoginLogRecord::username, LoginLogRecord::userId, LoginLogRecord::clientIp,
+                        LoginLogRecord::success, LoginLogRecord::message)
+                .containsExactly(tuple("admin", 1L, "10.0.0.8", false, "账号或密码错误"));
+    }
+
+    @Test
     void meReturnsCurrentUserMenus() {
         repository.user = enabledUser();
         repository.menus = List.of(menu(1L, "dashboard"));

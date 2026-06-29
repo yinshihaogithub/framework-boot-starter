@@ -3,6 +3,7 @@ package com.framework.auth.filter;
 import com.framework.auth.context.LoginUser;
 import com.framework.auth.context.UserContextHolder;
 import com.framework.auth.jwt.JwtUtils;
+import com.framework.auth.service.LoginUserValidator;
 import com.framework.auth.service.SessionManager;
 import com.framework.core.constant.FrameworkConstants;
 import com.framework.core.result.Result;
@@ -17,6 +18,8 @@ import org.springframework.util.AntPathMatcher;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.Collection;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -27,6 +30,7 @@ public class TokenAuthFilter extends OncePerRequestFilter {
 
     private final SessionManager sessionManager;
     private final Set<String> whiteList;
+    private final Collection<LoginUserValidator> loginUserValidators;
     private final AntPathMatcher pathMatcher = new AntPathMatcher();
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -35,8 +39,14 @@ public class TokenAuthFilter extends OncePerRequestFilter {
     }
 
     public TokenAuthFilter(SessionManager sessionManager, Set<String> whiteList) {
+        this(sessionManager, whiteList, List.of());
+    }
+
+    public TokenAuthFilter(SessionManager sessionManager, Set<String> whiteList,
+                           Collection<LoginUserValidator> loginUserValidators) {
         this.sessionManager = sessionManager;
         this.whiteList = whiteList;
+        this.loginUserValidators = loginUserValidators == null ? List.of() : loginUserValidators;
     }
 
     @Override
@@ -77,6 +87,11 @@ public class TokenAuthFilter extends OncePerRequestFilter {
                 writeUnauthorized(response, "Token无效或已过期");
                 return;
             }
+            if (!isLoginUserValid(user)) {
+                sessionManager.forceLogoutAll(user.getUserId());
+                writeUnauthorized(response, "账号已停用或不存在");
+                return;
+            }
             UserContextHolder.set(user);
 
             chain.doFilter(request, response);
@@ -90,6 +105,15 @@ public class TokenAuthFilter extends OncePerRequestFilter {
             return false;
         }
         return whiteList.stream().anyMatch(pattern -> pathMatcher.match(pattern, uri));
+    }
+
+    private boolean isLoginUserValid(LoginUser user) {
+        for (LoginUserValidator validator : loginUserValidators) {
+            if (!validator.isValid(user)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private void writeUnauthorized(HttpServletResponse response, String message) throws IOException {

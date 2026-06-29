@@ -3,6 +3,7 @@ package com.framework.auth.filter;
 import com.framework.auth.context.LoginUser;
 import com.framework.auth.context.UserContextHolder;
 import com.framework.auth.jwt.JwtUtils;
+import com.framework.auth.service.LoginUserValidator;
 import com.framework.auth.service.SessionManager;
 import com.framework.core.constant.FrameworkConstants;
 import org.junit.jupiter.api.AfterEach;
@@ -11,6 +12,8 @@ import org.springframework.mock.web.MockFilterChain;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 
+import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -84,6 +87,29 @@ class TokenAuthFilterTest {
         assertThat(UserContextHolder.get()).isSameAs(previous);
     }
 
+    @Test
+    void rejectsSessionWhenLoginUserValidatorFails() throws Exception {
+        LoginUser loginUser = new LoginUser()
+                .setUserId(1L)
+                .setUsername("alice")
+                .setAccessToken("token");
+        StubSessionManager sessionManager = new StubSessionManager(loginUser);
+        LoginUserValidator disabledUserValidator = user -> false;
+        TokenAuthFilter filter = new TokenAuthFilter(sessionManager, Set.of(), List.of(disabledUserValidator));
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/secure");
+        request.addHeader(FrameworkConstants.AUTH_HEADER, FrameworkConstants.TOKEN_PREFIX + "token");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        CapturingFilterChain chain = new CapturingFilterChain();
+
+        filter.doFilter(request, response, chain);
+
+        assertThat(response.getStatus()).isEqualTo(401);
+        assertThat(response.getContentAsString(StandardCharsets.UTF_8)).contains("账号已停用或不存在");
+        assertThat(sessionManager.forceLogoutAllUserId).isEqualTo(1L);
+        assertThat(chain.userDuringRequest).isNull();
+        assertThat(UserContextHolder.get()).isNull();
+    }
+
     private static final class CapturingFilterChain extends MockFilterChain {
         private LoginUser userDuringRequest;
 
@@ -97,6 +123,7 @@ class TokenAuthFilterTest {
     private static final class StubSessionManager extends SessionManager {
 
         private final LoginUser loginUser;
+        private Long forceLogoutAllUserId;
 
         private StubSessionManager(LoginUser loginUser) {
             super(null, null, 0);
@@ -111,6 +138,11 @@ class TokenAuthFilterTest {
         @Override
         public LoginUser getLoginUser(String accessToken) {
             return loginUser;
+        }
+
+        @Override
+        public void forceLogoutAll(Long userId) {
+            this.forceLogoutAllUserId = userId;
         }
     }
 }
