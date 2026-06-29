@@ -97,6 +97,10 @@ public class AdminSystemService {
     }
 
     public Result<String> updateTenant(Long id, TenantRequest request, HttpServletRequest servletRequest) {
+        Result<String> invalidId = invalidResourceId(id, "租户");
+        if (invalidId != null) {
+            return invalidId;
+        }
         Result<String> validation = validateTenant(request);
         if (validation != null) {
             return validation;
@@ -112,6 +116,10 @@ public class AdminSystemService {
     }
 
     public Result<String> deleteTenant(Long id, HttpServletRequest servletRequest) {
+        Result<String> invalidId = invalidResourceId(id, "租户");
+        if (invalidId != null) {
+            return invalidId;
+        }
         if (id == 1L) {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), "默认租户不能删除");
         }
@@ -152,6 +160,10 @@ public class AdminSystemService {
     }
 
     public Result<String> updateDept(Long id, DeptRequest request, HttpServletRequest servletRequest) {
+        Result<String> invalidId = invalidResourceId(id, "部门");
+        if (invalidId != null) {
+            return invalidId;
+        }
         Result<String> validation = validateDept(request);
         if (validation != null) {
             return validation;
@@ -171,6 +183,10 @@ public class AdminSystemService {
     }
 
     public Result<String> deleteDept(Long id, HttpServletRequest servletRequest) {
+        Result<String> invalidId = invalidResourceId(id, "部门");
+        if (invalidId != null) {
+            return invalidId;
+        }
         if (id == 1L) {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), "总部部门不能删除");
         }
@@ -659,6 +675,13 @@ public class AdminSystemService {
 
     private boolean isBlank(String value) {
         return value == null || value.isBlank();
+    }
+
+    private Result<String> invalidResourceId(Long id, String resourceName) {
+        if (id == null || id <= 0) {
+            return Result.fail(ResultCode.PARAM_ERROR.getCode(), resourceName + "ID必须大于0");
+        }
+        return null;
     }
 
     private Result<String> invalidUserId(Long id) {

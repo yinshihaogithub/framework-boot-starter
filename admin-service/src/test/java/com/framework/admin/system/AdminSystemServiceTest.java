@@ -319,6 +319,28 @@ class AdminSystemServiceTest {
     }
 
     @Test
+    void tenantIdOperationsRejectInvalidIdBeforeRepositoryLookup() {
+        repository.commandFailure = new RuntimeException("database down");
+
+        assertInvalidResourceId(service.updateTenant(0L, tenantRequest(), null), "租户ID必须大于0");
+        assertInvalidResourceId(service.deleteTenant(0L, null), "租户ID必须大于0");
+
+        assertThat(repository.updatedTenantId).isNull();
+        assertThat(repository.deletedTenantId).isNull();
+    }
+
+    @Test
+    void deptIdOperationsRejectInvalidIdBeforeRepositoryLookup() {
+        repository.commandFailure = new RuntimeException("database down");
+
+        assertInvalidResourceId(service.updateDept(0L, deptRequest(), null), "部门ID必须大于0");
+        assertInvalidResourceId(service.deleteDept(0L, null), "部门ID必须大于0");
+
+        assertThat(repository.updatedDeptId).isNull();
+        assertThat(repository.deletedDeptId).isNull();
+    }
+
+    @Test
     void roleValidationRejectsInvalidStatus() {
         RoleRequest request = new RoleRequest();
         request.setRoleCode("OPS");
@@ -554,6 +576,12 @@ class AdminSystemServiceTest {
         assertThat(result.getMessage()).isEqualTo("用户ID必须大于0");
     }
 
+    private static void assertInvalidResourceId(Result<?> result, String message) {
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getCode()).isEqualTo(ResultCode.PARAM_ERROR.getCode());
+        assertThat(result.getMessage()).isEqualTo(message);
+    }
+
     private static RoleRequest roleRequest() {
         RoleRequest request = new RoleRequest();
         request.setRoleCode("OPS");
@@ -610,7 +638,10 @@ class AdminSystemServiceTest {
         private UserCreateRequest createdUser;
         private String createdPasswordHash;
         private long tenantUserCount;
+        private Long updatedTenantId;
         private Long deletedTenantId;
+        private Long updatedDeptId;
+        private Long deletedDeptId;
         private RoleRequest createdRole;
         private Long resetPasswordUserId;
         private String resetPasswordHash;
@@ -676,6 +707,7 @@ class AdminSystemServiceTest {
         @Override
         public void updateTenant(Long id, TenantRequest request) {
             failCommandIfNeeded();
+            this.updatedTenantId = id;
         }
 
         @Override
@@ -699,11 +731,13 @@ class AdminSystemServiceTest {
         @Override
         public void updateDept(Long id, DeptRequest request) {
             failCommandIfNeeded();
+            this.updatedDeptId = id;
         }
 
         @Override
         public void deleteDept(Long id) {
             failCommandIfNeeded();
+            this.deletedDeptId = id;
         }
 
         @Override
