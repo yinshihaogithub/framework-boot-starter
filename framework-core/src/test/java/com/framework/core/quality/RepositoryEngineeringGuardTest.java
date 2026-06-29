@@ -876,6 +876,27 @@ class RepositoryEngineeringGuardTest {
     }
 
     @Test
+    void permissionCacheRedisFailuresDoNotLeakToBusinessFlow() throws Exception {
+        String cacheService = read(root.resolve(
+                "framework-security/src/main/java/com/framework/security/service/PermissionCacheService.java"));
+        String cacheServiceTest = read(root.resolve(
+                "framework-security/src/test/java/com/framework/security/service/PermissionCacheServiceTest.java"));
+
+        assertThat(cacheService)
+                .as("permission cache is an enhancement and Redis outages must not break callers")
+                .contains("log.warn(\"[权限缓存] 读取角色失败")
+                .contains("log.warn(\"[权限缓存] 读取权限失败")
+                .contains("log.warn(\"[权限缓存] 刷新失败")
+                .contains("log.warn(\"[权限缓存] 清空失败")
+                .contains("return null")
+                .contains("return false");
+        assertThat(cacheServiceTest)
+                .contains("readFailuresFallbackToMissingCache")
+                .contains("deleteFailuresDoNotLeakToBusinessFlow")
+                .contains("redis unavailable");
+    }
+
+    @Test
     void adminSessionsAreRevalidatedAgainstCurrentAccountStatus() throws Exception {
         String tokenFilter = read(root.resolve("framework-auth/src/main/java/com/framework/auth/filter/TokenAuthFilter.java"));
         String authAutoConfiguration = read(root.resolve("framework-auth/src/main/java/com/framework/auth/config/AuthAutoConfiguration.java"));

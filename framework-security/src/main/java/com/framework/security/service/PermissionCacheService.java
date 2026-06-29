@@ -1,12 +1,10 @@
 package com.framework.security.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.core.type.TypeReference;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -47,14 +45,14 @@ public class PermissionCacheService {
      * 获取用户角色（从缓存）
      */
     public String[] getRoles(Long userId) {
-        String json = redis.opsForValue().get(ROLE_CACHE_PREFIX + userId);
-        if (json == null) {
-            return null;
-        }
         try {
+            String json = redis.opsForValue().get(ROLE_CACHE_PREFIX + userId);
+            if (json == null) {
+                return null;
+            }
             return objectMapper.readValue(json, String[].class);
         } catch (Exception e) {
-            log.error("[权限缓存] 反序列化角色失败 userId={}", userId, e);
+            log.warn("[权限缓存] 读取角色失败 userId={}, error={}", userId, e.getMessage());
             return null;
         }
     }
@@ -75,14 +73,14 @@ public class PermissionCacheService {
      * 获取用户权限（从缓存）
      */
     public String[] getPermissions(Long userId) {
-        String json = redis.opsForValue().get(PERM_CACHE_PREFIX + userId);
-        if (json == null) {
-            return null;
-        }
         try {
+            String json = redis.opsForValue().get(PERM_CACHE_PREFIX + userId);
+            if (json == null) {
+                return null;
+            }
             return objectMapper.readValue(json, String[].class);
         } catch (Exception e) {
-            log.error("[权限缓存] 反序列化权限失败 userId={}", userId, e);
+            log.warn("[权限缓存] 读取权限失败 userId={}, error={}", userId, e.getMessage());
             return null;
         }
     }
@@ -91,9 +89,13 @@ public class PermissionCacheService {
      * 刷新用户权限缓存（角色或权限变更时调用）
      */
     public void refresh(Long userId) {
-        redis.delete(ROLE_CACHE_PREFIX + userId);
-        redis.delete(PERM_CACHE_PREFIX + userId);
-        log.info("[权限缓存] 已刷新 userId={}", userId);
+        try {
+            redis.delete(ROLE_CACHE_PREFIX + userId);
+            redis.delete(PERM_CACHE_PREFIX + userId);
+            log.info("[权限缓存] 已刷新 userId={}", userId);
+        } catch (Exception e) {
+            log.warn("[权限缓存] 刷新失败 userId={}, error={}", userId, e.getMessage());
+        }
     }
 
     /**
@@ -131,14 +133,18 @@ public class PermissionCacheService {
      * 清除所有权限缓存
      */
     public void clearAll() {
-        Set<String> roleKeys = redis.keys(ROLE_CACHE_PREFIX + "*");
-        Set<String> permKeys = redis.keys(PERM_CACHE_PREFIX + "*");
-        if (roleKeys != null) {
-            redis.delete(roleKeys);
+        try {
+            Set<String> roleKeys = redis.keys(ROLE_CACHE_PREFIX + "*");
+            Set<String> permKeys = redis.keys(PERM_CACHE_PREFIX + "*");
+            if (roleKeys != null) {
+                redis.delete(roleKeys);
+            }
+            if (permKeys != null) {
+                redis.delete(permKeys);
+            }
+            log.info("[权限缓存] 已清空所有缓存");
+        } catch (Exception e) {
+            log.warn("[权限缓存] 清空失败 error={}", e.getMessage());
         }
-        if (permKeys != null) {
-            redis.delete(permKeys);
-        }
-        log.info("[权限缓存] 已清空所有缓存");
     }
 }
