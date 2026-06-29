@@ -35,6 +35,8 @@ class RepositoryEngineeringGuardTest {
     private static final Pattern REQUIRE_PERMISSION_PATTERN = Pattern.compile(
             "@RequirePermission\\s*\\(\\s*(?:\\{\\s*)?([^)]*?)(?:\\s*}\\s*)?\\)", Pattern.DOTALL);
     private static final Pattern QUOTED_STRING_PATTERN = Pattern.compile("\"([^\"]+)\"");
+    private static final Pattern WRITE_MAPPING_WITH_VIEW_PERMISSION_PATTERN = Pattern.compile(
+            "@(?:Post|Put|Delete)Mapping[^\\n]*(?:\\R\\s*@[A-Za-z][^\\n]*)*\\R\\s*@RequirePermission\\(\"[^\"]*:view\"\\)");
 
     private final Path root = repositoryRoot();
 
@@ -485,6 +487,25 @@ class RepositoryEngineeringGuardTest {
             assertThat(aggregateScript)
                     .as("aggregate SQL must seed backend permission " + permission)
                     .contains("'" + permission + "'");
+        }
+    }
+
+    @Test
+    void adminWriteEndpointsUseActionPermissionsInsteadOfViewPermissions() throws Exception {
+        Path adminMain = root.resolve("admin-service/src/main/java/com/framework/admin");
+        try (Stream<Path> files = Files.walk(adminMain)) {
+            List<Path> controllerFiles = files
+                    .filter(Files::isRegularFile)
+                    .filter(path -> path.getFileName().toString().endsWith("Controller.java"))
+                    .filter(path -> !path.toString().contains("/auth/"))
+                    .toList();
+
+            assertThat(controllerFiles).isNotEmpty();
+            for (Path file : controllerFiles) {
+                assertThat(WRITE_MAPPING_WITH_VIEW_PERMISSION_PATTERN.matcher(read(file)).find())
+                        .as(file + " write endpoints must use create/update/delete/action permissions")
+                        .isFalse();
+            }
         }
     }
 

@@ -141,8 +141,8 @@
               <el-table-column prop="createTime" label="创建时间" min-width="170" />
               <el-table-column label="操作" width="116" fixed="right">
                 <template #default="{ row }">
-                  <el-button :icon="Edit" circle size="small" @click="openEditTenant(row)" />
-                  <el-button :icon="Delete" circle size="small" @click="deleteTenant(row)" />
+                  <el-button v-if="can('system:tenant:update')" :icon="Edit" circle size="small" @click="openEditTenant(row)" />
+                  <el-button v-if="can('system:tenant:delete')" :icon="Delete" circle size="small" @click="deleteTenant(row)" />
                 </template>
               </el-table-column>
             </el-table>
@@ -174,8 +174,8 @@
               <el-table-column label="操作" width="148" fixed="right">
                 <template #default="{ row }">
                   <el-button v-if="can('system:dept:create')" :icon="Plus" circle size="small" @click="openCreateDept(row)" />
-                  <el-button :icon="Edit" circle size="small" @click="openEditDept(row)" />
-                  <el-button :icon="Delete" circle size="small" @click="deleteDept(row)" />
+                  <el-button v-if="can('system:dept:update')" :icon="Edit" circle size="small" @click="openEditDept(row)" />
+                  <el-button v-if="can('system:dept:delete')" :icon="Delete" circle size="small" @click="deleteDept(row)" />
                 </template>
               </el-table-column>
             </el-table>
@@ -214,10 +214,10 @@
               </el-table-column>
               <el-table-column label="操作" width="190" fixed="right">
                 <template #default="{ row }">
-                  <el-button :icon="Edit" circle size="small" @click="openEditUser(row)" />
+                  <el-button v-if="can('system:user:update')" :icon="Edit" circle size="small" @click="openEditUser(row)" />
                   <el-button v-if="can('system:user:reset-password')" :icon="RefreshRight" circle size="small" @click="resetUserPassword(row.id)" />
-                  <el-button :icon="Switch" circle size="small" @click="toggleUser(row)" />
-                  <el-button :icon="Delete" circle size="small" @click="deleteUser(row)" />
+                  <el-button v-if="can('system:user:update-status')" :icon="Switch" circle size="small" @click="toggleUser(row)" />
+                  <el-button v-if="can('system:user:delete')" :icon="Delete" circle size="small" @click="deleteUser(row)" />
                 </template>
               </el-table-column>
             </el-table>
@@ -232,7 +232,7 @@
                 <span>角色管理</span>
                 <div class="actions">
                   <el-tag size="small">{{ roles.length }}</el-tag>
-                  <el-button :icon="Plus" circle @click="openCreateRole" />
+                  <el-button v-if="can('system:role:create')" :icon="Plus" circle @click="openCreateRole" />
                 </div>
               </div>
             </template>
@@ -244,9 +244,9 @@
               <el-table-column prop="sortOrder" label="排序" width="100" />
               <el-table-column label="操作" width="148" fixed="right">
                 <template #default="{ row }">
-                  <el-button :icon="Edit" circle size="small" @click="openEditRole(row)" />
-                  <el-button :icon="Setting" circle size="small" @click="openRoleAuth(row)" />
-                  <el-button :icon="Delete" circle size="small" @click="deleteRole(row)" />
+                  <el-button v-if="can('system:role:update')" :icon="Edit" circle size="small" @click="openEditRole(row)" />
+                  <el-button v-if="can('system:role:authorize')" :icon="Setting" circle size="small" @click="openRoleAuth(row)" />
+                  <el-button v-if="can('system:role:delete')" :icon="Delete" circle size="small" @click="deleteRole(row)" />
                 </template>
               </el-table-column>
             </el-table>
@@ -260,7 +260,7 @@
                 <span>菜单管理</span>
                 <div class="actions">
                   <el-tag size="small">{{ menuCount }}</el-tag>
-                  <el-button :icon="Plus" circle @click="openCreateMenu()" />
+                  <el-button v-if="can('system:menu:create')" :icon="Plus" circle @click="openCreateMenu()" />
                 </div>
               </div>
             </template>
@@ -275,9 +275,9 @@
               <el-table-column prop="sortOrder" label="排序" width="90" />
               <el-table-column label="操作" width="148" fixed="right">
                 <template #default="{ row }">
-                  <el-button :icon="Plus" circle size="small" @click="openCreateMenu(row)" />
-                  <el-button :icon="Edit" circle size="small" @click="openEditMenu(row)" />
-                  <el-button :icon="Delete" circle size="small" @click="deleteMenu(row)" />
+                  <el-button v-if="can('system:menu:create')" :icon="Plus" circle size="small" @click="openCreateMenu(row)" />
+                  <el-button v-if="can('system:menu:update')" :icon="Edit" circle size="small" @click="openEditMenu(row)" />
+                  <el-button v-if="can('system:menu:delete')" :icon="Delete" circle size="small" @click="deleteMenu(row)" />
                 </template>
               </el-table-column>
             </el-table>
@@ -291,7 +291,7 @@
                 <span>字典类型</span>
                 <div class="actions">
                   <el-tag size="small">{{ dictTypes.length }}</el-tag>
-                  <el-button :icon="Plus" circle @click="openCreateDictType" />
+                  <el-button v-if="can('system:dict:create')" :icon="Plus" circle @click="openCreateDictType" />
                 </div>
               </div>
             </template>
@@ -301,8 +301,8 @@
               <el-table-column prop="status" label="状态" width="100" />
               <el-table-column label="操作" width="108" fixed="right">
                 <template #default="{ row }">
-                  <el-button :icon="Edit" circle size="small" @click.stop="openEditDictType(row)" />
-                  <el-button :icon="Delete" circle size="small" @click.stop="deleteDictType(row)" />
+                  <el-button v-if="can('system:dict:update')" :icon="Edit" circle size="small" @click.stop="openEditDictType(row)" />
+                  <el-button v-if="can('system:dict:delete')" :icon="Delete" circle size="small" @click.stop="deleteDictType(row)" />
                 </template>
               </el-table-column>
             </el-table>
@@ -331,7 +331,7 @@
                 <span>字典项</span>
                 <div class="actions">
                   <el-tag size="small">{{ dictItems.length }}</el-tag>
-                  <el-button :icon="Plus" circle @click="openCreateDictItem" />
+                  <el-button v-if="can('system:dict:create')" :icon="Plus" circle @click="openCreateDictItem" />
                 </div>
               </div>
             </template>
@@ -342,8 +342,8 @@
               <el-table-column prop="status" label="状态" width="100" />
               <el-table-column label="操作" width="108" fixed="right">
                 <template #default="{ row }">
-                  <el-button :icon="Edit" circle size="small" @click="openEditDictItem(row)" />
-                  <el-button :icon="Delete" circle size="small" @click="deleteDictItem(row)" />
+                  <el-button v-if="can('system:dict:update')" :icon="Edit" circle size="small" @click="openEditDictItem(row)" />
+                  <el-button v-if="can('system:dict:delete')" :icon="Delete" circle size="small" @click="deleteDictItem(row)" />
                 </template>
               </el-table-column>
             </el-table>
@@ -357,7 +357,7 @@
                 <span>参数配置</span>
                 <div class="actions">
                   <el-tag size="small">{{ configs.length }}</el-tag>
-                  <el-button :icon="Plus" circle @click="openCreateConfig" />
+                  <el-button v-if="can('system:config:create')" :icon="Plus" circle @click="openCreateConfig" />
                 </div>
               </div>
             </template>
@@ -371,8 +371,8 @@
               <el-table-column prop="remark" label="备注" min-width="240" show-overflow-tooltip />
               <el-table-column label="操作" width="108" fixed="right">
                 <template #default="{ row }">
-                  <el-button :icon="Edit" circle size="small" @click="openEditConfig(row)" />
-                  <el-button :icon="Delete" circle size="small" @click="deleteConfig(row)" />
+                  <el-button v-if="can('system:config:update')" :icon="Edit" circle size="small" @click="openEditConfig(row)" />
+                  <el-button v-if="can('system:config:delete')" :icon="Delete" circle size="small" @click="deleteConfig(row)" />
                 </template>
               </el-table-column>
             </el-table>
