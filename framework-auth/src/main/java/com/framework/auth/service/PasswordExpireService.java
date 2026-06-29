@@ -17,6 +17,7 @@ import java.util.concurrent.TimeUnit;
 public class PasswordExpireService {
 
     private static final String PWD_UPDATE_TIME_PREFIX = "framework:password:update:";
+    private static final String PASSWORD_POLICY_UNAVAILABLE_MESSAGE = "密码过期策略服务暂不可用，请稍后重试";
     private static final long DAYS_BUFFER = 7;
 
     private final StringRedisTemplate redis;
@@ -38,12 +39,17 @@ public class PasswordExpireService {
             return; // 未启用密码过期策略
         }
         String key = buildPasswordUpdateKey(userId);
-        Long updateTime = readPasswordUpdateTime(key, userId);
+        Long updateTime;
+        try {
+            updateTime = readPasswordUpdateTime(key, userId);
 
-        if (updateTime == null) {
-            // 没有记录修改时间，可能是新用户或老用户，初始化为当前时间
-            recordPasswordChange(userId);
-            return;
+            if (updateTime == null) {
+                // 没有记录修改时间，可能是新用户或老用户，初始化为当前时间
+                recordPasswordChange(key, System.currentTimeMillis());
+                return;
+            }
+        } catch (RuntimeException e) {
+            throw passwordPolicyUnavailable("检查密码过期", userId, e);
         }
 
         long now = System.currentTimeMillis();
@@ -65,7 +71,11 @@ public class PasswordExpireService {
             return;
         }
         String key = buildPasswordUpdateKey(userId);
-        recordPasswordChange(key, System.currentTimeMillis());
+        try {
+            recordPasswordChange(key, System.currentTimeMillis());
+        } catch (RuntimeException e) {
+            throw passwordPolicyUnavailable("记录密码修改时间", userId, e);
+        }
     }
 
     private void recordPasswordChange(String key, long updateTime) {
@@ -85,7 +95,13 @@ public class PasswordExpireService {
             return -1;
         }
         String key = buildPasswordUpdateKey(userId);
-        Long updateTime = readPasswordUpdateTime(key, userId);
+        Long updateTime;
+        try {
+            updateTime = readPasswordUpdateTime(key, userId);
+        } catch (RuntimeException e) {
+            log.warn("[密码过期] 查询剩余有效天数失败 userId={} error={}", userId, e.getMessage());
+            return 0;
+        }
         if (updateTime == null) {
             return expireDays;
         }
@@ -107,6 +123,11 @@ public class PasswordExpireService {
             recordPasswordChange(key, now);
             return now;
         }
+    }
+
+    private BusinessException passwordPolicyUnavailable(String action, Long userId, RuntimeException e) {
+        log.error("[密码过期] {}失败 userId={} error={}", action, userId, e.getMessage());
+        return new BusinessException(ResultCode.SERVICE_ERROR, PASSWORD_POLICY_UNAVAILABLE_MESSAGE);
     }
 
     private String buildPasswordUpdateKey(Long userId) {

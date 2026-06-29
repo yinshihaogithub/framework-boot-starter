@@ -1,6 +1,7 @@
 package com.framework.auth.service;
 
 import com.framework.core.exception.BusinessException;
+import com.framework.core.result.ResultCode;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
@@ -69,6 +70,35 @@ class PasswordExpireServiceTest {
                 .hasMessageContaining("密码已过期");
     }
 
+    @Test
+    void redisFailuresDuringPasswordExpirationCheckFailClosed() {
+        PasswordExpireService service = new PasswordExpireService(new ThrowingRedisTemplate(), 30);
+
+        assertThatThrownBy(() -> service.checkPasswordExpired(1L))
+                .isInstanceOf(BusinessException.class)
+                .hasMessage("密码过期策略服务暂不可用，请稍后重试")
+                .extracting("code")
+                .isEqualTo(ResultCode.SERVICE_ERROR.getCode());
+    }
+
+    @Test
+    void redisFailuresDuringPasswordChangeRecordFailClosed() {
+        PasswordExpireService service = new PasswordExpireService(new ThrowingRedisTemplate(), 30);
+
+        assertThatThrownBy(() -> service.recordPasswordChange(1L))
+                .isInstanceOf(BusinessException.class)
+                .hasMessage("密码过期策略服务暂不可用，请稍后重试")
+                .extracting("code")
+                .isEqualTo(ResultCode.SERVICE_ERROR.getCode());
+    }
+
+    @Test
+    void redisFailuresDuringRemainingDaysQueryFallbackToZero() {
+        PasswordExpireService service = new PasswordExpireService(new ThrowingRedisTemplate(), 30);
+
+        assertThat(service.getRemainingDays(1L)).isZero();
+    }
+
     private static final class InMemoryRedisTemplate extends StringRedisTemplate {
 
         private final Map<String, String> values = new ConcurrentHashMap<>();
@@ -128,6 +158,20 @@ class PasswordExpireServiceTest {
                 return 0D;
             }
             return null;
+        }
+    }
+
+    private static final class ThrowingRedisTemplate extends StringRedisTemplate {
+
+        @Override
+        @SuppressWarnings("unchecked")
+        public ValueOperations<String, String> opsForValue() {
+            return (ValueOperations<String, String>) Proxy.newProxyInstance(
+                    ValueOperations.class.getClassLoader(),
+                    new Class<?>[]{ValueOperations.class},
+                    (proxy, method, args) -> {
+                        throw new IllegalStateException("redis unavailable");
+                    });
         }
     }
 }

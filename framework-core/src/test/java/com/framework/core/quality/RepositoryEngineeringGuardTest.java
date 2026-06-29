@@ -499,6 +499,27 @@ class RepositoryEngineeringGuardTest {
     }
 
     @Test
+    void passwordExpireServiceRedisFailuresFailClosedOrDegradeByOperationType() throws Exception {
+        String passwordExpireService = read(root.resolve(
+                "framework-auth/src/main/java/com/framework/auth/service/PasswordExpireService.java"));
+        String test = read(root.resolve(
+                "framework-auth/src/test/java/com/framework/auth/service/PasswordExpireServiceTest.java"));
+
+        assertThat(passwordExpireService)
+                .as("password expiration is security-sensitive while remaining-days is a display query")
+                .contains("PASSWORD_POLICY_UNAVAILABLE_MESSAGE")
+                .contains("ResultCode.SERVICE_ERROR")
+                .contains("passwordPolicyUnavailable")
+                .contains("查询剩余有效天数失败")
+                .contains("return 0");
+        assertThat(test)
+                .contains("redisFailuresDuringPasswordExpirationCheckFailClosed")
+                .contains("redisFailuresDuringPasswordChangeRecordFailClosed")
+                .contains("redisFailuresDuringRemainingDaysQueryFallbackToZero")
+                .contains("redis unavailable");
+    }
+
+    @Test
     void codegenModuleIsRemovedFromTheScaffold() throws Exception {
         assertThat(modules())
                 .as("codegen is intentionally not part of this scaffold")
