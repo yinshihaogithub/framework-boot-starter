@@ -11,6 +11,9 @@ public class PasswordUtils {
      * 加密密码
      */
     public static String hash(String plainPassword) {
+        if (plainPassword == null || plainPassword.isBlank()) {
+            throw new IllegalArgumentException("plainPassword must not be blank");
+        }
         return BCrypt.hashpw(plainPassword, BCrypt.gensalt(10));
     }
 
@@ -18,6 +21,10 @@ public class PasswordUtils {
      * 校验密码
      */
     public static boolean verify(String plainPassword, String hashedPassword) {
+        if (plainPassword == null || plainPassword.isBlank()
+                || hashedPassword == null || hashedPassword.isBlank()) {
+            return false;
+        }
         try {
             return BCrypt.checkpw(plainPassword, hashedPassword);
         } catch (Exception e) {
