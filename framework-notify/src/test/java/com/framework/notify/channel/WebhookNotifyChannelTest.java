@@ -19,6 +19,30 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class WebhookNotifyChannelTest {
 
     @Test
+    void returnsFailureForNullMessageBeforeSending() {
+        WebhookNotifyChannel channel = new WebhookNotifyChannel(new NotifyProperties(), new ObjectMapper());
+
+        NotifyResult result = channel.send(null);
+
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getChannel()).isEqualTo(NotifyChannelType.WEBHOOK);
+        assertThat(result.getMessage()).contains("message must not be null");
+    }
+
+    @Test
+    void returnsFailureForBlankTitleOrContentBeforeSending() {
+        WebhookNotifyChannel channel = new WebhookNotifyChannel(new NotifyProperties(), new ObjectMapper());
+
+        NotifyResult blankTitle = channel.send(message("https://example.com/hook").setTitle(" "));
+        NotifyResult blankContent = channel.send(message("https://example.com/hook").setContent(" "));
+
+        assertThat(blankTitle.isSuccess()).isFalse();
+        assertThat(blankTitle.getMessage()).contains("title must not be blank");
+        assertThat(blankContent.isSuccess()).isFalse();
+        assertThat(blankContent.getMessage()).contains("content must not be blank");
+    }
+
+    @Test
     void returnsFailureForUnsupportedWebhookScheme() {
         WebhookNotifyChannel channel = new WebhookNotifyChannel(new NotifyProperties(), new ObjectMapper());
 

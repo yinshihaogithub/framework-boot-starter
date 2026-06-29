@@ -43,6 +43,10 @@ public class WebhookNotifyChannel implements NotifyChannel {
 
     @Override
     public NotifyResult send(NotifyMessage message) {
+        NotifyResult validationResult = validateMessage(message);
+        if (validationResult != null) {
+            return validationResult;
+        }
         String url = StringUtils.hasText(message.getWebhookUrl())
                 ? message.getWebhookUrl()
                 : properties.getWebhook().getUrl();
@@ -81,6 +85,19 @@ public class WebhookNotifyChannel implements NotifyChannel {
             log.warn("[Webhook通知失败] title={}, error={}", message.getTitle(), failureMessage);
             return NotifyResult.failure(type(), failureMessage);
         }
+    }
+
+    private NotifyResult validateMessage(NotifyMessage message) {
+        if (message == null) {
+            return NotifyResult.failure(type(), "message must not be null");
+        }
+        if (!StringUtils.hasText(message.getTitle())) {
+            return NotifyResult.failure(type(), "title must not be blank");
+        }
+        if (!StringUtils.hasText(message.getContent())) {
+            return NotifyResult.failure(type(), "content must not be blank");
+        }
+        return null;
     }
 
     private List<String> receivers(NotifyMessage message) {
