@@ -183,6 +183,35 @@ class DefaultLocalMessageServiceTest {
     }
 
     @Test
+    void retryDueMessagesProtectsStoredMessageFromHandlerMutationOnSuccess() {
+        InMemoryLocalMessageRepository repository = new InMemoryLocalMessageRepository();
+        DefaultLocalMessageService service = new DefaultLocalMessageService(repository, properties(), List.of(handler(
+                "order.created",
+                message -> message
+                        .setId(999L)
+                        .setTopic("other.topic")
+                        .setPayload("changed")
+                        .setRetryCount(99)
+                        .setMaxRetry(1)
+                        .setStatus(LocalMessageStatus.FAILED)
+                        .setErrorMessage("changed")
+        )));
+        LocalMessage message = service.publish("order.created", "ORD-1", "{}");
+
+        int count = service.retryDueMessages();
+
+        assertThat(count).isEqualTo(1);
+        LocalMessage saved = repository.findById(message.getId()).orElseThrow();
+        assertThat(saved.getStatus()).isEqualTo(LocalMessageStatus.SUCCESS);
+        assertThat(saved.getTopic()).isEqualTo("order.created");
+        assertThat(saved.getPayload()).isEqualTo("{}");
+        assertThat(saved.getRetryCount()).isZero();
+        assertThat(saved.getMaxRetry()).isEqualTo(2);
+        assertThat(saved.getErrorMessage()).isNull();
+        assertThat(repository.findById(999L)).isEmpty();
+    }
+
+    @Test
     void retryNowDispatchesSingleMessageImmediately() {
         InMemoryLocalMessageRepository repository = new InMemoryLocalMessageRepository();
         AtomicInteger handled = new AtomicInteger();
@@ -329,6 +358,31 @@ class DefaultLocalMessageServiceTest {
         LocalMessage failure = repository.findById(message.getId()).orElseThrow();
         assertThat(failure.getStatus()).isEqualTo(LocalMessageStatus.PENDING);
         assertThat(failure.getErrorMessage()).isEqualTo(IllegalStateException.class.getName());
+    }
+
+    @Test
+    void retryDueMessagesProtectsRetryPolicyFromHandlerMutationOnFailure() {
+        InMemoryLocalMessageRepository repository = new InMemoryLocalMessageRepository();
+        DefaultLocalMessageService service = new DefaultLocalMessageService(repository, properties(), List.of(handler(
+                "order.created",
+                message -> {
+                    message.setId(999L)
+                            .setRetryCount(99)
+                            .setMaxRetry(1)
+                            .setStatus(LocalMessageStatus.SUCCESS);
+                    throw new IllegalStateException("handler failed");
+                }
+        )));
+        LocalMessage message = service.publish("order.created", "ORD-1", "{}");
+
+        service.retryDueMessages();
+
+        LocalMessage failure = repository.findById(message.getId()).orElseThrow();
+        assertThat(failure.getStatus()).isEqualTo(LocalMessageStatus.PENDING);
+        assertThat(failure.getRetryCount()).isEqualTo(1);
+        assertThat(failure.getMaxRetry()).isEqualTo(2);
+        assertThat(failure.getErrorMessage()).isEqualTo("handler failed");
+        assertThat(repository.findById(999L)).isEmpty();
     }
 
     @Test

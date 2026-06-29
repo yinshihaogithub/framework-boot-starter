@@ -97,15 +97,37 @@ public class DefaultLocalMessageService implements LocalMessageService {
     }
 
     private void dispatch(LocalMessage message, LocalMessageHandler handler) {
+        Long messageId = message.getId();
         message.setStatus(LocalMessageStatus.PROCESSING);
         message.setNextRetryTime(null);
         repository.save(message);
         try {
-            handler.handle(message);
-            markSuccess(message.getId());
+            handler.handle(copyForHandler(message));
+            markSuccess(messageId);
         } catch (Exception e) {
             markFailure(message, e);
         }
+    }
+
+    private LocalMessage copyForHandler(LocalMessage message) {
+        return new LocalMessage()
+                .setId(message.getId())
+                .setMessageId(message.getMessageId())
+                .setTraceId(message.getTraceId())
+                .setParentMessageId(message.getParentMessageId())
+                .setTopic(message.getTopic())
+                .setBusinessKey(message.getBusinessKey())
+                .setTenantId(message.getTenantId())
+                .setOperator(message.getOperator())
+                .setSource(message.getSource())
+                .setPayload(message.getPayload())
+                .setStatus(message.getStatus())
+                .setRetryCount(message.getRetryCount())
+                .setMaxRetry(message.getMaxRetry())
+                .setNextRetryTime(message.getNextRetryTime())
+                .setErrorMessage(message.getErrorMessage())
+                .setCreateTime(message.getCreateTime())
+                .setUpdateTime(message.getUpdateTime());
     }
 
     private void retryMessage(LocalMessage message) {
