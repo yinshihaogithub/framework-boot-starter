@@ -514,17 +514,22 @@ class RepositoryEngineeringGuardTest {
         String service = read(root.resolve("admin-service/src/main/java/com/framework/admin/system/AdminSystemService.java"));
         String repository = read(root.resolve("admin-service/src/main/java/com/framework/admin/system/AdminSystemRepository.java"));
         String mapper = read(root.resolve("admin-service/src/main/java/com/framework/admin/system/AdminSystemMapper.java"));
+        String sessionManager = read(root.resolve("framework-auth/src/main/java/com/framework/auth/service/SessionManager.java"));
 
         assertThat(service)
                 .as("system management writes must invalidate Redis-backed permission cache")
                 .contains("PermissionCacheService")
+                .contains("SessionManager")
                 .contains("refreshPermissionCache(userId)")
                 .contains("refreshPermissionCache(id)")
                 .contains("repository.listUserIdsByRoleId(id)")
                 .contains("refreshPermissionCache(affectedUserIds)")
                 .contains("clearPermissionCache()")
                 .contains("cacheService.refreshBatch")
-                .contains("cacheService.clearAll");
+                .contains("cacheService.clearAll")
+                .contains("forceLogoutUser(id)")
+                .contains("forceLogoutUsers(affectedUserIds)")
+                .contains("forceLogoutAllUsers()");
         assertThat(repository)
                 .as("role-level permission changes need the affected users")
                 .contains("listUserIdsByRoleId");
@@ -533,6 +538,11 @@ class RepositoryEngineeringGuardTest {
                 .contains("SELECT user_id")
                 .contains("FROM sys_user_role")
                 .contains("WHERE role_id = #{roleId}");
+        assertThat(sessionManager)
+                .as("session permissions are restored from Redis and must be invalidated after permission model changes")
+                .contains("public void forceLogoutAll(Long userId)")
+                .contains("public void forceLogoutAll()")
+                .contains("ScanOptions.scanOptions()");
     }
 
     @Test

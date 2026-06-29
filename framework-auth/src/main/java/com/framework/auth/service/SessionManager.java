@@ -7,8 +7,12 @@ import com.framework.core.constant.FrameworkConstants;
 import com.framework.core.exception.AuthException;
 import com.framework.core.result.ResultCode;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.Cursor;
+import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -204,6 +208,25 @@ public class SessionManager {
         log.info("[强制下线] userId={}, deviceId={}", userId, deviceId);
     }
 
+    /**
+     * 强制下线指定用户的全部设备会话。
+     */
+    public void forceLogoutAll(Long userId) {
+        if (userId == null) {
+            return;
+        }
+        long count = deleteSessionKeys(FrameworkConstants.SESSION_PREFIX + userId + ":*");
+        log.info("[强制下线] userId={}, count={}", userId, count);
+    }
+
+    /**
+     * 强制下线全部在线会话，适用于菜单权限模型变更。
+     */
+    public void forceLogoutAll() {
+        long count = deleteSessionKeys(FrameworkConstants.SESSION_PREFIX + "*");
+        log.info("[强制下线] allSessions=true, count={}", count);
+    }
+
     // ===== 私有方法 =====
 
     private void kickOutOldSession(Long userId, String deviceId) {
@@ -230,6 +253,34 @@ public class SessionManager {
 
     private boolean isInBlacklist(String token) {
         return Boolean.TRUE.equals(redis.hasKey(FrameworkConstants.TOKEN_BLACKLIST_PREFIX + token));
+    }
+
+    private long deleteSessionKeys(String pattern) {
+        List<String> keys = scanKeys(pattern);
+        if (keys.isEmpty()) {
+            return 0;
+        }
+        Long deleted = redis.delete(keys);
+        return deleted == null ? 0 : deleted;
+    }
+
+    private List<String> scanKeys(String pattern) {
+        List<String> keys = new ArrayList<>();
+        Cursor<String> cursor = redis.scan(ScanOptions.scanOptions()
+                .match(pattern)
+                .count(1000)
+                .build());
+        if (cursor == null) {
+            return keys;
+        }
+        try {
+            while (cursor.hasNext()) {
+                keys.add(cursor.next());
+            }
+            return keys;
+        } finally {
+            cursor.close();
+        }
     }
 
     private String buildSessionKey(Long userId, String deviceId) {

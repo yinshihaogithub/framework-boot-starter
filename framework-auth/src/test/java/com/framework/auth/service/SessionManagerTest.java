@@ -4,12 +4,18 @@ import com.framework.auth.context.LoginUser;
 import com.framework.auth.jwt.JwtUtils;
 import com.framework.core.constant.FrameworkConstants;
 import org.junit.jupiter.api.Test;
+import org.springframework.data.redis.core.Cursor;
 import org.springframework.data.redis.core.HashOperations;
+import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
 import java.lang.reflect.Proxy;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
@@ -68,6 +74,35 @@ class SessionManagerTest {
         assertThat(sessionManager.getLoginUser(user.getAccessToken())).isNull();
     }
 
+    @Test
+    void forceLogoutAllRemovesEverySessionOfUser() {
+        LoginUser web = sessionManager.createSession(1L, "alice", "tenant-a", "web",
+                new String[]{"ADMIN"}, new String[]{"user:view"});
+        LoginUser app = sessionManager.createSession(1L, "alice", "tenant-a", "app",
+                new String[]{"ADMIN"}, new String[]{"user:view"});
+        LoginUser other = sessionManager.createSession(2L, "bob", "tenant-a", "web",
+                new String[]{"USER"}, new String[]{"profile:view"});
+
+        sessionManager.forceLogoutAll(1L);
+
+        assertThat(sessionManager.validateAccessToken(web.getAccessToken())).isFalse();
+        assertThat(sessionManager.validateAccessToken(app.getAccessToken())).isFalse();
+        assertThat(sessionManager.validateAccessToken(other.getAccessToken())).isTrue();
+    }
+
+    @Test
+    void forceLogoutAllWithoutUserRemovesEverySession() {
+        LoginUser alice = sessionManager.createSession(1L, "alice", "tenant-a", "web",
+                new String[]{"ADMIN"}, new String[]{"user:view"});
+        LoginUser bob = sessionManager.createSession(2L, "bob", "tenant-a", "web",
+                new String[]{"USER"}, new String[]{"profile:view"});
+
+        sessionManager.forceLogoutAll();
+
+        assertThat(sessionManager.validateAccessToken(alice.getAccessToken())).isFalse();
+        assertThat(sessionManager.validateAccessToken(bob.getAccessToken())).isFalse();
+    }
+
     private static final class InMemoryRedisTemplate extends StringRedisTemplate {
 
         private final Map<String, String> values = new ConcurrentHashMap<>();
@@ -88,6 +123,30 @@ class SessionManagerTest {
             boolean removedValue = values.remove(key) != null;
             boolean removedHash = hashes.remove(key) != null;
             return removedValue || removedHash;
+        }
+
+        @Override
+        public Long delete(Collection<String> keys) {
+            long deleted = 0;
+            for (String key : keys) {
+                if (Boolean.TRUE.equals(delete(key))) {
+                    deleted++;
+                }
+            }
+            return deleted;
+        }
+
+        @Override
+        public Cursor<String> scan(ScanOptions options) {
+            String pattern = options == null ? "*" : options.getPattern();
+            List<String> keys = new ArrayList<>();
+            values.keySet().stream()
+                    .filter(key -> matches(pattern, key))
+                    .forEach(keys::add);
+            hashes.keySet().stream()
+                    .filter(key -> matches(pattern, key))
+                    .forEach(keys::add);
+            return new ListCursor(keys);
         }
 
         @Override
@@ -158,6 +217,57 @@ class SessionManagerTest {
                 return 0D;
             }
             return null;
+        }
+
+        private static boolean matches(String pattern, String key) {
+            if (pattern == null || "*".equals(pattern)) {
+                return true;
+            }
+            String regex = pattern
+                    .replace(".", "\\.")
+                    .replace("*", ".*");
+            return key.matches(regex);
+        }
+    }
+
+    private static final class ListCursor implements Cursor<String> {
+        private final Iterator<String> iterator;
+        private boolean closed;
+        private long position;
+
+        private ListCursor(List<String> values) {
+            this.iterator = values.iterator();
+        }
+
+        @Override
+        public long getCursorId() {
+            return 0;
+        }
+
+        @Override
+        public boolean isClosed() {
+            return closed;
+        }
+
+        @Override
+        public long getPosition() {
+            return position;
+        }
+
+        @Override
+        public boolean hasNext() {
+            return !closed && iterator.hasNext();
+        }
+
+        @Override
+        public String next() {
+            position++;
+            return iterator.next();
+        }
+
+        @Override
+        public void close() {
+            closed = true;
         }
     }
 }

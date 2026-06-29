@@ -25,6 +25,7 @@ import com.framework.core.result.PageResult;
 import com.framework.core.result.Result;
 import com.framework.core.result.ResultCode;
 import com.framework.auth.util.PasswordValidator;
+import com.framework.auth.service.SessionManager;
 import com.framework.crypto.util.PasswordUtils;
 import com.framework.security.service.PermissionCacheService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -49,17 +50,20 @@ public class AdminSystemService {
     private final AdminSystemRepository repository;
     private final AdminAuditService auditService;
     private final ObjectProvider<PermissionCacheService> permissionCacheServiceProvider;
+    private final ObjectProvider<SessionManager> sessionManagerProvider;
 
     public AdminSystemService(AdminSystemRepository repository, AdminAuditService auditService) {
-        this(repository, auditService, null);
+        this(repository, auditService, null, null);
     }
 
     @Autowired
     public AdminSystemService(AdminSystemRepository repository, AdminAuditService auditService,
-                              ObjectProvider<PermissionCacheService> permissionCacheServiceProvider) {
+                              ObjectProvider<PermissionCacheService> permissionCacheServiceProvider,
+                              ObjectProvider<SessionManager> sessionManagerProvider) {
         this.repository = repository;
         this.auditService = auditService;
         this.permissionCacheServiceProvider = permissionCacheServiceProvider;
+        this.sessionManagerProvider = sessionManagerProvider;
     }
 
     public List<Tenant> tenants() {
@@ -173,6 +177,7 @@ public class AdminSystemService {
         }
         repository.updateUser(id, request);
         refreshPermissionCache(id);
+        forceLogoutUser(id);
         auditService.success(servletRequest, "系统管理", "更新用户", "UPDATE",
                 auditService.params("userId", id, "nickname", request.getNickname(), "status", request.getStatus(),
                         "roleIds", request.getRoleIds()));
@@ -186,6 +191,7 @@ public class AdminSystemService {
         }
         repository.updateUserStatus(id, status);
         refreshPermissionCache(id);
+        forceLogoutUser(id);
         auditService.success(servletRequest, "系统管理", "更新用户状态", "UPDATE",
                 auditService.params("userId", id, "status", status));
         return Result.success("已更新");
@@ -200,6 +206,7 @@ public class AdminSystemService {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), passwordError);
         }
         repository.resetPassword(id, PasswordUtils.hash(request.getPassword()));
+        forceLogoutUser(id);
         auditService.success(servletRequest, "系统管理", "重置用户密码", "UPDATE",
                 auditService.params("userId", id));
         return Result.success("已重置");
@@ -211,6 +218,7 @@ public class AdminSystemService {
         }
         repository.deleteUser(id);
         refreshPermissionCache(id);
+        forceLogoutUser(id);
         auditService.success(servletRequest, "系统管理", "删除用户", "DELETE",
                 auditService.params("userId", id));
         return Result.success("已删除");
@@ -239,6 +247,7 @@ public class AdminSystemService {
         List<Long> affectedUserIds = repository.listUserIdsByRoleId(id);
         repository.updateRole(id, request);
         refreshPermissionCache(affectedUserIds);
+        forceLogoutUsers(affectedUserIds);
         auditService.success(servletRequest, "系统管理", "更新角色", "UPDATE",
                 auditService.params("roleId", id, "roleCode", request.getRoleCode(), "status", request.getStatus()));
         return Result.success("已更新");
@@ -251,6 +260,7 @@ public class AdminSystemService {
         List<Long> affectedUserIds = repository.listUserIdsByRoleId(id);
         repository.deleteRole(id);
         refreshPermissionCache(affectedUserIds);
+        forceLogoutUsers(affectedUserIds);
         auditService.success(servletRequest, "系统管理", "删除角色", "DELETE",
                 auditService.params("roleId", id));
         return Result.success("已删除");
@@ -264,6 +274,7 @@ public class AdminSystemService {
         List<Long> affectedUserIds = repository.listUserIdsByRoleId(id);
         repository.replaceRoleMenus(id, request == null ? List.of() : request.getMenuIds());
         refreshPermissionCache(affectedUserIds);
+        forceLogoutUsers(affectedUserIds);
         auditService.success(servletRequest, "系统管理", "角色菜单授权", "UPDATE",
                 auditService.params("roleId", id, "menuIds", request == null ? List.of() : request.getMenuIds()));
         return Result.success("已授权");
@@ -295,6 +306,7 @@ public class AdminSystemService {
         }
         repository.updateMenu(id, request);
         clearPermissionCache();
+        forceLogoutAllUsers();
         auditService.success(servletRequest, "系统管理", "更新菜单", "UPDATE",
                 auditService.params("menuId", id, "menuName", request.getMenuName(), "permission", request.getPermission()));
         return Result.success("已更新");
@@ -303,6 +315,7 @@ public class AdminSystemService {
     public Result<String> deleteMenu(Long id, HttpServletRequest servletRequest) {
         repository.deleteMenu(id);
         clearPermissionCache();
+        forceLogoutAllUsers();
         auditService.success(servletRequest, "系统管理", "删除菜单", "DELETE",
                 auditService.params("menuId", id));
         return Result.success("已删除");
@@ -476,8 +489,47 @@ public class AdminSystemService {
         }
     }
 
+    private void forceLogoutUser(Long userId) {
+        if (userId == null) {
+            return;
+        }
+        try {
+            SessionManager sessionManager = sessionManager();
+            if (sessionManager != null) {
+                sessionManager.forceLogoutAll(userId);
+            }
+        } catch (RuntimeException e) {
+            log.warn("[权限会话] 强制下线用户失败 userId={}", userId, e);
+        }
+    }
+
+    private void forceLogoutUsers(List<Long> userIds) {
+        if (userIds == null || userIds.isEmpty()) {
+            return;
+        }
+        userIds.stream()
+                .filter(userId -> userId != null)
+                .distinct()
+                .forEach(this::forceLogoutUser);
+    }
+
+    private void forceLogoutAllUsers() {
+        try {
+            SessionManager sessionManager = sessionManager();
+            if (sessionManager != null) {
+                sessionManager.forceLogoutAll();
+            }
+        } catch (RuntimeException e) {
+            log.warn("[权限会话] 强制下线全部用户失败", e);
+        }
+    }
+
     private PermissionCacheService permissionCacheService() {
         return permissionCacheServiceProvider == null ? null : permissionCacheServiceProvider.getIfAvailable();
+    }
+
+    private SessionManager sessionManager() {
+        return sessionManagerProvider == null ? null : sessionManagerProvider.getIfAvailable();
     }
 
     private Result<String> validateRole(RoleRequest request) {
