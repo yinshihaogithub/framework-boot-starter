@@ -25,7 +25,7 @@ class GlobalExceptionHandlerTest {
     @Test
     void noResourceFoundReturnsNotFoundResult() {
         Result<Void> result = handler.handleNoResourceFound(new NoResourceFoundException(
-                HttpMethod.POST, "/admin/excel/tasks/demo-export"));
+                HttpMethod.POST, "admin/excel/tasks/demo-export"));
 
         assertThat(result.getCode()).isEqualTo(ResultCode.NOT_FOUND.getCode());
         assertThat(result.getMessage()).isEqualTo("接口不存在: /admin/excel/tasks/demo-export");

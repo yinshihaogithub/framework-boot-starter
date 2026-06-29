@@ -121,7 +121,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(NoResourceFoundException.class)
     @ResponseStatus(HttpStatus.NOT_FOUND)
     public Result<Void> handleNoResourceFound(NoResourceFoundException e) {
-        return Result.fail(ResultCode.NOT_FOUND.getCode(), "接口不存在: " + e.getResourcePath());
+        return Result.fail(ResultCode.NOT_FOUND.getCode(), "接口不存在: " + normalizePath(e.getResourcePath()));
     }
 
     /**
@@ -152,5 +152,12 @@ public class GlobalExceptionHandler {
     public Result<Void> handleException(Exception e, HttpServletRequest request) {
         log.error("[系统异常] uri={}", request.getRequestURI(), e);
         return Result.fail(ResultCode.FAIL.getCode(), "系统繁忙，请稍后重试");
+    }
+
+    private String normalizePath(String path) {
+        if (path == null || path.isBlank() || path.startsWith("/")) {
+            return path;
+        }
+        return "/" + path;
     }
 }
