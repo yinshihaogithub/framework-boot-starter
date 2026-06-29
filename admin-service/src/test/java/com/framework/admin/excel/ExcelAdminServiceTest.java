@@ -220,6 +220,17 @@ class ExcelAdminServiceTest {
         assertThat(errors).isEmpty();
     }
 
+    @Test
+    void errorsRejectInvalidTaskIdBeforeRepositoryLookup() {
+        InMemoryExcelAdminRepository repository = new InMemoryExcelAdminRepository();
+        ExcelAdminService service = service(repository, null);
+
+        assertThat(service.errors(0L)).isEmpty();
+        assertThat(service.errors(null)).isEmpty();
+
+        assertThat(repository.listErrorsTaskId).isNull();
+    }
+
     private static ExcelAdminService service(ExcelAdminRepository repository, ExcelExportService exportService) {
         return service(repository, exportService, auditService());
     }
@@ -358,6 +369,7 @@ class ExcelAdminServiceTest {
         private final List<ExcelAdminModels.ErrorRecord> errorRecords = new ArrayList<>();
         private long nextTaskId = 1;
         private long nextErrorId = 1;
+        private Long listErrorsTaskId;
         private RuntimeException commandFailure;
 
         private InMemoryExcelAdminRepository() {
@@ -410,6 +422,7 @@ class ExcelAdminServiceTest {
 
         @Override
         public List<ExcelAdminModels.ErrorRecord> listErrors(Long taskId) {
+            this.listErrorsTaskId = taskId;
             return errors(taskId);
         }
 

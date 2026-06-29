@@ -170,6 +170,9 @@ public class ExcelAdminService {
     }
 
     public List<ExcelAdminModels.ErrorRecord> errors(Long taskId) {
+        if (taskId == null || taskId <= 0) {
+            return List.of();
+        }
         try {
             return repository.listErrors(taskId);
         } catch (Exception ignored) {
