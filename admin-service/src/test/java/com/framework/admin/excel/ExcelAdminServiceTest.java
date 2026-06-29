@@ -29,6 +29,16 @@ class ExcelAdminServiceTest {
     }
 
     @Test
+    void exportTaskReturnsEmptyWhenExportProviderFails() {
+        ExcelAdminService service = new ExcelAdminService(
+                new InMemoryExcelAdminRepository(), failingProvider(), auditService());
+
+        Optional<ExcelAdminModels.TaskResult> result = service.createExportTask(null, null);
+
+        assertThat(result).isEmpty();
+    }
+
+    @Test
     void exportTaskCreatesSuccessTask() {
         InMemoryExcelAdminRepository repository = new InMemoryExcelAdminRepository();
         CapturingExcelExportService exportService = new CapturingExcelExportService();
@@ -123,11 +133,31 @@ class ExcelAdminServiceTest {
                 .containsExactly(org.assertj.core.groups.Tuple.tuple("EXPORT", "SUCCESS"));
     }
 
-    private static ExcelAdminService service(InMemoryExcelAdminRepository repository, ExcelExportService exportService) {
+    @Test
+    void queryEndpointsFallBackWhenRepositoryFails() {
+        ExcelAdminService service = service(new FailingExcelAdminRepository(), null);
+
+        Map<String, Long> stats = service.stats();
+        PageResult<ExcelAdminModels.Task> page = service.tasks(null, null, -1, 500);
+        List<ExcelAdminModels.ErrorRecord> errors = service.errors(1L);
+
+        assertThat(stats)
+                .containsEntry("total", 0L)
+                .containsEntry("success", 0L)
+                .containsEntry("failed", 0L)
+                .containsEntry("import", 0L)
+                .containsEntry("export", 0L);
+        assertThat(page.getPageNum()).isEqualTo(1);
+        assertThat(page.getPageSize()).isEqualTo(200);
+        assertThat(page.getRecords()).isEmpty();
+        assertThat(errors).isEmpty();
+    }
+
+    private static ExcelAdminService service(ExcelAdminRepository repository, ExcelExportService exportService) {
         return service(repository, exportService, auditService());
     }
 
-    private static ExcelAdminService service(InMemoryExcelAdminRepository repository, ExcelExportService exportService,
+    private static ExcelAdminService service(ExcelAdminRepository repository, ExcelExportService exportService,
                                              AdminAuditService auditService) {
         return new ExcelAdminService(repository, provider(exportService), auditService);
     }
@@ -157,6 +187,35 @@ class ExcelAdminServiceTest {
             @Override
             public Stream<T> stream() {
                 return value == null ? Stream.empty() : Stream.of(value);
+            }
+        };
+    }
+
+    private static <T> ObjectProvider<T> failingProvider() {
+        return new ObjectProvider<>() {
+            @Override
+            public T getObject(Object... args) {
+                throw new IllegalStateException("excel provider unavailable");
+            }
+
+            @Override
+            public T getIfAvailable() {
+                throw new IllegalStateException("excel provider unavailable");
+            }
+
+            @Override
+            public T getIfUnique() {
+                throw new IllegalStateException("excel provider unavailable");
+            }
+
+            @Override
+            public T getObject() {
+                throw new IllegalStateException("excel provider unavailable");
+            }
+
+            @Override
+            public Stream<T> stream() {
+                return Stream.empty();
             }
         };
     }
@@ -271,6 +330,32 @@ class ExcelAdminServiceTest {
             return errorRecords.stream()
                     .filter(error -> taskId.equals(error.getTaskId()))
                     .toList();
+        }
+    }
+
+    private static class FailingExcelAdminRepository extends ExcelAdminRepository {
+        private FailingExcelAdminRepository() {
+            super(null);
+        }
+
+        @Override
+        public List<ExcelAdminModels.Task> listTasks(String taskType, String status, int pageNum, int pageSize) {
+            throw new IllegalStateException("excel repository unavailable");
+        }
+
+        @Override
+        public long countTasks(String taskType, String status) {
+            throw new IllegalStateException("excel repository unavailable");
+        }
+
+        @Override
+        public Map<String, Long> stats() {
+            throw new IllegalStateException("excel repository unavailable");
+        }
+
+        @Override
+        public List<ExcelAdminModels.ErrorRecord> listErrors(Long taskId) {
+            throw new IllegalStateException("excel repository unavailable");
         }
     }
 }

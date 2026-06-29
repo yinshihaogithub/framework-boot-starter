@@ -37,7 +37,11 @@ public class ExcelAdminService {
     }
 
     public Map<String, Long> stats() {
-        return repository.stats();
+        try {
+            return repository.stats();
+        } catch (Exception ignored) {
+            return zeroStats();
+        }
     }
 
     public PageResult<ExcelAdminModels.Task> tasks(String taskType, String status, int pageNum, int pageSize) {
@@ -45,15 +49,19 @@ public class ExcelAdminService {
         int safePageSize = safePageSize(pageSize);
         String normalizedTaskType = normalize(taskType);
         String normalizedStatus = normalize(status);
-        List<ExcelAdminModels.Task> records = repository.listTasks(normalizedTaskType, normalizedStatus,
-                safePageNum, safePageSize);
-        long total = repository.countTasks(normalizedTaskType, normalizedStatus);
-        return PageResult.of(records, total, safePageNum, safePageSize);
+        try {
+            List<ExcelAdminModels.Task> records = repository.listTasks(normalizedTaskType, normalizedStatus,
+                    safePageNum, safePageSize);
+            long total = repository.countTasks(normalizedTaskType, normalizedStatus);
+            return PageResult.of(records, total, safePageNum, safePageSize);
+        } catch (Exception ignored) {
+            return PageResult.empty(safePageNum, safePageSize);
+        }
     }
 
     public Optional<ExcelAdminModels.TaskResult> createExportTask(ExcelAdminModels.ExportRequest request,
                                                                   HttpServletRequest servletRequest) {
-        ExcelExportService exportService = exportServiceProvider.getIfAvailable();
+        ExcelExportService exportService = available(exportServiceProvider);
         if (exportService == null) {
             return Optional.empty();
         }
@@ -145,7 +153,11 @@ public class ExcelAdminService {
     }
 
     public List<ExcelAdminModels.ErrorRecord> errors(Long taskId) {
-        return repository.listErrors(taskId);
+        try {
+            return repository.listErrors(taskId);
+        } catch (Exception ignored) {
+            return List.of();
+        }
     }
 
     private int safePageNum(int pageNum) {
@@ -170,6 +182,21 @@ public class ExcelAdminService {
     private String errorMessage(RuntimeException exception) {
         String message = exception.getMessage();
         return message == null || message.isBlank() ? exception.getClass().getSimpleName() : message;
+    }
+
+    private Map<String, Long> zeroStats() {
+        return Map.of("total", 0L, "success", 0L, "failed", 0L, "import", 0L, "export", 0L);
+    }
+
+    private <T> T available(ObjectProvider<T> provider) {
+        if (provider == null) {
+            return null;
+        }
+        try {
+            return provider.getIfAvailable();
+        } catch (RuntimeException ignored) {
+            return null;
+        }
     }
 
     @Data
