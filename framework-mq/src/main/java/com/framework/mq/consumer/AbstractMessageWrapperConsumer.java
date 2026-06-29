@@ -66,14 +66,23 @@ public abstract class AbstractMessageWrapperConsumer<T> {
         if (redisTemplate == null || key == null || key.isBlank()) {
             return false;
         }
-        return Boolean.TRUE.equals(redisTemplate.hasKey(IDEMPOTENT_PREFIX + key));
+        try {
+            return Boolean.TRUE.equals(redisTemplate.hasKey(IDEMPOTENT_PREFIX + key));
+        } catch (Exception e) {
+            log.warn("[MQ消费] Redis幂等检查失败 key={} error={}", key, e.getMessage());
+            return false;
+        }
     }
 
     private void markConsumed(String key) {
         if (redisTemplate == null || key == null || key.isBlank()) {
             return;
         }
-        redisTemplate.opsForValue().set(IDEMPOTENT_PREFIX + key, "1", 7, TimeUnit.DAYS);
+        try {
+            redisTemplate.opsForValue().set(IDEMPOTENT_PREFIX + key, "1", 7, TimeUnit.DAYS);
+        } catch (Exception e) {
+            log.warn("[MQ消费] Redis幂等标记失败 key={} error={}", key, e.getMessage());
+        }
     }
 
     private String firstText(String... values) {

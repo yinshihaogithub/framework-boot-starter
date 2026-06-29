@@ -380,6 +380,35 @@ class RepositoryEngineeringGuardTest {
     }
 
     @Test
+    void mqConsumerRedisIdempotentFailuresDoNotBlockConsumption() throws Exception {
+        String wrapperConsumer = read(root.resolve(
+                "framework-mq/src/main/java/com/framework/mq/consumer/AbstractMessageWrapperConsumer.java"));
+        String rabbitConsumer = read(root.resolve(
+                "framework-mq/src/main/java/com/framework/mq/consumer/AbstractMqConsumer.java"));
+        String wrapperConsumerTest = read(root.resolve(
+                "framework-mq/src/test/java/com/framework/mq/consumer/AbstractMessageWrapperConsumerTest.java"));
+        String rabbitConsumerTest = read(root.resolve(
+                "framework-mq/src/test/java/com/framework/mq/consumer/AbstractMqConsumerTest.java"));
+
+        assertThat(wrapperConsumer)
+                .as("provider-neutral MQ consumers must treat Redis idempotency as an enhancement")
+                .contains("Redis幂等检查失败")
+                .contains("Redis幂等标记失败")
+                .contains("return false");
+        assertThat(rabbitConsumer)
+                .as("Rabbit MQ consumers must treat Redis idempotency as an enhancement")
+                .contains("Redis幂等检查失败")
+                .contains("Redis幂等标记失败")
+                .contains("return false");
+        assertThat(wrapperConsumerTest)
+                .contains("redisIdempotentFailuresDoNotBlockConsumption")
+                .contains("redis unavailable");
+        assertThat(rabbitConsumerTest)
+                .contains("redisIdempotentFailuresDoNotBlockRabbitConsumption")
+                .contains("redis unavailable");
+    }
+
+    @Test
     void codegenModuleIsRemovedFromTheScaffold() throws Exception {
         assertThat(modules())
                 .as("codegen is intentionally not part of this scaffold")

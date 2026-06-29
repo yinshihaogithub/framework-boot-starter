@@ -53,6 +53,17 @@ class AbstractMessageWrapperConsumerTest {
         assertThat(consumer.observedTrace).hasValue("header-trace");
     }
 
+    @Test
+    void redisIdempotentFailuresDoNotBlockConsumption() throws Exception {
+        RecordingConsumer consumer = new RecordingConsumer(new ThrowingRedisTemplate());
+        MessageWrapper<String> wrapper = MessageWrapper.of("ORDER-11", "OrderCreated", "payload");
+
+        boolean consumed = consumer.consume(objectMapper.writeValueAsString(wrapper));
+
+        assertThat(consumed).isTrue();
+        assertThat(consumer.runs).hasValue(1);
+    }
+
     private static class RecordingConsumer extends AbstractMessageWrapperConsumer<String> {
 
         private final AtomicInteger runs = new AtomicInteger();
@@ -98,6 +109,32 @@ class AbstractMessageWrapperConsumerTest {
                         }
                         return defaultValue(method.getReturnType());
                     });
+        }
+    }
+
+    private static class ThrowingRedisTemplate extends StringRedisTemplate {
+
+        @Override
+        public Boolean hasKey(String key) {
+            throw unavailable();
+        }
+
+        @Override
+        @SuppressWarnings("unchecked")
+        public ValueOperations<String, String> opsForValue() {
+            return (ValueOperations<String, String>) Proxy.newProxyInstance(
+                    ValueOperations.class.getClassLoader(),
+                    new Class<?>[]{ValueOperations.class},
+                    (proxy, method, args) -> {
+                        if ("set".equals(method.getName())) {
+                            throw unavailable();
+                        }
+                        return defaultValue(method.getReturnType());
+                    });
+        }
+
+        private static IllegalStateException unavailable() {
+            return new IllegalStateException("redis unavailable");
         }
     }
 

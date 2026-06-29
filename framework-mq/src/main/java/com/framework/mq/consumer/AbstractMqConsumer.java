@@ -131,8 +131,13 @@ public abstract class AbstractMqConsumer<T> {
             return false;
         }
         String redisKey = IDEMPOTENT_PREFIX + key;
-        // key 已存在说明已消费过
-        return Boolean.TRUE.equals(redisTemplate.hasKey(redisKey));
+        try {
+            // key 已存在说明已消费过
+            return Boolean.TRUE.equals(redisTemplate.hasKey(redisKey));
+        } catch (Exception e) {
+            log.warn("[MQ消费] Redis幂等检查失败 key={} error={}", key, e.getMessage());
+            return false;
+        }
     }
 
     /**
@@ -143,7 +148,11 @@ public abstract class AbstractMqConsumer<T> {
             return;
         }
         String redisKey = IDEMPOTENT_PREFIX + key;
-        redisTemplate.opsForValue().set(redisKey, "1", 7, TimeUnit.DAYS);
+        try {
+            redisTemplate.opsForValue().set(redisKey, "1", 7, TimeUnit.DAYS);
+        } catch (Exception e) {
+            log.warn("[MQ消费] Redis幂等标记失败 key={} error={}", key, e.getMessage());
+        }
     }
 
     /**

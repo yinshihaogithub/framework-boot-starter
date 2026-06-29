@@ -9,6 +9,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.core.MessageProperties;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
 
 import java.lang.reflect.Proxy;
 import java.nio.charset.StandardCharsets;
@@ -49,6 +51,26 @@ class AbstractMqConsumerTest {
         assertThat(channel.nacked()).isFalse();
     }
 
+    @Test
+    void redisIdempotentFailuresDoNotBlockRabbitConsumption() throws Exception {
+        RecordingRabbitConsumer consumer = new RecordingRabbitConsumer(new ThrowingRedisTemplate());
+        MessageWrapper<String> wrapper = MessageWrapper.of("ORDER-4", "OrderCreated", "订单创建");
+        wrapper.setTraceId("wrapper-trace");
+        MessageProperties properties = new MessageProperties();
+        properties.setDeliveryTag(101L);
+        properties.setMessageId("rabbit-message-id");
+        Message message = new Message(
+                objectMapper.writeValueAsString(wrapper).getBytes(StandardCharsets.UTF_8),
+                properties);
+        RecordingChannel channel = new RecordingChannel();
+
+        consumer.handleMessage(message, channel.proxy());
+
+        assertThat(consumer.lastWrapper().getPayload()).isEqualTo("订单创建");
+        assertThat(channel.ackedDeliveryTag()).isEqualTo(101L);
+        assertThat(channel.nacked()).isFalse();
+    }
+
     private static class RecordingRabbitConsumer extends AbstractMqConsumer<String> {
 
         private final AtomicReference<String> observedTrace = new AtomicReference<>();
@@ -56,6 +78,10 @@ class AbstractMqConsumerTest {
 
         RecordingRabbitConsumer() {
             super(null, String.class);
+        }
+
+        RecordingRabbitConsumer(StringRedisTemplate redisTemplate) {
+            super(redisTemplate, String.class);
         }
 
         @Override
@@ -132,6 +158,32 @@ class AbstractMqConsumerTest {
                 return 0D;
             }
             return null;
+        }
+    }
+
+    private static class ThrowingRedisTemplate extends StringRedisTemplate {
+
+        @Override
+        public Boolean hasKey(String key) {
+            throw unavailable();
+        }
+
+        @Override
+        @SuppressWarnings("unchecked")
+        public ValueOperations<String, String> opsForValue() {
+            return (ValueOperations<String, String>) Proxy.newProxyInstance(
+                    ValueOperations.class.getClassLoader(),
+                    new Class<?>[]{ValueOperations.class},
+                    (proxy, method, args) -> {
+                        if ("set".equals(method.getName())) {
+                            throw unavailable();
+                        }
+                        return RecordingChannel.defaultValue(method.getReturnType());
+                    });
+        }
+
+        private static IllegalStateException unavailable() {
+            return new IllegalStateException("redis unavailable");
         }
     }
 }
