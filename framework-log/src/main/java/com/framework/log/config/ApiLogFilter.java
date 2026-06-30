@@ -40,8 +40,7 @@ public class ApiLogFilter extends OncePerRequestFilter {
     protected void doFilterInternal(jakarta.servlet.http.HttpServletRequest request,
                                     HttpServletResponse response,
                                     FilterChain chain) throws ServletException, IOException {
-        // 采样判断
-        if (!storageService.shouldLogApi()) {
+        if (!shouldLogApi()) {
             chain.doFilter(request, response);
             return;
         }
@@ -76,10 +75,24 @@ public class ApiLogFilter extends OncePerRequestFilter {
                     entity.setParams(LogDesensitizeUtils.desensitize(queryString));
                 }
 
-                storageService.saveAsync(entity);
+                if (storageService != null) {
+                    storageService.saveAsync(entity);
+                }
             } catch (Exception e) {
                 log.debug("[API日志] 记录失败: {}", e.getMessage());
             }
+        }
+    }
+
+    private boolean shouldLogApi() {
+        if (storageService == null) {
+            return false;
+        }
+        try {
+            return storageService.shouldLogApi();
+        } catch (Exception e) {
+            log.debug("[API日志] 采样判断失败: {}", e.getMessage());
+            return false;
         }
     }
 
