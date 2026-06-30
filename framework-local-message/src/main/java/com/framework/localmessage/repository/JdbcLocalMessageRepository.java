@@ -48,11 +48,7 @@ public class JdbcLocalMessageRepository implements LocalMessageRepository {
 
     @Override
     public LocalMessage save(LocalMessage message) {
-        LocalDateTime now = LocalDateTime.now();
-        if (message.getCreateTime() == null) {
-            message.setCreateTime(now);
-        }
-        message.setUpdateTime(now);
+        touch(message);
 
         if (message.getId() == null) {
             KeyHolder keyHolder = new GeneratedKeyHolder();
@@ -73,7 +69,80 @@ public class JdbcLocalMessageRepository implements LocalMessageRepository {
             return message;
         }
 
-        jdbcTemplate.update("""
+        updateExisting(message);
+        return message;
+    }
+
+    @Override
+    public boolean update(LocalMessage message) {
+        touch(message);
+        return updateExisting(message) > 0;
+    }
+
+    @Override
+    public Optional<LocalMessage> findById(Long id) {
+        List<LocalMessage> messages = jdbcTemplate.query(
+                "SELECT * FROM %s WHERE id = ?".formatted(tableName),
+                rowMapper,
+                id);
+        return messages.stream().findFirst();
+    }
+
+    @Override
+    public List<LocalMessage> findDueMessages(LocalDateTime now, int limit) {
+        return jdbcTemplate.query("""
+                        SELECT * FROM %s
+                        WHERE status = ?
+                          AND (next_retry_time IS NULL OR next_retry_time <= ?)
+                        ORDER BY create_time ASC
+                        LIMIT ?
+                        """.formatted(tableName),
+                rowMapper,
+                LocalMessageStatus.PENDING.name(),
+                toTimestamp(now),
+                limit);
+    }
+
+    @Override
+    public List<LocalMessage> findAll() {
+        return jdbcTemplate.query(
+                "SELECT * FROM %s ORDER BY id ASC".formatted(tableName),
+                rowMapper);
+    }
+
+    @Override
+    public boolean delete(Long id) {
+        return jdbcTemplate.update("DELETE FROM %s WHERE id = ?".formatted(tableName), id) > 0;
+    }
+
+    public static String validateTableName(String tableName) {
+        if (tableName == null || !tableName.matches("[A-Za-z0-9_]+")) {
+            throw new IllegalArgumentException("local message tableName must match [A-Za-z0-9_]+");
+        }
+        return tableName;
+    }
+
+    private static void bindMessage(PreparedStatement ps, LocalMessage message) throws java.sql.SQLException {
+        ps.setString(1, message.getMessageId());
+        ps.setString(2, message.getTraceId());
+        ps.setString(3, message.getParentMessageId());
+        ps.setString(4, message.getTopic());
+        ps.setString(5, message.getBusinessKey());
+        ps.setString(6, message.getTenantId());
+        ps.setString(7, message.getOperator());
+        ps.setString(8, message.getSource());
+        ps.setString(9, message.getPayload());
+        ps.setString(10, message.getStatus().name());
+        ps.setInt(11, message.getRetryCount());
+        ps.setInt(12, message.getMaxRetry());
+        ps.setTimestamp(13, toTimestamp(message.getNextRetryTime()));
+        ps.setString(14, message.getErrorMessage());
+        ps.setTimestamp(15, toTimestamp(message.getCreateTime()));
+        ps.setTimestamp(16, toTimestamp(message.getUpdateTime()));
+    }
+
+    private int updateExisting(LocalMessage message) {
+        return jdbcTemplate.update("""
                         UPDATE %s SET
                             message_id = ?,
                             trace_id = ?,
@@ -110,69 +179,15 @@ public class JdbcLocalMessageRepository implements LocalMessageRepository {
                 toTimestamp(message.getCreateTime()),
                 toTimestamp(message.getUpdateTime()),
                 message.getId());
-        return message;
     }
 
-    @Override
-    public Optional<LocalMessage> findById(Long id) {
-        List<LocalMessage> messages = jdbcTemplate.query(
-                "SELECT * FROM %s WHERE id = ?".formatted(tableName),
-                rowMapper,
-                id);
-        return messages.stream().findFirst();
-    }
-
-    @Override
-    public List<LocalMessage> findDueMessages(LocalDateTime now, int limit) {
-        return jdbcTemplate.query("""
-                        SELECT * FROM %s
-                        WHERE status = ?
-                          AND (next_retry_time IS NULL OR next_retry_time <= ?)
-                        ORDER BY create_time ASC
-                        LIMIT ?
-                        """.formatted(tableName),
-                rowMapper,
-                LocalMessageStatus.PENDING.name(),
-                toTimestamp(now),
-                limit);
-    }
-
-    @Override
-    public List<LocalMessage> findAll() {
-        return jdbcTemplate.query(
-                "SELECT * FROM %s ORDER BY id ASC".formatted(tableName),
-                rowMapper);
-    }
-
-    @Override
-    public void delete(Long id) {
-        jdbcTemplate.update("DELETE FROM %s WHERE id = ?".formatted(tableName), id);
-    }
-
-    public static String validateTableName(String tableName) {
-        if (tableName == null || !tableName.matches("[A-Za-z0-9_]+")) {
-            throw new IllegalArgumentException("local message tableName must match [A-Za-z0-9_]+");
+    private static void touch(LocalMessage message) {
+        Objects.requireNonNull(message, "message must not be null");
+        LocalDateTime now = LocalDateTime.now();
+        if (message.getCreateTime() == null) {
+            message.setCreateTime(now);
         }
-        return tableName;
-    }
-
-    private static void bindMessage(PreparedStatement ps, LocalMessage message) throws java.sql.SQLException {
-        ps.setString(1, message.getMessageId());
-        ps.setString(2, message.getTraceId());
-        ps.setString(3, message.getParentMessageId());
-        ps.setString(4, message.getTopic());
-        ps.setString(5, message.getBusinessKey());
-        ps.setString(6, message.getTenantId());
-        ps.setString(7, message.getOperator());
-        ps.setString(8, message.getSource());
-        ps.setString(9, message.getPayload());
-        ps.setString(10, message.getStatus().name());
-        ps.setInt(11, message.getRetryCount());
-        ps.setInt(12, message.getMaxRetry());
-        ps.setTimestamp(13, toTimestamp(message.getNextRetryTime()));
-        ps.setString(14, message.getErrorMessage());
-        ps.setTimestamp(15, toTimestamp(message.getCreateTime()));
-        ps.setTimestamp(16, toTimestamp(message.getUpdateTime()));
+        message.setUpdateTime(now);
     }
 
     private static Timestamp toTimestamp(LocalDateTime value) {

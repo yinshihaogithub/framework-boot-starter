@@ -653,6 +653,15 @@ class DefaultLocalMessageServiceTest {
         }
 
         @Override
+        public boolean update(LocalMessage message) {
+            if (failOnSave) {
+                throw new IllegalStateException("save failed");
+            }
+            messages.put(message.getId(), message);
+            return true;
+        }
+
+        @Override
         public Optional<LocalMessage> findById(Long id) {
             findByIdCalls++;
             return Optional.ofNullable(messages.get(id));
@@ -674,8 +683,8 @@ class DefaultLocalMessageServiceTest {
         }
 
         @Override
-        public void delete(Long id) {
-            messages.remove(id);
+        public boolean delete(Long id) {
+            return messages.remove(id) != null;
         }
     }
 }

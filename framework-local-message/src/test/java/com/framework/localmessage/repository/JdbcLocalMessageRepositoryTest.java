@@ -108,12 +108,58 @@ class JdbcLocalMessageRepositoryTest {
         });
     }
 
+    @Test
+    void updateReportsAffectedRowsAndBindsMessageId() {
+        CapturingJdbcTemplate jdbcTemplate = new CapturingJdbcTemplate();
+        JdbcLocalMessageRepository repository = new JdbcLocalMessageRepository(jdbcTemplate, "framework_local_message");
+        LocalMessage message = new LocalMessage()
+                .setId(9L)
+                .setMessageId("local-msg-9")
+                .setTraceId("trace-9")
+                .setTopic("order.created")
+                .setBusinessKey("ORD-9")
+                .setPayload("{\"id\":9}")
+                .setStatus(LocalMessageStatus.SUCCESS)
+                .setRetryCount(0)
+                .setMaxRetry(3)
+                .setCreateTime(LocalDateTime.of(2026, 6, 25, 9, 0));
+
+        assertThat(repository.update(message)).isTrue();
+        assertThat(jdbcTemplate.updateSql)
+                .contains("UPDATE framework_local_message SET")
+                .contains("WHERE id = ?");
+        assertThat(jdbcTemplate.updateArgs.get(0)).isEqualTo("local-msg-9");
+        assertThat(jdbcTemplate.updateArgs.get(9)).isEqualTo(LocalMessageStatus.SUCCESS.name());
+        assertThat(jdbcTemplate.updateArgs.get(16)).isEqualTo(9L);
+
+        jdbcTemplate.updateResult = 0;
+
+        assertThat(repository.update(message)).isFalse();
+    }
+
+    @Test
+    void deleteReportsAffectedRows() {
+        CapturingJdbcTemplate jdbcTemplate = new CapturingJdbcTemplate();
+        JdbcLocalMessageRepository repository = new JdbcLocalMessageRepository(jdbcTemplate, "framework_local_message");
+
+        assertThat(repository.delete(9L)).isTrue();
+        assertThat(jdbcTemplate.updateSql).isEqualTo("DELETE FROM framework_local_message WHERE id = ?");
+        assertThat(jdbcTemplate.updateArgs).containsExactly(9L);
+
+        jdbcTemplate.updateResult = 0;
+
+        assertThat(repository.delete(9L)).isFalse();
+    }
+
     private static class CapturingJdbcTemplate extends JdbcTemplate {
 
         private final CapturingPreparedStatement preparedStatement = new CapturingPreparedStatement();
         private String preparedSql;
         private String querySql;
         private List<Object> queryArgs = List.of();
+        private String updateSql;
+        private List<Object> updateArgs = List.of();
+        private int updateResult = 1;
 
         @Override
         public int update(PreparedStatementCreator psc, KeyHolder generatedKeyHolder) {
@@ -136,6 +182,13 @@ class JdbcLocalMessageRepositoryTest {
             } catch (Exception e) {
                 throw new AssertionError(e);
             }
+        }
+
+        @Override
+        public int update(String sql, Object... args) {
+            updateSql = sql;
+            updateArgs = args == null ? List.of() : new ArrayList<>(java.util.Arrays.asList(args));
+            return updateResult;
         }
 
         private ResultSet resultSet() throws Exception {

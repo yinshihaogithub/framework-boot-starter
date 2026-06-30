@@ -150,7 +150,9 @@ public class LocalMessageAdminService {
             updated.setRetryCount(0);
             updated.setErrorMessage(null);
             updated.setNextRetryTime(LocalDateTime.now());
-            repository.save(updated);
+            if (!repository.update(updated)) {
+                return ActionResult.fail(ResultCode.NOT_FOUND, "消息不存在");
+            }
             auditSuccess(servletRequest, "人工立即重试本地消息", "UPDATE",
                     "id", id, "messageId", updated.getMessageId(),
                     "traceId", updated.getTraceId(), "status", updated.getStatus());
@@ -179,7 +181,9 @@ public class LocalMessageAdminService {
             updated.setRetryCount(0);
             updated.setErrorMessage(null);
             updated.setNextRetryTime(null);
-            repository.save(updated);
+            if (!repository.update(updated)) {
+                return ActionResult.fail(ResultCode.NOT_FOUND, "消息不存在");
+            }
             auditSuccess(servletRequest, "人工标记本地消息成功", "UPDATE",
                     "id", id, "messageId", updated.getMessageId(), "traceId", updated.getTraceId());
             return ActionResult.success("已标记成功");
@@ -211,7 +215,9 @@ public class LocalMessageAdminService {
             updated.setRetryCount(0);
             updated.setErrorMessage(safeReason);
             updated.setNextRetryTime(null);
-            repository.save(updated);
+            if (!repository.update(updated)) {
+                return ActionResult.fail(ResultCode.NOT_FOUND, "消息不存在");
+            }
             auditSuccess(servletRequest, "人工标记本地消息失败", "UPDATE",
                     "id", id, "messageId", updated.getMessageId(), "traceId", updated.getTraceId(),
                     "reason", safeReason);
@@ -235,7 +241,9 @@ public class LocalMessageAdminService {
             if (message == null) {
                 return ActionResult.fail(ResultCode.NOT_FOUND, "消息不存在");
             }
-            repository.delete(id);
+            if (!repository.delete(id)) {
+                return ActionResult.fail(ResultCode.NOT_FOUND, "消息不存在");
+            }
             auditSuccess(servletRequest, "删除本地消息", "DELETE",
                     "id", id, "messageId", message.getMessageId(),
                     "traceId", message.getTraceId(), "status", message.getStatus());

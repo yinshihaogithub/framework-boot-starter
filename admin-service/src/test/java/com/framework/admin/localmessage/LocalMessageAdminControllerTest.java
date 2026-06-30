@@ -220,6 +220,67 @@ class LocalMessageAdminControllerTest {
     }
 
     @Test
+    void manualRetryReturnsNotFoundWhenMessageDisappearsBeforeUpdate() {
+        InMemoryLocalMessageRepository repository = new InMemoryLocalMessageRepository();
+        repository.save(localMessage(11L)
+                .setStatus(LocalMessageStatus.FAILED)
+                .setRetryCount(3)
+                .setErrorMessage("handler missing"));
+        repository.updateAffected = false;
+        LocalMessageAdminController controller = controller(repository);
+
+        Result<String> result = controller.retryNow(11L, null);
+
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getCode()).isEqualTo(ResultCode.NOT_FOUND.getCode());
+        assertThat(result.getMessage()).isEqualTo("消息不存在");
+        LocalMessage saved = repository.findById(11L).orElseThrow();
+        assertThat(saved.getStatus()).isEqualTo(LocalMessageStatus.FAILED);
+        assertThat(saved.getRetryCount()).isEqualTo(3);
+        assertThat(saved.getErrorMessage()).isEqualTo("handler missing");
+    }
+
+    @Test
+    void manualSuccessReturnsNotFoundWhenMessageDisappearsBeforeUpdate() {
+        InMemoryLocalMessageRepository repository = new InMemoryLocalMessageRepository();
+        repository.save(localMessage(12L)
+                .setStatus(LocalMessageStatus.PENDING)
+                .setErrorMessage("old error"));
+        repository.updateAffected = false;
+        LocalMessageAdminController controller = controller(repository);
+
+        Result<String> result = controller.markSuccess(12L, null);
+
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getCode()).isEqualTo(ResultCode.NOT_FOUND.getCode());
+        assertThat(result.getMessage()).isEqualTo("消息不存在");
+        LocalMessage saved = repository.findById(12L).orElseThrow();
+        assertThat(saved.getStatus()).isEqualTo(LocalMessageStatus.PENDING);
+        assertThat(saved.getErrorMessage()).isEqualTo("old error");
+    }
+
+    @Test
+    void manualFailureReturnsNotFoundWhenMessageDisappearsBeforeUpdate() {
+        InMemoryLocalMessageRepository repository = new InMemoryLocalMessageRepository();
+        repository.save(localMessage(13L)
+                .setStatus(LocalMessageStatus.PENDING)
+                .setRetryCount(1));
+        repository.updateAffected = false;
+        LocalMessageAdminController.FailureRequest request = new LocalMessageAdminController.FailureRequest();
+        request.setReason("manual stop");
+        LocalMessageAdminController controller = controller(repository);
+
+        Result<String> result = controller.markFailure(13L, request, null);
+
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getCode()).isEqualTo(ResultCode.NOT_FOUND.getCode());
+        assertThat(result.getMessage()).isEqualTo("消息不存在");
+        LocalMessage saved = repository.findById(13L).orElseThrow();
+        assertThat(saved.getStatus()).isEqualTo(LocalMessageStatus.PENDING);
+        assertThat(saved.getRetryCount()).isEqualTo(1);
+    }
+
+    @Test
     void manualFailureKeepsOriginalMessageWhenSaveFails() {
         InMemoryLocalMessageRepository repository = new InMemoryLocalMessageRepository();
         LocalDateTime nextRetryTime = LocalDateTime.now().plusMinutes(5);
@@ -267,6 +328,21 @@ class LocalMessageAdminControllerTest {
         assertThat(result.isSuccess()).isFalse();
         assertThat(result.getCode()).isEqualTo(ResultCode.NOT_FOUND.getCode());
         assertThat(result.getMessage()).isEqualTo("消息不存在");
+    }
+
+    @Test
+    void deleteReturnsNotFoundWhenMessageDisappearsBeforeDelete() {
+        InMemoryLocalMessageRepository repository = new InMemoryLocalMessageRepository();
+        repository.save(localMessage(14L));
+        repository.deleteAffected = false;
+        LocalMessageAdminController controller = controller(repository);
+
+        Result<String> result = controller.delete(14L, null);
+
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getCode()).isEqualTo(ResultCode.NOT_FOUND.getCode());
+        assertThat(result.getMessage()).isEqualTo("消息不存在");
+        assertThat(repository.findById(14L)).isPresent();
     }
 
     @Test
@@ -618,6 +694,8 @@ class LocalMessageAdminControllerTest {
     private static class InMemoryLocalMessageRepository implements LocalMessageRepository {
         private final Map<Long, LocalMessage> messages = new LinkedHashMap<>();
         private boolean failOnSave;
+        private boolean updateAffected = true;
+        private boolean deleteAffected = true;
 
         @Override
         public LocalMessage save(LocalMessage message) {
@@ -626,6 +704,18 @@ class LocalMessageAdminControllerTest {
             }
             messages.put(message.getId(), message);
             return message;
+        }
+
+        @Override
+        public boolean update(LocalMessage message) {
+            if (failOnSave) {
+                throw new IllegalStateException("save failed");
+            }
+            if (!updateAffected) {
+                return false;
+            }
+            messages.put(message.getId(), message);
+            return true;
         }
 
         @Override
@@ -647,8 +737,11 @@ class LocalMessageAdminControllerTest {
         }
 
         @Override
-        public void delete(Long id) {
-            messages.remove(id);
+        public boolean delete(Long id) {
+            if (!deleteAffected) {
+                return false;
+            }
+            return messages.remove(id) != null;
         }
     }
 }

@@ -13,11 +13,13 @@ public interface LocalMessageRepository {
 
     LocalMessage save(LocalMessage message);
 
+    boolean update(LocalMessage message);
+
     Optional<LocalMessage> findById(Long id);
 
     List<LocalMessage> findDueMessages(LocalDateTime now, int limit);
 
     List<LocalMessage> findAll();
 
-    void delete(Long id);
+    boolean delete(Long id);
 }
