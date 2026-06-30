@@ -21,6 +21,8 @@ import com.framework.admin.system.AdminSystemModels.TenantRequest;
 import com.framework.admin.system.AdminSystemModels.UserCreateRequest;
 import com.framework.admin.system.AdminSystemModels.UserStatusRequest;
 import com.framework.admin.system.AdminSystemModels.UserUpdateRequest;
+import com.framework.auth.context.LoginUser;
+import com.framework.auth.context.UserContextHolder;
 import com.framework.auth.service.LoginSecurityService;
 import com.framework.auth.service.SessionManager;
 import com.framework.core.result.PageResult;
@@ -30,10 +32,12 @@ import com.framework.crypto.util.PasswordUtils;
 import com.framework.security.service.PermissionCacheService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.ObjectProvider;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Stream;
 
@@ -44,6 +48,11 @@ class AdminSystemServiceTest {
     private final FakeRepository repository = new FakeRepository();
     private final FakeAuditService auditService = new FakeAuditService();
     private final AdminSystemService service = new AdminSystemService(repository, auditService);
+
+    @AfterEach
+    void tearDown() {
+        UserContextHolder.clear();
+    }
 
     @Test
     void usersSanitizesPagingAndPasswordHash() {
@@ -142,6 +151,22 @@ class AdminSystemServiceTest {
         assertThat(repository.createdPasswordHash).isNotEqualTo("Pass@123");
         assertThat(PasswordUtils.verify("Pass@123", repository.createdPasswordHash)).isTrue();
         assertThat(auditService.actions).containsExactly("新增用户");
+        assertThat(auditService.params).containsEntry("operator", "admin");
+    }
+
+    @Test
+    void writeAuditRecordsCurrentOperator() {
+        UserContextHolder.set(new LoginUser().setUserId(7L).setUsername("alice"));
+        UserCreateRequest request = new UserCreateRequest();
+        request.setUsername("alice");
+        request.setPassword("Pass@123");
+        repository.nextUserId = 9L;
+
+        Result<Long> result = service.createUser(request, null);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(auditService.actions).containsExactly("新增用户");
+        assertThat(auditService.params).containsEntry("operator", "alice");
     }
 
     @Test
@@ -1355,14 +1380,17 @@ class AdminSystemServiceTest {
 
     private static class FakeAuditService extends AdminAuditService {
         private final List<String> actions = new ArrayList<>();
+        private Map<String, Object> params;
 
         private FakeAuditService() {
             super(null, null);
         }
 
         @Override
+        @SuppressWarnings("unchecked")
         public void success(HttpServletRequest request, String module, String action, String operationType, Object params) {
             actions.add(action);
+            this.params = (Map<String, Object>) params;
         }
     }
 

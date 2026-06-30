@@ -23,6 +23,7 @@ import com.framework.admin.system.AdminSystemModels.UserStatusRequest;
 import com.framework.admin.system.AdminSystemModels.UserUpdateRequest;
 import com.framework.admin.support.AdminPageSupport;
 import com.framework.admin.support.AdminTextSupport;
+import com.framework.auth.context.UserContextHolder;
 import com.framework.core.result.PageResult;
 import com.framework.core.result.Result;
 import com.framework.core.result.ResultCode;
@@ -771,10 +772,22 @@ public class AdminSystemService {
             return;
         }
         try {
-            auditService.success(request, "系统管理", action, operationType, auditService.params(params));
+            auditService.success(request, "系统管理", action, operationType,
+                    auditService.params(paramsWithOperator(params)));
         } catch (RuntimeException e) {
             log.warn("[系统管理] 审计日志写入失败 action={}, error={}", action, e.getMessage());
         }
+    }
+
+    private Object[] paramsWithOperator(Object[] params) {
+        int length = params == null ? 0 : params.length;
+        Object[] values = new Object[length + 2];
+        if (length > 0) {
+            System.arraycopy(params, 0, values, 0, length);
+        }
+        values[length] = "operator";
+        values[length + 1] = currentOperatorName();
+        return values;
     }
 
     private <T> Result<T> serviceError(String action, String message, RuntimeException exception) {
@@ -792,6 +805,15 @@ public class AdminSystemService {
 
     private String text(String value) {
         return AdminTextSupport.trimToNull(value);
+    }
+
+    private String text(String value, String fallback) {
+        String text = text(value);
+        return text == null ? fallback : text;
+    }
+
+    private String currentOperatorName() {
+        return text(UserContextHolder.getUsername(), "admin");
     }
 
     private String normalizeStatusFilter(String status) {
