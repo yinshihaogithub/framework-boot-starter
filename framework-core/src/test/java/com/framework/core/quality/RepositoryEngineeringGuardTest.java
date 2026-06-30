@@ -50,6 +50,11 @@ class RepositoryEngineeringGuardTest {
     private static final Pattern JAVA_METHOD_DECLARATION_PATTERN = Pattern.compile(
             "(?:public|private|protected)\\s+[^=;{}]+?\\s+(\\w+)\\s*\\([^;{}]*\\)\\s*\\{",
             Pattern.DOTALL);
+    private static final Pattern MYBATIS_SQL_ANNOTATION_PATTERN = Pattern.compile(
+            "@(?:Select|Insert|Update|Delete|SelectProvider|InsertProvider|UpdateProvider|DeleteProvider)\\s*\\(");
+    private static final Pattern MAPPER_METHOD_DECLARATION_PATTERN = Pattern.compile(
+            "(?m)^\\s*(?!default\\b)(?:[\\w<>.?]+\\s+)+\\w+\\s*\\([^;{}]*\\)\\s*;",
+            Pattern.DOTALL);
 
     private final Path root = repositoryRoot();
 
@@ -392,6 +397,57 @@ class RepositoryEngineeringGuardTest {
                         .doesNotContain("JdbcTemplate")
                         .doesNotContain("NamedParameterJdbcTemplate")
                         .doesNotContain("GeneratedKeyHolder");
+            }
+        }
+    }
+
+    @Test
+    void mybatisMappersUseAnnotationSqlInsteadOfXmlMappers() throws Exception {
+        try (Stream<Path> files = Files.walk(root)) {
+            List<Path> xmlMapperFiles = files
+                    .filter(Files::isRegularFile)
+                    .filter(path -> !path.toString().contains("/target/"))
+                    .filter(path -> path.toString().contains("/src/main/resources/"))
+                    .filter(path -> path.toString().endsWith(".xml"))
+                    .filter(path -> {
+                        String content = readUnchecked(path);
+                        return content.contains("<mapper") || content.contains("<!DOCTYPE mapper");
+                    })
+                    .toList();
+
+            assertThat(xmlMapperFiles)
+                    .as("MyBatis persistence must stay on annotation SQL instead of XML mapper files")
+                    .isEmpty();
+        }
+
+        try (Stream<Path> files = Files.walk(root)) {
+            List<Path> mapperFiles = files
+                    .filter(this::isProductionSourceFile)
+                    .filter(path -> path.getFileName().toString().endsWith("Mapper.java"))
+                    .toList();
+
+            assertThat(mapperFiles).isNotEmpty();
+            for (Path mapperFile : mapperFiles) {
+                String content = read(mapperFile);
+                assertThat(content)
+                        .as(mapperFile + " must be an explicit MyBatis mapper")
+                        .contains("@Mapper");
+
+                Matcher methodMatcher = MAPPER_METHOD_DECLARATION_PATTERN.matcher(content);
+                int methodCount = 0;
+                int previousMethodEnd = 0;
+                while (methodMatcher.find()) {
+                    methodCount++;
+                    String annotationBlock = content.substring(previousMethodEnd, methodMatcher.start());
+                    assertThat(MYBATIS_SQL_ANNOTATION_PATTERN.matcher(annotationBlock).find())
+                            .as(mapperFile + " method must declare SQL through MyBatis annotations: "
+                                    + methodMatcher.group().strip())
+                            .isTrue();
+                    previousMethodEnd = methodMatcher.end();
+                }
+                assertThat(methodCount)
+                        .as(mapperFile + " must declare mapper methods")
+                        .isPositive();
             }
         }
     }
