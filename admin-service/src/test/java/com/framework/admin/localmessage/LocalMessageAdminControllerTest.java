@@ -131,6 +131,29 @@ class LocalMessageAdminControllerTest {
     }
 
     @Test
+    void manualRetryKeepsOriginalMessageWhenSaveFails() {
+        InMemoryLocalMessageRepository repository = new InMemoryLocalMessageRepository();
+        repository.save(localMessage(7L)
+                .setStatus(LocalMessageStatus.FAILED)
+                .setRetryCount(3)
+                .setErrorMessage("handler missing")
+                .setNextRetryTime(null));
+        repository.failOnSave = true;
+        LocalMessageAdminController controller = controller(repository);
+
+        Result<String> result = controller.retryNow(7L, null);
+
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getCode()).isEqualTo(ResultCode.SERVICE_ERROR.getCode());
+        assertThat(result.getMessage()).isEqualTo("本地消息操作失败");
+        LocalMessage saved = repository.findById(7L).orElseThrow();
+        assertThat(saved.getStatus()).isEqualTo(LocalMessageStatus.FAILED);
+        assertThat(saved.getRetryCount()).isEqualTo(3);
+        assertThat(saved.getErrorMessage()).isEqualTo("handler missing");
+        assertThat(saved.getNextRetryTime()).isNull();
+    }
+
+    @Test
     void manualSuccessSucceedsWhenAuditServiceFails() {
         InMemoryLocalMessageRepository repository = new InMemoryLocalMessageRepository();
         repository.save(localMessage(4L)
@@ -150,6 +173,30 @@ class LocalMessageAdminControllerTest {
     }
 
     @Test
+    void manualSuccessKeepsOriginalMessageWhenSaveFails() {
+        InMemoryLocalMessageRepository repository = new InMemoryLocalMessageRepository();
+        LocalDateTime nextRetryTime = LocalDateTime.now().plusMinutes(5);
+        repository.save(localMessage(8L)
+                .setStatus(LocalMessageStatus.PENDING)
+                .setRetryCount(2)
+                .setErrorMessage("old error")
+                .setNextRetryTime(nextRetryTime));
+        repository.failOnSave = true;
+        LocalMessageAdminController controller = controller(repository);
+
+        Result<String> result = controller.markSuccess(8L, null);
+
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getCode()).isEqualTo(ResultCode.SERVICE_ERROR.getCode());
+        assertThat(result.getMessage()).isEqualTo("本地消息操作失败");
+        LocalMessage saved = repository.findById(8L).orElseThrow();
+        assertThat(saved.getStatus()).isEqualTo(LocalMessageStatus.PENDING);
+        assertThat(saved.getRetryCount()).isEqualTo(2);
+        assertThat(saved.getErrorMessage()).isEqualTo("old error");
+        assertThat(saved.getNextRetryTime()).isEqualTo(nextRetryTime);
+    }
+
+    @Test
     void manualUpdateFailsWhenMessageDoesNotExist() {
         LocalMessageAdminController controller = controller(new InMemoryLocalMessageRepository());
 
@@ -158,6 +205,32 @@ class LocalMessageAdminControllerTest {
         assertThat(result.isSuccess()).isFalse();
         assertThat(result.getCode()).isEqualTo(ResultCode.NOT_FOUND.getCode());
         assertThat(result.getMessage()).isEqualTo("消息不存在");
+    }
+
+    @Test
+    void manualFailureKeepsOriginalMessageWhenSaveFails() {
+        InMemoryLocalMessageRepository repository = new InMemoryLocalMessageRepository();
+        LocalDateTime nextRetryTime = LocalDateTime.now().plusMinutes(5);
+        repository.save(localMessage(9L)
+                .setStatus(LocalMessageStatus.PENDING)
+                .setRetryCount(1)
+                .setErrorMessage("old error")
+                .setNextRetryTime(nextRetryTime));
+        repository.failOnSave = true;
+        LocalMessageAdminController.FailureRequest request = new LocalMessageAdminController.FailureRequest();
+        request.setReason("manual stop");
+        LocalMessageAdminController controller = controller(repository);
+
+        Result<String> result = controller.markFailure(9L, request, null);
+
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getCode()).isEqualTo(ResultCode.SERVICE_ERROR.getCode());
+        assertThat(result.getMessage()).isEqualTo("本地消息操作失败");
+        LocalMessage saved = repository.findById(9L).orElseThrow();
+        assertThat(saved.getStatus()).isEqualTo(LocalMessageStatus.PENDING);
+        assertThat(saved.getRetryCount()).isEqualTo(1);
+        assertThat(saved.getErrorMessage()).isEqualTo("old error");
+        assertThat(saved.getNextRetryTime()).isEqualTo(nextRetryTime);
     }
 
     @Test
@@ -522,9 +595,13 @@ class LocalMessageAdminControllerTest {
 
     private static class InMemoryLocalMessageRepository implements LocalMessageRepository {
         private final Map<Long, LocalMessage> messages = new LinkedHashMap<>();
+        private boolean failOnSave;
 
         @Override
         public LocalMessage save(LocalMessage message) {
+            if (failOnSave) {
+                throw new IllegalStateException("save failed");
+            }
             messages.put(message.getId(), message);
             return message;
         }

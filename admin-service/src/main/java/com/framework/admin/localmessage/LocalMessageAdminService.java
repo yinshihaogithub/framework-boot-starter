@@ -145,14 +145,15 @@ public class LocalMessageAdminService {
             if (message == null) {
                 return ActionResult.fail(ResultCode.NOT_FOUND, "消息不存在");
             }
-            message.setStatus(LocalMessageStatus.PENDING);
-            message.setRetryCount(0);
-            message.setErrorMessage(null);
-            message.setNextRetryTime(LocalDateTime.now());
-            repository.save(message);
+            LocalMessage updated = copyForUpdate(message);
+            updated.setStatus(LocalMessageStatus.PENDING);
+            updated.setRetryCount(0);
+            updated.setErrorMessage(null);
+            updated.setNextRetryTime(LocalDateTime.now());
+            repository.save(updated);
             auditSuccess(servletRequest, "人工立即重试本地消息", "UPDATE",
-                    "id", id, "messageId", message.getMessageId(),
-                    "traceId", message.getTraceId(), "status", message.getStatus());
+                    "id", id, "messageId", updated.getMessageId(),
+                    "traceId", updated.getTraceId(), "status", updated.getStatus());
             return ActionResult.success("已加入重试队列");
         } catch (Exception ignored) {
             return ActionResult.fail(ResultCode.SERVICE_ERROR, "本地消息操作失败");
@@ -173,13 +174,14 @@ public class LocalMessageAdminService {
             if (message == null) {
                 return ActionResult.fail(ResultCode.NOT_FOUND, "消息不存在");
             }
-            message.setStatus(LocalMessageStatus.SUCCESS);
-            message.setRetryCount(0);
-            message.setErrorMessage(null);
-            message.setNextRetryTime(null);
-            repository.save(message);
+            LocalMessage updated = copyForUpdate(message);
+            updated.setStatus(LocalMessageStatus.SUCCESS);
+            updated.setRetryCount(0);
+            updated.setErrorMessage(null);
+            updated.setNextRetryTime(null);
+            repository.save(updated);
             auditSuccess(servletRequest, "人工标记本地消息成功", "UPDATE",
-                    "id", id, "messageId", message.getMessageId(), "traceId", message.getTraceId());
+                    "id", id, "messageId", updated.getMessageId(), "traceId", updated.getTraceId());
             return ActionResult.success("已标记成功");
         } catch (Exception ignored) {
             return ActionResult.fail(ResultCode.SERVICE_ERROR, "本地消息操作失败");
@@ -204,13 +206,14 @@ public class LocalMessageAdminService {
             if (safeReason == null) {
                 safeReason = "manual terminate";
             }
-            message.setStatus(LocalMessageStatus.FAILED);
-            message.setRetryCount(0);
-            message.setErrorMessage(safeReason);
-            message.setNextRetryTime(null);
-            repository.save(message);
+            LocalMessage updated = copyForUpdate(message);
+            updated.setStatus(LocalMessageStatus.FAILED);
+            updated.setRetryCount(0);
+            updated.setErrorMessage(safeReason);
+            updated.setNextRetryTime(null);
+            repository.save(updated);
             auditSuccess(servletRequest, "人工标记本地消息失败", "UPDATE",
-                    "id", id, "messageId", message.getMessageId(), "traceId", message.getTraceId(),
+                    "id", id, "messageId", updated.getMessageId(), "traceId", updated.getTraceId(),
                     "reason", safeReason);
             return ActionResult.success("已标记失败");
         } catch (Exception ignored) {
@@ -289,6 +292,27 @@ public class LocalMessageAdminService {
     private Map<String, Long> zero(Map<String, Long> stats) {
         stats.replaceAll((key, value) -> 0L);
         return stats;
+    }
+
+    private LocalMessage copyForUpdate(LocalMessage message) {
+        return new LocalMessage()
+                .setId(message.getId())
+                .setMessageId(message.getMessageId())
+                .setTraceId(message.getTraceId())
+                .setParentMessageId(message.getParentMessageId())
+                .setTopic(message.getTopic())
+                .setBusinessKey(message.getBusinessKey())
+                .setTenantId(message.getTenantId())
+                .setOperator(message.getOperator())
+                .setSource(message.getSource())
+                .setPayload(message.getPayload())
+                .setStatus(message.getStatus())
+                .setRetryCount(message.getRetryCount())
+                .setMaxRetry(message.getMaxRetry())
+                .setNextRetryTime(message.getNextRetryTime())
+                .setErrorMessage(message.getErrorMessage())
+                .setCreateTime(message.getCreateTime())
+                .setUpdateTime(message.getUpdateTime());
     }
 
     private <T> ActionResult<T> invalidIdResult(Long id) {
