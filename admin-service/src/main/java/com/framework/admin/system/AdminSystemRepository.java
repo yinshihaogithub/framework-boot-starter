@@ -225,7 +225,7 @@ public class AdminSystemRepository {
                 return false;
             }
             mapper.clearUserDeptIds(ids);
-            mapper.deleteDeptIds(ids);
+            requireAffectedAtLeast("system dept delete", mapper.deleteDeptIds(ids), ids.size());
             return true;
         });
     }
@@ -301,7 +301,7 @@ public class AdminSystemRepository {
                 return false;
             }
             mapper.deleteRoleMenusByMenuIds(ids);
-            mapper.deleteMenuIds(ids);
+            requireAffectedAtLeast("system menu delete", mapper.deleteMenuIds(ids), ids.size());
             return true;
         });
     }
@@ -353,7 +353,7 @@ public class AdminSystemRepository {
                 return false;
             }
             mapper.deleteDictItemsByCode(dictCode);
-            mapper.deleteDictType(id);
+            requireAffected("system dict type delete", mapper.deleteDictType(id));
             return true;
         });
     }
@@ -444,6 +444,12 @@ public class AdminSystemRepository {
 
     private void requireAffected(String operation, int affectedRows) {
         if (affectedRows <= 0) {
+            throw new IllegalStateException(operation + " failed");
+        }
+    }
+
+    private void requireAffectedAtLeast(String operation, int affectedRows, int expectedRows) {
+        if (affectedRows < expectedRows) {
             throw new IllegalStateException(operation + " failed");
         }
     }

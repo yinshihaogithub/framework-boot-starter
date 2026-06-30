@@ -236,8 +236,118 @@ class AdminSystemRepositoryTest {
         assertThat(mapper.operations).containsExactly("deleteUser:7", "deleteUserRoles:7");
     }
 
+    @Test
+    void deleteDeptDeletesSubtreeAndValidatesMainDeleteRows() {
+        mapper.allDepts = List.of(dept(7L, 0L), dept(8L, 7L), dept(9L, 0L));
+
+        boolean deleted = repository.deleteDept(7L);
+
+        assertThat(deleted).isTrue();
+        assertThat(mapper.operations).containsExactly(
+                "listAllDepts",
+                "clearUserDeptIds:[7, 8]",
+                "deleteDeptIds:[7, 8]");
+    }
+
+    @Test
+    void deleteDeptReturnsFalseWhenSubtreeIsMissing() {
+        mapper.allDepts = List.of(dept(9L, 0L));
+
+        boolean deleted = repository.deleteDept(7L);
+
+        assertThat(deleted).isFalse();
+        assertThat(mapper.operations).containsExactly("listAllDepts");
+    }
+
+    @Test
+    void deleteDeptThrowsWhenMainDeleteAffectsTooFewRows() {
+        mapper.allDepts = List.of(dept(7L, 0L), dept(8L, 7L));
+        mapper.deleteDeptIdsResult = 1;
+
+        assertThatThrownBy(() -> repository.deleteDept(7L))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("system dept delete failed");
+        assertThat(mapper.operations).containsExactly(
+                "listAllDepts",
+                "clearUserDeptIds:[7, 8]",
+                "deleteDeptIds:[7, 8]");
+    }
+
+    @Test
+    void deleteMenuDeletesSubtreeAndValidatesMainDeleteRows() {
+        mapper.allMenus = List.of(menu(11L, 0L), menu(12L, 11L), menu(13L, 0L));
+
+        boolean deleted = repository.deleteMenu(11L);
+
+        assertThat(deleted).isTrue();
+        assertThat(mapper.operations).containsExactly(
+                "listAllMenus",
+                "deleteRoleMenusByMenuIds:[11, 12]",
+                "deleteMenuIds:[11, 12]");
+    }
+
+    @Test
+    void deleteMenuReturnsFalseWhenSubtreeIsMissing() {
+        mapper.allMenus = List.of(menu(13L, 0L));
+
+        boolean deleted = repository.deleteMenu(11L);
+
+        assertThat(deleted).isFalse();
+        assertThat(mapper.operations).containsExactly("listAllMenus");
+    }
+
+    @Test
+    void deleteMenuThrowsWhenMainDeleteAffectsTooFewRows() {
+        mapper.allMenus = List.of(menu(11L, 0L), menu(12L, 11L));
+        mapper.deleteMenuIdsResult = 1;
+
+        assertThatThrownBy(() -> repository.deleteMenu(11L))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("system menu delete failed");
+        assertThat(mapper.operations).containsExactly(
+                "listAllMenus",
+                "deleteRoleMenusByMenuIds:[11, 12]",
+                "deleteMenuIds:[11, 12]");
+    }
+
+    @Test
+    void deleteDictTypeDeletesItemsThenTypeAndValidatesTypeDelete() {
+        boolean deleted = repository.deleteDictType(5L);
+
+        assertThat(deleted).isTrue();
+        assertThat(mapper.operations).containsExactly(
+                "findDictCodeById:5",
+                "deleteDictItemsByCode:sys_status",
+                "deleteDictType:5");
+    }
+
+    @Test
+    void deleteDictTypeReturnsFalseWhenTypeIsMissing() {
+        mapper.dictCodeById = null;
+
+        boolean deleted = repository.deleteDictType(5L);
+
+        assertThat(deleted).isFalse();
+        assertThat(mapper.operations).containsExactly("findDictCodeById:5");
+    }
+
+    @Test
+    void deleteDictTypeThrowsWhenTypeDeleteAffectsNoRows() {
+        mapper.deleteDictTypeResult = 0;
+
+        assertThatThrownBy(() -> repository.deleteDictType(5L))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("system dict type delete failed");
+        assertThat(mapper.operations).containsExactly(
+                "findDictCodeById:5",
+                "deleteDictItemsByCode:sys_status",
+                "deleteDictType:5");
+    }
+
     private static class RecordingMapper {
         private List<ConfigItem> configs = List.of();
+        private List<Dept> allDepts = List.of();
+        private List<Menu> allMenus = List.of();
         private ConfigItem updatedConfig;
         private boolean preserveValue;
         private boolean assignGeneratedIds = true;
@@ -252,6 +362,10 @@ class AdminSystemRepositoryTest {
         private int insertConfigResult = 1;
         private int insertUserRoleResult = 1;
         private int insertRoleMenuResult = 1;
+        private Integer deleteDeptIdsResult;
+        private Integer deleteMenuIdsResult;
+        private String dictCodeById = "sys_status";
+        private int deleteDictTypeResult = 1;
         private int deleteTenantResult = 1;
         private int deleteUserResult = 1;
         private int resetPasswordResult = 1;
@@ -264,6 +378,14 @@ class AdminSystemRepositoryTest {
                     new Class<?>[]{AdminSystemMapper.class},
                     (proxy, method, args) -> switch (method.getName()) {
                         case "listConfigs" -> configs;
+                        case "listAllDepts" -> {
+                            operations.add("listAllDepts");
+                            yield allDepts;
+                        }
+                        case "listAllMenus" -> {
+                            operations.add("listAllMenus");
+                            yield allMenus;
+                        }
                         case "updateConfig" -> {
                             updatedConfig = (ConfigItem) args[0];
                             preserveValue = (Boolean) args[1];
@@ -336,6 +458,34 @@ class AdminSystemRepositoryTest {
                         case "deleteRoleMenus" -> {
                             operations.add("deleteRoleMenus:" + args[0]);
                             yield 1;
+                        }
+                        case "clearUserDeptIds" -> {
+                            operations.add("clearUserDeptIds:" + args[0]);
+                            yield 0;
+                        }
+                        case "deleteDeptIds" -> {
+                            operations.add("deleteDeptIds:" + args[0]);
+                            yield deleteDeptIdsResult == null ? ((List<?>) args[0]).size() : deleteDeptIdsResult;
+                        }
+                        case "deleteRoleMenusByMenuIds" -> {
+                            operations.add("deleteRoleMenusByMenuIds:" + args[0]);
+                            yield 0;
+                        }
+                        case "deleteMenuIds" -> {
+                            operations.add("deleteMenuIds:" + args[0]);
+                            yield deleteMenuIdsResult == null ? ((List<?>) args[0]).size() : deleteMenuIdsResult;
+                        }
+                        case "findDictCodeById" -> {
+                            operations.add("findDictCodeById:" + args[0]);
+                            yield dictCodeById;
+                        }
+                        case "deleteDictItemsByCode" -> {
+                            operations.add("deleteDictItemsByCode:" + args[0]);
+                            yield 0;
+                        }
+                        case "deleteDictType" -> {
+                            operations.add("deleteDictType:" + args[0]);
+                            yield deleteDictTypeResult;
                         }
                         case "resetPassword" -> {
                             operations.add("resetPassword:" + args[0]);
@@ -469,5 +619,21 @@ class AdminSystemRepositoryTest {
         request.setConfigValue("Framework");
         request.setSensitive(false);
         return request;
+    }
+
+    private static Dept dept(Long id, Long parentId) {
+        return new Dept()
+                .setId(id)
+                .setParentId(parentId)
+                .setDeptName("dept-" + id);
+    }
+
+    private static Menu menu(Long id, Long parentId) {
+        return new Menu()
+                .setId(id)
+                .setParentId(parentId)
+                .setMenuType("MENU")
+                .setMenuName("menu-" + id)
+                .setVisible(true);
     }
 }
