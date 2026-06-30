@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.core.io.Resource;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -66,7 +67,7 @@ public class FileAdminController {
         if (result.isSuccess()) {
             return result.getData();
         }
-        return ResponseEntity.status(result.getCode() == ResultCode.NOT_FOUND.getCode() ? 404 : 500)
+        return ResponseEntity.status(downloadErrorStatus(result.getCode()))
                 .body(Result.fail(result.getCode(), result.getMessage()));
     }
 
@@ -75,5 +76,15 @@ public class FileAdminController {
     @RequirePermission("file:delete")
     public Result<String> delete(@PathVariable Long id, HttpServletRequest servletRequest) {
         return fileAdminService.delete(id, servletRequest);
+    }
+
+    private HttpStatus downloadErrorStatus(int code) {
+        if (code == ResultCode.PARAM_ERROR.getCode() || code == ResultCode.BAD_REQUEST.getCode()) {
+            return HttpStatus.BAD_REQUEST;
+        }
+        if (code == ResultCode.NOT_FOUND.getCode()) {
+            return HttpStatus.NOT_FOUND;
+        }
+        return HttpStatus.INTERNAL_SERVER_ERROR;
     }
 }
