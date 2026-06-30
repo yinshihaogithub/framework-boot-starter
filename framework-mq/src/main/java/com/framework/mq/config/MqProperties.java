@@ -1,5 +1,6 @@
 package com.framework.mq.config;
 
+import com.framework.mq.support.MqTextSupport;
 import lombok.Data;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -27,13 +28,15 @@ public class MqProperties implements InitializingBean {
         if (maxRetry <= 0) {
             throw new IllegalArgumentException("framework.mq.max-retry must be greater than 0");
         }
+        failedMessageTableName = MqTextSupport.trimToNull(failedMessageTableName);
         if (failedMessageTableName == null || !failedMessageTableName.matches("[A-Za-z0-9_]+")) {
             throw new IllegalArgumentException("framework.mq.failed-message-table-name must match [A-Za-z0-9_]+");
         }
         if (deadLetter == null) {
             throw new IllegalArgumentException("framework.mq.dead-letter must not be null");
         }
-        if (deadLetter.isEnabled() && !hasText(deadLetter.getQueue())) {
+        deadLetter.setQueue(MqTextSupport.trimToNull(deadLetter.getQueue()));
+        if (deadLetter.isEnabled() && deadLetter.getQueue() == null) {
             throw new IllegalArgumentException("framework.mq.dead-letter.queue must not be blank");
         }
         if (retry == null) {
@@ -42,10 +45,6 @@ public class MqProperties implements InitializingBean {
         if (retry.getFixedDelay() <= 0) {
             throw new IllegalArgumentException("framework.mq.retry.fixed-delay must be greater than 0");
         }
-    }
-
-    private static boolean hasText(String value) {
-        return value != null && !value.isBlank();
     }
 
     public enum Provider {
