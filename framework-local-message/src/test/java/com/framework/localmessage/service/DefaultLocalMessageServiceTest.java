@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -180,6 +181,66 @@ class DefaultLocalMessageServiceTest {
         assertThat(repository.findById(message.getId()).orElseThrow().getStatus())
                 .isEqualTo(LocalMessageStatus.SUCCESS);
         assertThat(repository.findById(message.getId()).orElseThrow().getNextRetryTime()).isNull();
+    }
+
+    @Test
+    void retryDueMessagesRunsHandlerWithMessageTraceIdAndRestoresCallerTrace() {
+        InMemoryLocalMessageRepository repository = new InMemoryLocalMessageRepository();
+        AtomicReference<String> handlerTraceId = new AtomicReference<>();
+        DefaultLocalMessageService service = new DefaultLocalMessageService(repository, properties(), List.of(handler(
+                "order.created",
+                message -> handlerTraceId.set(TraceContext.getTraceId())
+        )));
+        LocalMessage message = service.publish(new LocalMessage()
+                .setTopic("order.created")
+                .setTraceId("message-trace")
+                .setBusinessKey("ORD-1")
+                .setPayload("{}"));
+        TraceContext.putTraceId("caller-trace");
+
+        try {
+            int count = service.retryDueMessages();
+
+            assertThat(count).isEqualTo(1);
+            assertThat(handlerTraceId).hasValue("message-trace");
+            assertThat(TraceContext.getTraceId()).isEqualTo("caller-trace");
+            assertThat(repository.findById(message.getId()).orElseThrow().getStatus())
+                    .isEqualTo(LocalMessageStatus.SUCCESS);
+        } finally {
+            TraceContext.clear();
+        }
+    }
+
+    @Test
+    void retryDueMessagesRestoresCallerTraceWhenHandlerFails() {
+        InMemoryLocalMessageRepository repository = new InMemoryLocalMessageRepository();
+        AtomicReference<String> handlerTraceId = new AtomicReference<>();
+        DefaultLocalMessageService service = new DefaultLocalMessageService(repository, properties(), List.of(handler(
+                "order.created",
+                message -> {
+                    handlerTraceId.set(TraceContext.getTraceId());
+                    throw new IllegalStateException("downstream unavailable");
+                }
+        )));
+        LocalMessage message = service.publish(new LocalMessage()
+                .setTopic("order.created")
+                .setTraceId("message-trace")
+                .setBusinessKey("ORD-1")
+                .setPayload("{}"));
+        TraceContext.putTraceId("caller-trace");
+
+        try {
+            int count = service.retryDueMessages();
+
+            assertThat(count).isEqualTo(1);
+            assertThat(handlerTraceId).hasValue("message-trace");
+            assertThat(TraceContext.getTraceId()).isEqualTo("caller-trace");
+            LocalMessage saved = repository.findById(message.getId()).orElseThrow();
+            assertThat(saved.getStatus()).isEqualTo(LocalMessageStatus.PENDING);
+            assertThat(saved.getErrorMessage()).isEqualTo("downstream unavailable");
+        } finally {
+            TraceContext.clear();
+        }
     }
 
     @Test

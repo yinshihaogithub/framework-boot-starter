@@ -101,11 +101,15 @@ public class DefaultLocalMessageService implements LocalMessageService {
         message.setStatus(LocalMessageStatus.PROCESSING);
         message.setNextRetryTime(null);
         repository.save(message);
+        Map<String, String> previousContext = TraceContext.copyContextMap();
+        TraceContext.getOrCreateTraceId(message.getTraceId());
         try {
             handler.handle(copyForHandler(message));
             markSuccess(messageId);
         } catch (Exception e) {
             markFailure(message, e);
+        } finally {
+            TraceContext.restore(previousContext);
         }
     }
 
