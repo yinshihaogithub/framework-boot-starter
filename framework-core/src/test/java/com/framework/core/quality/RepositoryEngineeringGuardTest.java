@@ -1268,6 +1268,25 @@ class RepositoryEngineeringGuardTest {
     }
 
     @Test
+    void productionSourceUsesLoggingInsteadOfConsoleOutput() throws Exception {
+        try (Stream<Path> files = Files.walk(root)) {
+            List<Path> sourceFiles = files
+                    .filter(this::isProductionSourceFile)
+                    .toList();
+
+            assertThat(sourceFiles).isNotEmpty();
+            for (Path file : sourceFiles) {
+                String content = read(file);
+                assertThat(content)
+                        .as(file + " must use structured logging instead of console output")
+                        .doesNotContain("System.out")
+                        .doesNotContain("System.err")
+                        .doesNotContain("printStackTrace(");
+            }
+        }
+    }
+
+    @Test
     void productionSourceSpecifiesCharsetWhenEncodingOrDecodingBytes() throws Exception {
         try (Stream<Path> files = Files.walk(root)) {
             List<Path> sourceFiles = files
