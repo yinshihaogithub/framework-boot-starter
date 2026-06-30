@@ -347,6 +347,35 @@ class NotifyAdminServiceTest {
     }
 
     @Test
+    void updateTemplateReturnsNotFoundWhenTemplateDisappearsBeforeUpdate() {
+        InMemoryNotifyAdminRepository repository = new InMemoryNotifyAdminRepository();
+        Long templateId = repository.createTemplate(templateRequest());
+        repository.updateTemplateAffected = false;
+        NotifyAdminService service = service(repository, null);
+
+        NotifyAdminService.ActionResult<String> result = service.updateTemplate(templateId, templateRequest(), null);
+
+        assertThat(result.success()).isFalse();
+        assertThat(result.code()).isEqualTo(ResultCode.NOT_FOUND.getCode());
+        assertThat(result.message()).isEqualTo("模板不存在");
+    }
+
+    @Test
+    void deleteTemplateReturnsNotFoundWhenTemplateDisappearsBeforeDelete() {
+        InMemoryNotifyAdminRepository repository = new InMemoryNotifyAdminRepository();
+        Long templateId = repository.createTemplate(templateRequest());
+        repository.deleteTemplateAffected = false;
+        NotifyAdminService service = service(repository, null);
+
+        NotifyAdminService.ActionResult<String> result = service.deleteTemplate(templateId, null);
+
+        assertThat(result.success()).isFalse();
+        assertThat(result.code()).isEqualTo(ResultCode.NOT_FOUND.getCode());
+        assertThat(result.message()).isEqualTo("模板不存在");
+        assertThat(repository.templates).hasSize(1);
+    }
+
+    @Test
     void writeOperationsReturnServiceErrorWhenRepositoryFails() {
         InMemoryNotifyAdminRepository repository = new InMemoryNotifyAdminRepository();
         Long templateId = repository.createTemplate(templateRequest());
@@ -522,6 +551,8 @@ class NotifyAdminServiceTest {
         private final List<NotifyAdminModels.Record> records = new ArrayList<>();
         private long nextTemplateId = 1;
         private long nextRecordId = 1;
+        private boolean updateTemplateAffected = true;
+        private boolean deleteTemplateAffected = true;
         private RuntimeException queryFailure;
         private RuntimeException commandFailure;
 
@@ -572,8 +603,11 @@ class NotifyAdminServiceTest {
         }
 
         @Override
-        public void updateTemplate(Long id, NotifyAdminModels.TemplateRequest request) {
+        public boolean updateTemplate(Long id, NotifyAdminModels.TemplateRequest request) {
             failCommandIfNeeded();
+            if (!updateTemplateAffected) {
+                return false;
+            }
             findTemplate(id).ifPresent(template -> template
                     .setTemplateCode(request.getTemplateCode())
                     .setTemplateName(request.getTemplateName())
@@ -583,12 +617,17 @@ class NotifyAdminServiceTest {
                     .setReceivers(request.getReceivers())
                     .setWebhookUrl(request.getWebhookUrl())
                     .setStatus(request.getStatus()));
+            return true;
         }
 
         @Override
-        public void deleteTemplate(Long id) {
+        public boolean deleteTemplate(Long id) {
             failCommandIfNeeded();
+            if (!deleteTemplateAffected) {
+                return false;
+            }
             templates.removeIf(template -> id.equals(template.getId()));
+            return true;
         }
 
         @Override

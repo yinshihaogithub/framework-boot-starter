@@ -39,12 +39,12 @@ public class NotifyAdminRepository {
         return row.getId();
     }
 
-    public void updateTemplate(Long id, NotifyAdminModels.TemplateRequest request) {
-        mapper.updateTemplate(toTemplateRow(request).setId(id));
+    public boolean updateTemplate(Long id, NotifyAdminModels.TemplateRequest request) {
+        return mapper.updateTemplate(toTemplateRow(request).setId(id)) > 0;
     }
 
-    public void deleteTemplate(Long id) {
-        mapper.deleteTemplate(id);
+    public boolean deleteTemplate(Long id) {
+        return mapper.deleteTemplate(id) > 0;
     }
 
     public Long createRecord(NotifyAdminModels.Record record) {

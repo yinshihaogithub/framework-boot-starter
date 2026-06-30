@@ -71,6 +71,25 @@ class NotifyAdminRepositoryTest {
         assertThat(mapper.recordRow.getSuccess()).isTrue();
     }
 
+    @Test
+    void updateAndDeleteTemplateReportAffectedRows() {
+        NotifyAdminModels.TemplateRequest request = new NotifyAdminModels.TemplateRequest();
+        request.setTemplateCode("welcome");
+        request.setTemplateName("欢迎");
+        request.setChannel("LOG");
+        request.setTitle("hello");
+        request.setContent("content");
+
+        assertThat(repository.updateTemplate(9L, request)).isTrue();
+        assertThat(repository.deleteTemplate(9L)).isTrue();
+
+        mapper.updateTemplateResult = 0;
+        mapper.deleteTemplateResult = 0;
+
+        assertThat(repository.updateTemplate(9L, request)).isFalse();
+        assertThat(repository.deleteTemplate(9L)).isFalse();
+    }
+
     private static class RecordingMapper implements NotifyAdminMapper {
         private String keywordLike;
         private String channel;
@@ -79,6 +98,8 @@ class NotifyAdminRepositoryTest {
         private int pageSize;
         private TemplateRow templateRow;
         private RecordRow recordRow;
+        private int updateTemplateResult = 1;
+        private int deleteTemplateResult = 1;
 
         @Override
         public List<TemplateRow> listTemplates(String keywordLike, String channel, String status, int offset, int pageSize) {
@@ -113,12 +134,12 @@ class NotifyAdminRepositoryTest {
         @Override
         public int updateTemplate(TemplateRow row) {
             this.templateRow = row;
-            return 1;
+            return updateTemplateResult;
         }
 
         @Override
         public int deleteTemplate(Long id) {
-            return 1;
+            return deleteTemplateResult;
         }
 
         @Override

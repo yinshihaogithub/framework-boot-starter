@@ -100,7 +100,9 @@ public class NotifyAdminService {
             if (repository.findTemplate(id).isEmpty()) {
                 return ActionResult.fail(ResultCode.NOT_FOUND, "模板不存在");
             }
-            repository.updateTemplate(id, request);
+            if (!repository.updateTemplate(id, request)) {
+                return ActionResult.fail(ResultCode.NOT_FOUND, "模板不存在");
+            }
             auditSuccess(servletRequest, "更新通知模板", "UPDATE",
                     "id", id, "templateCode", request.getTemplateCode(), "channel", request.getChannel());
             return ActionResult.success("已更新");
@@ -121,7 +123,9 @@ public class NotifyAdminService {
             if (repository.findTemplate(id).isEmpty()) {
                 return ActionResult.fail(ResultCode.NOT_FOUND, "模板不存在");
             }
-            repository.deleteTemplate(id);
+            if (!repository.deleteTemplate(id)) {
+                return ActionResult.fail(ResultCode.NOT_FOUND, "模板不存在");
+            }
             auditSuccess(servletRequest, "删除通知模板", "DELETE", "id", id);
             return ActionResult.success("已删除");
         } catch (RuntimeException e) {
