@@ -53,14 +53,36 @@ class AdminSystemServiceTest {
                 .setPasswordHash("secret"));
         repository.userCount = 1;
 
-        PageResult<AdminUser> page = service.users(null, null, -1, 500);
+        PageResult<AdminUser> page = service.users(" alice ", " enabled ", -1, 500);
 
         assertThat(page.getPageNum()).isEqualTo(1);
         assertThat(page.getPageSize()).isEqualTo(200);
         assertThat(page.getRecords()).hasSize(1);
         assertThat(page.getRecords().get(0).getPasswordHash()).isNull();
+        assertThat(repository.listUserKeyword).isEqualTo("alice");
+        assertThat(repository.listUserStatus).isEqualTo("ENABLED");
+        assertThat(repository.countUserKeyword).isEqualTo("alice");
+        assertThat(repository.countUserStatus).isEqualTo("ENABLED");
         assertThat(repository.listUserPageNum).isEqualTo(1);
         assertThat(repository.listUserPageSize).isEqualTo(200);
+    }
+
+    @Test
+    void usersReturnEmptyPageForInvalidStatusFilter() {
+        repository.users = List.of(new AdminUser()
+                .setId(2L)
+                .setUsername("alice")
+                .setPasswordHash("secret"));
+        repository.userCount = 1;
+
+        PageResult<AdminUser> page = service.users(" alice ", "LOCKED", 1, 20);
+
+        assertThat(page.getTotal()).isZero();
+        assertThat(page.getRecords()).isEmpty();
+        assertThat(repository.listUserKeyword).isNull();
+        assertThat(repository.listUserStatus).isNull();
+        assertThat(repository.countUserKeyword).isNull();
+        assertThat(repository.countUserStatus).isNull();
     }
 
     @Test
@@ -693,6 +715,10 @@ class AdminSystemServiceTest {
         private long userCount;
         private int listUserPageNum;
         private int listUserPageSize;
+        private String listUserKeyword;
+        private String listUserStatus;
+        private String countUserKeyword;
+        private String countUserStatus;
         private Long nextUserId = 1L;
         private UserCreateRequest createdUser;
         private String createdPasswordHash;
@@ -748,6 +774,8 @@ class AdminSystemServiceTest {
         @Override
         public List<AdminUser> listUsers(String keyword, String status, int pageNum, int pageSize) {
             failQueryIfNeeded();
+            this.listUserKeyword = keyword;
+            this.listUserStatus = status;
             this.listUserPageNum = pageNum;
             this.listUserPageSize = pageSize;
             return new ArrayList<>(users);
@@ -756,6 +784,8 @@ class AdminSystemServiceTest {
         @Override
         public long countUsers(String keyword, String status) {
             failQueryIfNeeded();
+            this.countUserKeyword = keyword;
+            this.countUserStatus = status;
             return userCount;
         }
 

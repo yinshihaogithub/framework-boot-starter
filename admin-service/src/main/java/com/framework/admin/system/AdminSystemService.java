@@ -37,6 +37,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Locale;
 
 /**
  * 系统管理后台服务。
@@ -200,13 +201,18 @@ public class AdminSystemService {
     public PageResult<AdminUser> users(String keyword, String status, int pageNum, int pageSize) {
         int safePageNum = AdminPageSupport.safePageNum(pageNum);
         int safePageSize = AdminPageSupport.safePageSize(pageSize);
+        String safeKeyword = text(keyword);
+        String safeStatus = normalizeStatusFilter(status);
+        if (isInvalidStatusFilter(status, safeStatus)) {
+            return PageResult.empty(safePageNum, safePageSize);
+        }
         try {
-            List<AdminUser> records = repository.listUsers(keyword, status, safePageNum, safePageSize);
+            List<AdminUser> records = repository.listUsers(safeKeyword, safeStatus, safePageNum, safePageSize);
             records.forEach(user -> {
                 enrichLoginSecurity(user);
                 user.setPasswordHash(null);
             });
-            return PageResult.of(records, repository.countUsers(keyword, status), safePageNum, safePageSize);
+            return PageResult.of(records, repository.countUsers(safeKeyword, safeStatus), safePageNum, safePageSize);
         } catch (RuntimeException e) {
             log.warn("[系统管理] 用户列表查询失败 error={}", e.getMessage());
             return PageResult.empty(safePageNum, safePageSize);
@@ -709,6 +715,23 @@ public class AdminSystemService {
 
     private boolean isBlank(String value) {
         return value == null || value.isBlank();
+    }
+
+    private String text(String value) {
+        return isBlank(value) ? null : value.trim();
+    }
+
+    private String normalizeStatusFilter(String status) {
+        String text = text(status);
+        if (text == null) {
+            return null;
+        }
+        String normalized = text.toUpperCase(Locale.ROOT);
+        return "ENABLED".equals(normalized) || "DISABLED".equals(normalized) ? normalized : null;
+    }
+
+    private boolean isInvalidStatusFilter(String originalStatus, String normalizedStatus) {
+        return !isBlank(originalStatus) && normalizedStatus == null;
     }
 
     private Result<String> invalidResourceId(Long id, String resourceName) {
