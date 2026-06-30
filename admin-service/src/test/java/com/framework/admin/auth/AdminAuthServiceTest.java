@@ -367,6 +367,20 @@ class AdminAuthServiceTest {
     }
 
     @Test
+    void changePasswordReturnsUnauthorizedWhenPasswordRowIsMissing() {
+        repository.user = enabledUser();
+        repository.resetPasswordResult = false;
+        UserContextHolder.set(new LoginUser().setUserId(1L));
+        AdminAuthController.ChangePasswordRequest request = changePasswordRequest("Admin@123", "NewAdmin@123");
+
+        Result<String> result = service.changePassword(request, null);
+
+        assertThat(result.getCode()).isEqualTo(ResultCode.UNAUTHORIZED.getCode());
+        assertThat(repository.configUpdates).isEmpty();
+        assertThat(sessionManager.forceLogoutAllUserId).isNull();
+    }
+
+    @Test
     void changePasswordReturnsServiceErrorWhenConfigUpdateFails() {
         repository.user = enabledUser();
         repository.configUpdateFailure = new RuntimeException("database down");
@@ -378,6 +392,22 @@ class AdminAuthServiceTest {
         assertThat(result.getCode()).isEqualTo(ResultCode.SERVICE_ERROR.getCode());
         assertThat(result.getMessage()).isEqualTo("密码修改失败");
         assertThat(repository.resetPasswordUserId).isEqualTo(1L);
+        assertThat(sessionManager.forceLogoutAllUserId).isNull();
+    }
+
+    @Test
+    void changePasswordReturnsServiceErrorWhenConfigUpdateMissesRow() {
+        repository.user = enabledUser();
+        repository.configUpdateResult = false;
+        UserContextHolder.set(new LoginUser().setUserId(1L));
+        AdminAuthController.ChangePasswordRequest request = changePasswordRequest("Admin@123", "NewAdmin@123");
+
+        Result<String> result = service.changePassword(request, null);
+
+        assertThat(result.getCode()).isEqualTo(ResultCode.SERVICE_ERROR.getCode());
+        assertThat(result.getMessage()).isEqualTo("密码修改失败");
+        assertThat(repository.resetPasswordUserId).isEqualTo(1L);
+        assertThat(repository.configUpdates).isEmpty();
         assertThat(sessionManager.forceLogoutAllUserId).isNull();
     }
 
@@ -501,6 +531,8 @@ class AdminAuthServiceTest {
         private RuntimeException menusFailure;
         private RuntimeException resetPasswordFailure;
         private RuntimeException configUpdateFailure;
+        private boolean resetPasswordResult = true;
+        private boolean configUpdateResult = true;
 
         private FakeRepository() {
             super(null);
@@ -552,17 +584,24 @@ class AdminAuthServiceTest {
             if (resetPasswordFailure != null) {
                 throw resetPasswordFailure;
             }
+            if (!resetPasswordResult) {
+                return false;
+            }
             this.resetPasswordUserId = userId;
             this.resetPasswordHash = passwordHash;
             return true;
         }
 
         @Override
-        public void updateConfigValue(String configKey, String configValue) {
+        public boolean updateConfigValue(String configKey, String configValue) {
             if (configUpdateFailure != null) {
                 throw configUpdateFailure;
             }
+            if (!configUpdateResult) {
+                return false;
+            }
             configUpdates.add(new ConfigUpdate(configKey, configValue));
+            return true;
         }
     }
 

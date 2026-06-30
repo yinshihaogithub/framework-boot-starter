@@ -9,6 +9,7 @@ import java.lang.reflect.Proxy;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class AdminSystemRepositoryTest {
 
@@ -79,6 +80,50 @@ class AdminSystemRepositoryTest {
     }
 
     @Test
+    void updateConfigValueReportsAffectedRows() {
+        assertThat(repository.updateConfigValue("admin.default.password.changed", "true")).isTrue();
+
+        mapper.updateConfigValueResult = 0;
+
+        assertThat(repository.updateConfigValue("missing.key", "true")).isFalse();
+    }
+
+    @Test
+    void resetPasswordAndUpdateConfigValueUpdatesBothInOrder() {
+        boolean updated = repository.resetPasswordAndUpdateConfigValue(
+                7L, "password-hash", "admin.default.password.changed", "true");
+
+        assertThat(updated).isTrue();
+        assertThat(mapper.operations).containsExactly(
+                "resetPassword:7",
+                "updateConfigValue:admin.default.password.changed=true");
+    }
+
+    @Test
+    void resetPasswordAndUpdateConfigValueSkipsConfigWhenPasswordRowIsMissing() {
+        mapper.resetPasswordResult = 0;
+
+        boolean updated = repository.resetPasswordAndUpdateConfigValue(
+                7L, "password-hash", "admin.default.password.changed", "true");
+
+        assertThat(updated).isFalse();
+        assertThat(mapper.operations).containsExactly("resetPassword:7");
+    }
+
+    @Test
+    void resetPasswordAndUpdateConfigValueThrowsWhenConfigRowIsMissing() {
+        mapper.updateConfigValueResult = 0;
+
+        assertThatThrownBy(() -> repository.resetPasswordAndUpdateConfigValue(
+                7L, "password-hash", "admin.default.password.changed", "true"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("admin.default.password.changed");
+        assertThat(mapper.operations).containsExactly(
+                "resetPassword:7",
+                "updateConfigValue:admin.default.password.changed=true");
+    }
+
+    @Test
     void deleteTenantSkipsDeptCleanupWhenTenantDoesNotExist() {
         mapper.deleteTenantResult = 0;
 
@@ -102,6 +147,8 @@ class AdminSystemRepositoryTest {
         private boolean preserveValue;
         private int deleteTenantResult = 1;
         private int deleteUserResult = 1;
+        private int resetPasswordResult = 1;
+        private int updateConfigValueResult = 1;
         private final List<String> operations = new ArrayList<>();
 
         private AdminSystemMapper proxy() {
@@ -130,6 +177,14 @@ class AdminSystemRepositoryTest {
                         case "deleteUserRoles" -> {
                             operations.add("deleteUserRoles:" + args[0]);
                             yield 1;
+                        }
+                        case "resetPassword" -> {
+                            operations.add("resetPassword:" + args[0]);
+                            yield resetPasswordResult;
+                        }
+                        case "updateConfigValue" -> {
+                            operations.add("updateConfigValue:" + args[0] + "=" + args[1]);
+                            yield updateConfigValueResult;
                         }
                         default -> defaultValue(method.getReturnType());
                     });

@@ -33,6 +33,7 @@ public class AdminAuthService {
     private static final int DEVICE_ID_MAX_LENGTH = 64;
     private static final int CLIENT_IP_MAX_LENGTH = 64;
     private static final String DEFAULT_DEVICE_ID = "admin-web";
+    private static final String DEFAULT_PASSWORD_CHANGED_CONFIG_KEY = "admin.default.password.changed";
 
     private final AdminSystemRepository systemRepository;
     private final SessionManager sessionManager;
@@ -157,8 +158,10 @@ public class AdminAuthService {
             if (PasswordUtils.verify(request.getNewPassword(), user.getPasswordHash())) {
                 return Result.fail(ResultCode.PARAM_ERROR.getCode(), "新密码不能与原密码相同");
             }
-            systemRepository.resetPassword(user.getId(), PasswordUtils.hash(request.getNewPassword()));
-            systemRepository.updateConfigValue("admin.default.password.changed", "true");
+            if (!systemRepository.resetPasswordAndUpdateConfigValue(user.getId(),
+                    PasswordUtils.hash(request.getNewPassword()), DEFAULT_PASSWORD_CHANGED_CONFIG_KEY, "true")) {
+                return Result.fail(ResultCode.UNAUTHORIZED);
+            }
             forceLogoutAll(user.getId());
             auditChangePassword(servletRequest, user);
             return Result.success("密码已修改，请重新登录");

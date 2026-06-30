@@ -113,6 +113,19 @@ public class AdminSystemRepository {
         return mapper.resetPassword(userId, passwordHash) > 0;
     }
 
+    public boolean resetPasswordAndUpdateConfigValue(Long userId, String passwordHash,
+                                                     String configKey, String configValue) {
+        return inTransaction(() -> {
+            if (!resetPassword(userId, passwordHash)) {
+                return false;
+            }
+            if (!updateConfigValue(configKey, configValue)) {
+                throw new IllegalStateException("system config update failed: " + configKey);
+            }
+            return true;
+        });
+    }
+
     public boolean deleteUser(Long userId) {
         return inTransaction(() -> {
             int deleted = mapper.deleteUser(userId);
@@ -409,8 +422,8 @@ public class AdminSystemRepository {
                 isMaskedSensitiveValue(request)) > 0;
     }
 
-    public void updateConfigValue(String configKey, String configValue) {
-        mapper.updateConfigValue(configKey, configValue);
+    public boolean updateConfigValue(String configKey, String configValue) {
+        return mapper.updateConfigValue(configKey, configValue) > 0;
     }
 
     public boolean deleteConfig(Long id) {

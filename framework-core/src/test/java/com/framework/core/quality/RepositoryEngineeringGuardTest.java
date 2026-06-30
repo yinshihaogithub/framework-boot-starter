@@ -1030,12 +1030,14 @@ class RepositoryEngineeringGuardTest {
                 .contains("PasswordValidator.validateStrong(request.getNewPassword())")
                 .contains("PasswordUtils.verify(request.getOldPassword(), user.getPasswordHash())")
                 .contains("新密码不能与原密码相同")
-                .contains("updateConfigValue(\"admin.default.password.changed\", \"true\")")
+                .contains("DEFAULT_PASSWORD_CHANGED_CONFIG_KEY = \"admin.default.password.changed\"")
+                .contains("resetPasswordAndUpdateConfigValue(user.getId()")
                 .contains("forceLogoutAll(user.getId())")
                 .contains("sessionManager.forceLogoutAll(userId)")
                 .contains("密码已修改，请重新登录");
         assertThat(repository)
-                .contains("public void updateConfigValue(String configKey, String configValue)");
+                .contains("public boolean resetPasswordAndUpdateConfigValue(Long userId, String passwordHash")
+                .contains("public boolean updateConfigValue(String configKey, String configValue)");
         assertThat(mapper)
                 .contains("UPDATE sys_config")
                 .contains("WHERE config_key = #{configKey}");
