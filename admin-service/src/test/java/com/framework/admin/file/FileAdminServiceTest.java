@@ -259,6 +259,23 @@ class FileAdminServiceTest {
         assertThat(auditService.actions).isEmpty();
     }
 
+    @Test
+    void deleteReturnsNotFoundWhenRecordWasAlreadyMarkedDeletedByAnotherRequest() {
+        repository.record = new FileAdminModels.FileRecord()
+                .setId(9L)
+                .setFileKey("file-key")
+                .setOriginalFilename("hello.txt");
+        repository.markDeletedAffected = false;
+
+        Result<String> result = service.delete(9L, null);
+
+        assertThat(result.getCode()).isEqualTo(ResultCode.NOT_FOUND.getCode());
+        assertThat(result.getMessage()).isEqualTo("文件不存在");
+        assertThat(storageService.deletedKey).isNull();
+        assertThat(repository.deletedId).isEqualTo(9L);
+        assertThat(auditService.actions).isEmpty();
+    }
+
     private static void assertInvalidFileId(Result<?> result) {
         assertThat(result.isSuccess()).isFalse();
         assertThat(result.getCode()).isEqualTo(ResultCode.PARAM_ERROR.getCode());
@@ -278,6 +295,7 @@ class FileAdminServiceTest {
         private FileAdminModels.FileRecord created;
         private FileAdminModels.FileRecord record;
         private Long deletedId;
+        private boolean markDeletedAffected = true;
         private RuntimeException statsFailure;
         private RuntimeException listFailure;
         private RuntimeException createFailure;
@@ -334,11 +352,12 @@ class FileAdminServiceTest {
         }
 
         @Override
-        public void markDeleted(Long id) {
+        public boolean markDeleted(Long id) {
             if (markFailure != null) {
                 throw markFailure;
             }
             this.deletedId = id;
+            return markDeletedAffected;
         }
     }
 

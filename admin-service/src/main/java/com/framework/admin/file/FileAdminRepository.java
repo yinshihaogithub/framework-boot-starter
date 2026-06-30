@@ -41,8 +41,8 @@ public class FileAdminRepository {
         return Optional.ofNullable(mapper.findById(id));
     }
 
-    public void markDeleted(Long id) {
-        mapper.markDeleted(id);
+    public boolean markDeleted(Long id) {
+        return mapper.markDeleted(id) > 0;
     }
 
     private static int offset(int pageNum, int pageSize) {

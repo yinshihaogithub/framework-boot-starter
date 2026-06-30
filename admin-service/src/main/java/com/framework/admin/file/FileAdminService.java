@@ -175,7 +175,9 @@ public class FileAdminService {
             return Result.fail(ResultCode.SERVICE_ERROR.getCode(), "文件存储服务未启用");
         }
         try {
-            repository.markDeleted(id);
+            if (!repository.markDeleted(id)) {
+                return Result.fail(ResultCode.NOT_FOUND.getCode(), "文件不存在");
+            }
         } catch (RuntimeException e) {
             log.warn("[文件中心] 文件元数据删除失败 fileId={}, error={}", id, e.getMessage());
             return Result.fail(ResultCode.SERVICE_ERROR.getCode(), "文件删除失败");

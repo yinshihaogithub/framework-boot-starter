@@ -2497,8 +2497,8 @@ async function downloadFile(row: FileRecord) {
 
 async function deleteFile(row: FileRecord) {
   await confirmDelete(`删除文件 ${row.originalFilename}？`)
-  await api.deleteFile(row.id)
-  ElMessage.success('已删除')
+  const message = await api.deleteFile(row.id)
+  ElMessage.success(message || '已删除')
   await loadFiles()
 }
 
