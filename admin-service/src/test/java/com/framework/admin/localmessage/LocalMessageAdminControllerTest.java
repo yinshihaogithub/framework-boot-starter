@@ -29,12 +29,12 @@ class LocalMessageAdminControllerTest {
         InMemoryLocalMessageRepository repository = new InMemoryLocalMessageRepository();
         LocalMessage message = localMessage(1L)
                 .setStatus(LocalMessageStatus.PENDING)
-                .setRetryCount(0)
+                .setRetryCount(2)
                 .setMaxRetry(3)
                 .setNextRetryTime(LocalDateTime.now().plusMinutes(5));
         repository.save(message);
         LocalMessageAdminController.FailureRequest request = new LocalMessageAdminController.FailureRequest();
-        request.setReason("manual stop");
+        request.setReason(" manual stop ");
         LocalMessageAdminController controller = controller(repository);
 
         Result<String> result = controller.markFailure(1L, request, null);
@@ -45,6 +45,27 @@ class LocalMessageAdminControllerTest {
         assertThat(saved.getRetryCount()).isZero();
         assertThat(saved.getNextRetryTime()).isNull();
         assertThat(saved.getErrorMessage()).isEqualTo("manual stop");
+    }
+
+    @Test
+    void manualFailureUsesDefaultReasonWhenReasonIsBlank() {
+        InMemoryLocalMessageRepository repository = new InMemoryLocalMessageRepository();
+        repository.save(localMessage(5L)
+                .setStatus(LocalMessageStatus.PENDING)
+                .setRetryCount(1)
+                .setNextRetryTime(LocalDateTime.now().plusMinutes(5)));
+        LocalMessageAdminController.FailureRequest request = new LocalMessageAdminController.FailureRequest();
+        request.setReason(" ");
+        LocalMessageAdminController controller = controller(repository);
+
+        Result<String> result = controller.markFailure(5L, request, null);
+
+        assertThat(result.isSuccess()).isTrue();
+        LocalMessage saved = repository.findById(5L).orElseThrow();
+        assertThat(saved.getStatus()).isEqualTo(LocalMessageStatus.FAILED);
+        assertThat(saved.getRetryCount()).isZero();
+        assertThat(saved.getNextRetryTime()).isNull();
+        assertThat(saved.getErrorMessage()).isEqualTo("manual terminate");
     }
 
     @Test

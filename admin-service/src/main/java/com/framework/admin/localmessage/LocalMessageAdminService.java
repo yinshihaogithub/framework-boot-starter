@@ -199,8 +199,12 @@ public class LocalMessageAdminService {
             if (message == null) {
                 return ActionResult.fail(ResultCode.NOT_FOUND, "消息不存在");
             }
-            String safeReason = isBlank(reason) ? "manual terminate" : reason;
+            String safeReason = trimToNull(reason);
+            if (safeReason == null) {
+                safeReason = "manual terminate";
+            }
             message.setStatus(LocalMessageStatus.FAILED);
+            message.setRetryCount(0);
             message.setErrorMessage(safeReason);
             message.setNextRetryTime(null);
             repository.save(message);
