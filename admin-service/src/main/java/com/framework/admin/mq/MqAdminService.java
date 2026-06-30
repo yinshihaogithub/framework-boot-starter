@@ -27,6 +27,7 @@ import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -487,15 +488,21 @@ public class MqAdminService {
         return result;
     }
 
-    private void auditSuccess(HttpServletRequest servletRequest, String action, String operationType, Object params) {
+    private void auditSuccess(HttpServletRequest servletRequest, String action, String operationType,
+                              Map<String, Object> params) {
         if (auditService == null) {
             return;
         }
         try {
-            auditService.success(servletRequest, "MQ管理", action, operationType, params);
+            auditService.success(servletRequest, "MQ管理", action, operationType, auditParams(params));
         } catch (RuntimeException e) {
             log.warn("[MQ管理] 审计日志写入失败 action={}, error={}", action, e.getMessage());
         }
+    }
+
+    private Map<String, Object> auditParams(Map<String, Object> params) {
+        params.putIfAbsent("operator", operator(null));
+        return params;
     }
 
     private <T> T available(ObjectProvider<T> provider) {

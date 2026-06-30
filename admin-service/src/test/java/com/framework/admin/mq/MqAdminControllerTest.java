@@ -618,6 +618,7 @@ class MqAdminControllerTest {
 
     @Test
     void deleteFailedMessageRemovesStoreAndRepositoryRecord() {
+        UserContextHolder.set(new LoginUser().setUserId(7L).setUsername("alice"));
         InMemoryMqFailedMessageRepository repository = new InMemoryMqFailedMessageRepository(List.of(
                 failedMessage(3L, "trace-c", MqFailedMessage.STATUS_EXHAUSTED)));
         DeadLetterHandler handler = new DeadLetterHandler(repository, new MqProperties());
@@ -636,7 +637,8 @@ class MqAdminControllerTest {
                 .containsEntry("messageId", "msg-3")
                 .containsEntry("traceId", "trace-c")
                 .containsEntry("status", MqFailedMessage.STATUS_EXHAUSTED)
-                .containsEntry("deleted", true);
+                .containsEntry("deleted", true)
+                .containsEntry("operator", "alice");
     }
 
     @Test
@@ -662,7 +664,8 @@ class MqAdminControllerTest {
                 failedMessage(6L, "trace-f", MqFailedMessage.STATUS_MANUAL),
                 failedMessage(7L, "trace-g", MqFailedMessage.STATUS_EXHAUSTED)));
         DeadLetterHandler handler = new DeadLetterHandler(repository, new MqProperties());
-        MqAdminController controller = controller(handler, new MqProperties(), null);
+        RecordingAuditService auditService = new RecordingAuditService();
+        MqAdminController controller = controller(handler, new MqProperties(), null, null, auditService);
 
         Result<String> result = controller.cleanProcessed(null);
 
@@ -670,6 +673,10 @@ class MqAdminControllerTest {
         assertThat(result.getData()).isEqualTo("已清理 3 条记录");
         assertThat(handler.getFailedMessageStore().keySet()).containsExactly(4L);
         assertThat(repository.findAll()).extracting(MqFailedMessage::getId).containsExactly(4L);
+        assertThat(auditService.action).isEqualTo("清空MQ已处理记录");
+        assertThat(auditService.params)
+                .containsEntry("cleaned", 3)
+                .containsEntry("operator", "admin");
     }
 
     private static MqAdminController controller(DeadLetterHandler handler,
