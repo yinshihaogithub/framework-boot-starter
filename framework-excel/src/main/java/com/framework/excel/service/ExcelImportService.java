@@ -142,7 +142,23 @@ public class ExcelImportService {
     }
 
     private String normalizeHeader(String header) {
-        return header == null ? "" : header.trim();
+        if (header == null) {
+            return "";
+        }
+        String normalized = header.replace('\u00A0', ' ');
+        int start = 0;
+        int end = normalized.length();
+        while (start < end && isHeaderBoundarySpace(normalized.charAt(start))) {
+            start++;
+        }
+        while (end > start && isHeaderBoundarySpace(normalized.charAt(end - 1))) {
+            end--;
+        }
+        return normalized.substring(start, end);
+    }
+
+    private boolean isHeaderBoundarySpace(char value) {
+        return Character.isWhitespace(value) || Character.isSpaceChar(value);
     }
 
     private String exceptionMessage(Exception exception) {

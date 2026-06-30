@@ -88,6 +88,23 @@ class ExcelImportServiceTest {
     }
 
     @Test
+    void trimsUnicodeHeaderBoundarySpacesBeforeComparingWithRowClass() {
+        ExcelImportService importService = new ExcelImportService(new ExcelProperties());
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        EasyExcel.write(outputStream, HeaderWithUnicodeWhitespaceRow.class)
+                .sheet("Sheet1")
+                .doWrite(List.of(new HeaderWithUnicodeWhitespaceRow("alice")));
+
+        ExcelImportResult<ImportRow> result = importService.importExcel(
+                new ByteArrayInputStream(outputStream.toByteArray()),
+                ImportRow.class
+        );
+
+        assertThat(result.hasErrors()).isFalse();
+        assertThat(result.successCount()).isEqualTo(1);
+    }
+
+    @Test
     void returnsErrorResultWhenRowClassHasNoExcelPropertyHeaders() {
         ExcelImportService importService = new ExcelImportService(new ExcelProperties());
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
@@ -172,6 +189,19 @@ class ExcelImportServiceTest {
         private final String name;
 
         HeaderWithWhitespaceRow(String name) {
+            this.name = name;
+        }
+
+        public String getName() {
+            return name;
+        }
+    }
+
+    static class HeaderWithUnicodeWhitespaceRow {
+        @ExcelProperty("\u00A0Name\u3000")
+        private final String name;
+
+        HeaderWithUnicodeWhitespaceRow(String name) {
             this.name = name;
         }
 
