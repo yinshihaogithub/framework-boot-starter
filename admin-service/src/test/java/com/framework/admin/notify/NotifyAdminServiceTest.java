@@ -74,6 +74,67 @@ class NotifyAdminServiceTest {
     }
 
     @Test
+    void templatesNormalizeFiltersBeforeQueryingRepository() {
+        InMemoryNotifyAdminRepository repository = new InMemoryNotifyAdminRepository();
+        repository.createTemplate(templateRequest());
+        NotifyAdminModels.TemplateRequest otherTemplate = templateRequest();
+        otherTemplate.setTemplateCode("alert");
+        otherTemplate.setTemplateName("告警通知");
+        otherTemplate.setTitle("alert");
+        otherTemplate.setChannel("EMAIL");
+        otherTemplate.setStatus("DISABLED");
+        repository.createTemplate(otherTemplate);
+        NotifyAdminService service = service(repository, null);
+
+        PageResult<NotifyAdminModels.Template> page = service.templates(" welcome ", " log ", " enabled ", 1, 20);
+
+        assertThat(page.getTotal()).isEqualTo(1);
+        assertThat(page.getRecords()).extracting(NotifyAdminModels.Template::getTemplateCode)
+                .containsExactly("welcome");
+    }
+
+    @Test
+    void templatesReturnEmptyPageForInvalidChannelOrStatusFilter() {
+        InMemoryNotifyAdminRepository repository = new InMemoryNotifyAdminRepository();
+        repository.createTemplate(templateRequest());
+        NotifyAdminService service = service(repository, null);
+
+        PageResult<NotifyAdminModels.Template> invalidChannel = service.templates(null, "ding-talk", null, 1, 20);
+        PageResult<NotifyAdminModels.Template> invalidStatus = service.templates(null, null, "ARCHIVED", 1, 20);
+
+        assertThat(invalidChannel.getTotal()).isZero();
+        assertThat(invalidChannel.getRecords()).isEmpty();
+        assertThat(invalidStatus.getTotal()).isZero();
+        assertThat(invalidStatus.getRecords()).isEmpty();
+    }
+
+    @Test
+    void recordsNormalizeChannelFilterBeforeQueryingRepository() {
+        InMemoryNotifyAdminRepository repository = new InMemoryNotifyAdminRepository();
+        repository.createRecord(record("LOG", true));
+        repository.createRecord(record("EMAIL", true));
+        NotifyAdminService service = service(repository, null);
+
+        PageResult<NotifyAdminModels.Record> page = service.records(" log ", true, 1, 20);
+
+        assertThat(page.getTotal()).isEqualTo(1);
+        assertThat(page.getRecords()).extracting(NotifyAdminModels.Record::getChannel)
+                .containsExactly("LOG");
+    }
+
+    @Test
+    void recordsReturnEmptyPageForInvalidChannelFilter() {
+        InMemoryNotifyAdminRepository repository = new InMemoryNotifyAdminRepository();
+        repository.createRecord(record("LOG", true));
+        NotifyAdminService service = service(repository, null);
+
+        PageResult<NotifyAdminModels.Record> page = service.records("ding-talk", true, 1, 20);
+
+        assertThat(page.getTotal()).isZero();
+        assertThat(page.getRecords()).isEmpty();
+    }
+
+    @Test
     void queryEndpointsFallBackWhenRepositoryFails() {
         InMemoryNotifyAdminRepository repository = new InMemoryNotifyAdminRepository();
         repository.queryFailure = new RuntimeException("database down");
@@ -337,6 +398,15 @@ class NotifyAdminServiceTest {
         request.setWebhookUrl("https://example.com/webhook");
         request.setStatus("ENABLED");
         return request;
+    }
+
+    private static NotifyAdminModels.Record record(String channel, boolean success) {
+        return new NotifyAdminModels.Record()
+                .setTemplateCode("welcome")
+                .setChannel(channel)
+                .setTitle("hello")
+                .setContent("hello Codex")
+                .setSuccess(success);
     }
 
     private static void assertInvalidTemplateId(NotifyAdminService.ActionResult<?> result) {

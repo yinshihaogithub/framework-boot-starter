@@ -57,10 +57,16 @@ public class NotifyAdminService {
                                                            int pageNum, int pageSize) {
         int safePageNum = AdminPageSupport.safePageNum(pageNum);
         int safePageSize = AdminPageSupport.safePageSize(pageSize);
+        String safeKeyword = trimToNull(keyword);
+        String safeChannel = normalizeChannelFilter(channel);
+        String safeStatus = normalizeStatusFilter(status);
+        if (isInvalidFilter(channel, safeChannel) || isInvalidFilter(status, safeStatus)) {
+            return PageResult.empty(safePageNum, safePageSize);
+        }
         try {
             List<NotifyAdminModels.Template> records = repository.listTemplates(
-                    keyword, channel, status, safePageNum, safePageSize);
-            long total = repository.countTemplates(keyword, channel, status);
+                    safeKeyword, safeChannel, safeStatus, safePageNum, safePageSize);
+            long total = repository.countTemplates(safeKeyword, safeChannel, safeStatus);
             return PageResult.of(records, total, safePageNum, safePageSize);
         } catch (RuntimeException e) {
             log.warn("[通知中心] 模板列表查询失败 error={}", e.getMessage());
@@ -173,9 +179,13 @@ public class NotifyAdminService {
     public PageResult<NotifyAdminModels.Record> records(String channel, Boolean success, int pageNum, int pageSize) {
         int safePageNum = AdminPageSupport.safePageNum(pageNum);
         int safePageSize = AdminPageSupport.safePageSize(pageSize);
+        String safeChannel = normalizeChannelFilter(channel);
+        if (isInvalidFilter(channel, safeChannel)) {
+            return PageResult.empty(safePageNum, safePageSize);
+        }
         try {
-            List<NotifyAdminModels.Record> records = repository.listRecords(channel, success, safePageNum, safePageSize);
-            long total = repository.countRecords(channel, success);
+            List<NotifyAdminModels.Record> records = repository.listRecords(safeChannel, success, safePageNum, safePageSize);
+            long total = repository.countRecords(safeChannel, success);
             return PageResult.of(records, total, safePageNum, safePageSize);
         } catch (RuntimeException e) {
             log.warn("[通知中心] 发送记录查询失败 error={}", e.getMessage());
@@ -271,6 +281,35 @@ public class NotifyAdminService {
 
     private boolean hasText(String value) {
         return value != null && !value.isBlank();
+    }
+
+    private String trimToNull(String value) {
+        return hasText(value) ? value.trim() : null;
+    }
+
+    private String normalizeChannelFilter(String channel) {
+        String text = trimToNull(channel);
+        if (text == null) {
+            return null;
+        }
+        try {
+            return NotifyChannelType.valueOf(text.toUpperCase(Locale.ROOT)).name();
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+    }
+
+    private String normalizeStatusFilter(String status) {
+        String text = trimToNull(status);
+        if (text == null) {
+            return null;
+        }
+        String normalizedStatus = text.toUpperCase(Locale.ROOT);
+        return SUPPORTED_STATUSES.contains(normalizedStatus) ? normalizedStatus : null;
+    }
+
+    private boolean isInvalidFilter(String originalValue, String normalizedValue) {
+        return hasText(originalValue) && normalizedValue == null;
     }
 
     private <T> ActionResult<T> invalidTemplateId(Long id) {
