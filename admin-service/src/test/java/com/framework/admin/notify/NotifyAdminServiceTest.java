@@ -183,6 +183,42 @@ class NotifyAdminServiceTest {
     }
 
     @Test
+    void sendTestNormalizesReceiverAndWebhookOverridesBeforeSendingAndRecording() {
+        InMemoryNotifyAdminRepository repository = new InMemoryNotifyAdminRepository();
+        Long templateId = repository.createTemplate(templateRequest());
+        CapturingNotifyService notifyService = new CapturingNotifyService(true, "sent");
+        NotifyAdminService service = service(repository, notifyService);
+        NotifyAdminModels.SendRequest request = new NotifyAdminModels.SendRequest();
+        request.setReceivers(java.util.Arrays.asList(" ops@example.com ", " ", null, "dev@example.com"));
+        request.setWebhookUrl(" https://callback.example.com/hook ");
+
+        NotifyAdminService.ActionResult<NotifyAdminModels.Record> record = service.sendTest(templateId, request, null);
+
+        assertThat(record.success()).isTrue();
+        assertThat(record.data().getReceivers()).containsExactly("ops@example.com", "dev@example.com");
+        assertThat(record.data().getWebhookUrl()).isEqualTo("https://callback.example.com/hook");
+        assertThat(notifyService.message.getReceivers()).containsExactly("ops@example.com", "dev@example.com");
+        assertThat(notifyService.message.getWebhookUrl()).isEqualTo("https://callback.example.com/hook");
+        assertThat(repository.records.get(0).getReceivers()).containsExactly("ops@example.com", "dev@example.com");
+    }
+
+    @Test
+    void sendTestFallsBackToTemplateReceiversWhenOverrideReceiversAreBlank() {
+        InMemoryNotifyAdminRepository repository = new InMemoryNotifyAdminRepository();
+        Long templateId = repository.createTemplate(templateRequest());
+        CapturingNotifyService notifyService = new CapturingNotifyService(true, "sent");
+        NotifyAdminService service = service(repository, notifyService);
+        NotifyAdminModels.SendRequest request = new NotifyAdminModels.SendRequest();
+        request.setReceivers(List.of(" "));
+
+        NotifyAdminService.ActionResult<NotifyAdminModels.Record> record = service.sendTest(templateId, request, null);
+
+        assertThat(record.success()).isTrue();
+        assertThat(record.data().getReceivers()).containsExactly("admin@example.com");
+        assertThat(notifyService.message.getReceivers()).containsExactly("admin@example.com");
+    }
+
+    @Test
     void createTemplateSucceedsWhenAuditFails() {
         InMemoryNotifyAdminRepository repository = new InMemoryNotifyAdminRepository();
         NotifyAdminService service = service(repository, null, new ThrowingAuditService());

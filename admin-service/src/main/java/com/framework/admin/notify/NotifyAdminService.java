@@ -233,17 +233,18 @@ public class NotifyAdminService {
     }
 
     private List<String> resolveReceivers(NotifyAdminModels.Template template, NotifyAdminModels.SendRequest request) {
-        if (request != null && request.getReceivers() != null && !request.getReceivers().isEmpty()) {
-            return request.getReceivers();
+        List<String> requestReceivers = request == null ? List.of() : normalizeReceivers(request.getReceivers());
+        if (!requestReceivers.isEmpty()) {
+            return requestReceivers;
         }
-        return template.getReceivers();
+        return normalizeReceivers(template.getReceivers());
     }
 
     private String resolveWebhookUrl(NotifyAdminModels.Template template, NotifyAdminModels.SendRequest request) {
         if (request != null && hasText(request.getWebhookUrl())) {
             return request.getWebhookUrl().trim();
         }
-        return template.getWebhookUrl();
+        return trimToNull(template.getWebhookUrl());
     }
 
     private NotifyChannelType channel(String channel) {
@@ -289,6 +290,16 @@ public class NotifyAdminService {
 
     private String trimToNull(String value) {
         return hasText(value) ? value.trim() : null;
+    }
+
+    private List<String> normalizeReceivers(List<String> receivers) {
+        if (receivers == null || receivers.isEmpty()) {
+            return List.of();
+        }
+        return receivers.stream()
+                .filter(this::hasText)
+                .map(String::trim)
+                .toList();
     }
 
     private String normalizeChannelFilter(String channel) {
