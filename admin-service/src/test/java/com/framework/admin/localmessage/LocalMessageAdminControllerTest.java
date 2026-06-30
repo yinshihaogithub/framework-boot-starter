@@ -8,10 +8,12 @@ import com.framework.localmessage.model.LocalMessage;
 import com.framework.localmessage.model.LocalMessageStatus;
 import com.framework.localmessage.repository.LocalMessageRepository;
 import com.framework.localmessage.service.LocalMessageService;
+import com.framework.security.annotation.RequirePermission;
 import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 
+import java.lang.reflect.Method;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -23,6 +25,16 @@ import java.util.stream.Stream;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class LocalMessageAdminControllerTest {
+
+    @Test
+    void writeEndpointsRequireBothViewAndRetryPermissions() throws NoSuchMethodException {
+        assertLocalMessageWritePermission("retryDueMessages", HttpServletRequest.class);
+        assertLocalMessageWritePermission("retryNow", Long.class, HttpServletRequest.class);
+        assertLocalMessageWritePermission("markSuccess", Long.class, HttpServletRequest.class);
+        assertLocalMessageWritePermission("markFailure", Long.class, LocalMessageAdminController.FailureRequest.class,
+                HttpServletRequest.class);
+        assertLocalMessageWritePermission("delete", Long.class, HttpServletRequest.class);
+    }
 
     @Test
     void manualFailureMarksMessageAsTerminalFailed() {
@@ -465,6 +477,16 @@ class LocalMessageAdminControllerTest {
         assertThat(result.isSuccess()).isFalse();
         assertThat(result.getCode()).isEqualTo(ResultCode.PARAM_ERROR.getCode());
         assertThat(result.getMessage()).isEqualTo("本地消息ID必须大于0");
+    }
+
+    private static void assertLocalMessageWritePermission(String methodName, Class<?>... parameterTypes)
+            throws NoSuchMethodException {
+        Method method = LocalMessageAdminController.class.getDeclaredMethod(methodName, parameterTypes);
+        RequirePermission permission = method.getAnnotation(RequirePermission.class);
+
+        assertThat(permission).isNotNull();
+        assertThat(permission.logicalAnd()).isTrue();
+        assertThat(permission.value()).containsExactly("local-message:view", "local-message:retry");
     }
 
     private static <T> ObjectProvider<T> provider(T value) {

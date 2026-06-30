@@ -50,6 +50,24 @@ class PermissionAspectTest {
     }
 
     @Test
+    void logicalAndPermissionRequiresEveryPermission() {
+        UserContextHolder.set(new LoginUser().setUserId(1L).setPermissions(new String[]{"mq:retry"}));
+        MultiPermissionService service = proxy(new MultiPermissionService());
+
+        assertThatThrownBy(service::retry)
+                .isInstanceOf(PermissionException.class)
+                .hasMessageContaining("mq:view");
+    }
+
+    @Test
+    void logicalAndPermissionAllowsWhenAllPermissionsExist() {
+        UserContextHolder.set(new LoginUser().setUserId(1L).setPermissions(new String[]{"mq:view", "mq:retry"}));
+        MultiPermissionService service = proxy(new MultiPermissionService());
+
+        assertThat(service.retry()).isEqualTo("ok");
+    }
+
+    @Test
     void methodLevelRequirementOverridesClassLevelRequirement() {
         UserContextHolder.set(new LoginUser().setUserId(1L).setRoles(new String[]{"AUDITOR"}));
         MethodOverrideService service = proxy(new MethodOverrideService());
@@ -136,6 +154,13 @@ class PermissionAspectTest {
     public static class LoginRequiredService {
         @RequireLogin
         public String profile() {
+            return "ok";
+        }
+    }
+
+    public static class MultiPermissionService {
+        @RequirePermission(value = {"mq:view", "mq:retry"}, logicalAnd = true)
+        public String retry() {
             return "ok";
         }
     }

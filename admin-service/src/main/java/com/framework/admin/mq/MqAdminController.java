@@ -62,7 +62,7 @@ public class MqAdminController {
 
     @Operation(summary = "手动重发单条消息")
     @PostMapping("/failed-messages/{id}/retry")
-    @RequirePermission("mq:retry")
+    @RequirePermission(value = {"mq:view", "mq:retry"}, logicalAnd = true)
     public Result<String> retryOne(@PathVariable Long id,
                                    @RequestParam(defaultValue = "admin") String operator,
                                    @RequestParam(required = false) String remark,
@@ -72,7 +72,7 @@ public class MqAdminController {
 
     @Operation(summary = "批量重发消息")
     @PostMapping("/failed-messages/batch-retry")
-    @RequirePermission("mq:retry")
+    @RequirePermission(value = {"mq:view", "mq:retry"}, logicalAnd = true)
     public Result<MqAdminDTO.ManualRetryResult> batchRetry(@RequestBody MqAdminDTO.ManualRetryRequest request,
                                                            HttpServletRequest servletRequest) {
         return toResult(mqAdminService.batchRetry(request, servletRequest));
@@ -80,7 +80,7 @@ public class MqAdminController {
 
     @Operation(summary = "人工补偿完成")
     @PostMapping("/failed-messages/{id}/manual-success")
-    @RequirePermission("mq:retry")
+    @RequirePermission(value = {"mq:view", "mq:retry"}, logicalAnd = true)
     public Result<String> manualSuccess(@PathVariable Long id,
                                         @RequestBody(required = false) ManualCompensationRequest request,
                                         HttpServletRequest servletRequest) {
@@ -90,7 +90,7 @@ public class MqAdminController {
 
     @Operation(summary = "人工终止消息")
     @PostMapping("/failed-messages/{id}/manual-failure")
-    @RequirePermission("mq:retry")
+    @RequirePermission(value = {"mq:view", "mq:retry"}, logicalAnd = true)
     public Result<String> manualFailure(@PathVariable Long id,
                                         @RequestBody(required = false) ManualCompensationRequest request,
                                         HttpServletRequest servletRequest) {
@@ -100,14 +100,14 @@ public class MqAdminController {
 
     @Operation(summary = "删除失败记录")
     @DeleteMapping("/failed-messages/{id}")
-    @RequirePermission("mq:retry")
+    @RequirePermission(value = {"mq:view", "mq:retry"}, logicalAnd = true)
     public Result<String> deleteFailedMessage(@PathVariable Long id, HttpServletRequest servletRequest) {
         return toResult(mqAdminService.deleteFailedMessage(id, servletRequest));
     }
 
     @Operation(summary = "清空已处理记录")
     @DeleteMapping("/failed-messages/clean")
-    @RequirePermission("mq:retry")
+    @RequirePermission(value = {"mq:view", "mq:retry"}, logicalAnd = true)
     public Result<String> cleanProcessed(HttpServletRequest servletRequest) {
         return toResult(mqAdminService.cleanProcessed(servletRequest));
     }

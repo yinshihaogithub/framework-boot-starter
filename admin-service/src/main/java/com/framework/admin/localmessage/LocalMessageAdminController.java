@@ -58,28 +58,28 @@ public class LocalMessageAdminController {
 
     @Operation(summary = "扫描并重试到期消息")
     @PostMapping("/retry-due")
-    @RequirePermission("local-message:retry")
+    @RequirePermission(value = {"local-message:view", "local-message:retry"}, logicalAnd = true)
     public Result<Integer> retryDueMessages(HttpServletRequest servletRequest) {
         return toResult(localMessageAdminService.retryDueMessages(servletRequest));
     }
 
     @Operation(summary = "立即重试本地消息")
     @PostMapping("/{id}/retry")
-    @RequirePermission("local-message:retry")
+    @RequirePermission(value = {"local-message:view", "local-message:retry"}, logicalAnd = true)
     public Result<String> retryNow(@PathVariable Long id, HttpServletRequest servletRequest) {
         return toResult(localMessageAdminService.retryNow(id, servletRequest));
     }
 
     @Operation(summary = "标记成功")
     @PostMapping("/{id}/success")
-    @RequirePermission("local-message:retry")
+    @RequirePermission(value = {"local-message:view", "local-message:retry"}, logicalAnd = true)
     public Result<String> markSuccess(@PathVariable Long id, HttpServletRequest servletRequest) {
         return toResult(localMessageAdminService.markSuccess(id, servletRequest));
     }
 
     @Operation(summary = "标记失败")
     @PostMapping("/{id}/failure")
-    @RequirePermission("local-message:retry")
+    @RequirePermission(value = {"local-message:view", "local-message:retry"}, logicalAnd = true)
     public Result<String> markFailure(@PathVariable Long id,
                                       @RequestBody(required = false) FailureRequest request,
                                       HttpServletRequest servletRequest) {
@@ -89,7 +89,7 @@ public class LocalMessageAdminController {
 
     @Operation(summary = "删除本地消息")
     @DeleteMapping("/{id}")
-    @RequirePermission("local-message:retry")
+    @RequirePermission(value = {"local-message:view", "local-message:retry"}, logicalAnd = true)
     public Result<String> delete(@PathVariable Long id, HttpServletRequest servletRequest) {
         return toResult(localMessageAdminService.delete(id, servletRequest));
     }

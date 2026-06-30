@@ -13,11 +13,13 @@ import com.framework.mq.deadletter.MqRetryScheduler;
 import com.framework.mq.producer.MqMessageSender;
 import com.framework.mq.producer.MqMessageSenderRegistry;
 import com.framework.mq.core.MessageWrapper;
+import com.framework.security.annotation.RequirePermission;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.support.StaticApplicationContext;
 import jakarta.servlet.http.HttpServletRequest;
 
+import java.lang.reflect.Method;
 import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -28,6 +30,18 @@ import java.util.stream.Stream;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class MqAdminControllerTest {
+
+    @Test
+    void writeEndpointsRequireBothViewAndRetryPermissions() throws NoSuchMethodException {
+        assertMqWritePermission("retryOne", Long.class, String.class, String.class, HttpServletRequest.class);
+        assertMqWritePermission("batchRetry", MqAdminDTO.ManualRetryRequest.class, HttpServletRequest.class);
+        assertMqWritePermission("manualSuccess", Long.class, MqAdminController.ManualCompensationRequest.class,
+                HttpServletRequest.class);
+        assertMqWritePermission("manualFailure", Long.class, MqAdminController.ManualCompensationRequest.class,
+                HttpServletRequest.class);
+        assertMqWritePermission("deleteFailedMessage", Long.class, HttpServletRequest.class);
+        assertMqWritePermission("cleanProcessed", HttpServletRequest.class);
+    }
 
     @Test
     void returnsEmptyPageWhenMqRuntimeIsNotEnabled() {
@@ -491,6 +505,15 @@ class MqAdminControllerTest {
         assertThat(result.isSuccess()).isFalse();
         assertThat(result.getCode()).isEqualTo(ResultCode.PARAM_ERROR.getCode());
         assertThat(result.getMessage()).isEqualTo("消息ID必须大于0");
+    }
+
+    private static void assertMqWritePermission(String methodName, Class<?>... parameterTypes) throws NoSuchMethodException {
+        Method method = MqAdminController.class.getDeclaredMethod(methodName, parameterTypes);
+        RequirePermission permission = method.getAnnotation(RequirePermission.class);
+
+        assertThat(permission).isNotNull();
+        assertThat(permission.logicalAnd()).isTrue();
+        assertThat(permission.value()).containsExactly("mq:view", "mq:retry");
     }
 
     private static MqAdminController controller(DeadLetterHandler handler,
