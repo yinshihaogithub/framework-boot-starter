@@ -353,7 +353,7 @@ class TraceAdminServiceTest {
     private static LocalMessageService localMessageService(List<LocalMessage> messages) {
         return new LocalMessageService() {
             @Override
-            public LocalMessage publish(String topic, String businessKey, String payload) {
+            public LocalMessage publish(LocalMessage message) {
                 return null;
             }
 
@@ -390,7 +390,7 @@ class TraceAdminServiceTest {
     private static LocalMessageService failingLocalMessageService() {
         return new LocalMessageService() {
             @Override
-            public LocalMessage publish(String topic, String businessKey, String payload) {
+            public LocalMessage publish(LocalMessage message) {
                 return null;
             }
 

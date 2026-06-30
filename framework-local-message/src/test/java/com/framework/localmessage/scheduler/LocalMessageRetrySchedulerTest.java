@@ -39,6 +39,11 @@ class LocalMessageRetrySchedulerTest {
         }
 
         @Override
+        public LocalMessage publish(LocalMessage message) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
         public int retryDueMessages() {
             return 0;
         }

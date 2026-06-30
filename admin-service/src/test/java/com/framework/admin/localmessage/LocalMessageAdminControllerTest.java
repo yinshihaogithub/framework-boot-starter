@@ -650,7 +650,7 @@ class LocalMessageAdminControllerTest {
     private static LocalMessageService localMessageService(LocalMessageRepository repository) {
         return new LocalMessageService() {
             @Override
-            public LocalMessage publish(String topic, String businessKey, String payload) {
+            public LocalMessage publish(LocalMessage message) {
                 return null;
             }
 

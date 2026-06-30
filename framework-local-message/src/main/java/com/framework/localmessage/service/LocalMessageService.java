@@ -10,14 +10,14 @@ import java.util.Optional;
  */
 public interface LocalMessageService {
 
-    LocalMessage publish(String topic, String businessKey, String payload);
-
-    default LocalMessage publish(LocalMessage message) {
-        if (message == null) {
-            throw new IllegalArgumentException("message must not be null");
-        }
-        return publish(message.getTopic(), message.getBusinessKey(), message.getPayload());
+    default LocalMessage publish(String topic, String businessKey, String payload) {
+        return publish(new LocalMessage()
+                .setTopic(topic)
+                .setBusinessKey(businessKey)
+                .setPayload(payload));
     }
+
+    LocalMessage publish(LocalMessage message);
 
     int retryDueMessages();
 
