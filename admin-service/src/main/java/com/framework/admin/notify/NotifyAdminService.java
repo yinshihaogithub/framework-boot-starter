@@ -348,10 +348,16 @@ public class NotifyAdminService {
             return;
         }
         try {
-            auditService.success(request, "通知中心", action, operationType, auditService.params(params));
+            auditService.success(request, "通知中心", action, operationType, auditParams(params));
         } catch (RuntimeException e) {
             log.warn("[通知中心] 审计日志写入失败 action={}, error={}", action, e.getMessage());
         }
+    }
+
+    private Map<String, Object> auditParams(Object... params) {
+        Map<String, Object> auditParams = auditService.params(params);
+        auditParams.putIfAbsent("operator", operator());
+        return auditParams;
     }
 
     private Map<String, Long> emptyStats() {

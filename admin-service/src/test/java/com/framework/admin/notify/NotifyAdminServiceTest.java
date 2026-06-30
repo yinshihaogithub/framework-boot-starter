@@ -226,6 +226,55 @@ class NotifyAdminServiceTest {
     }
 
     @Test
+    void createTemplateAuditsCurrentUserAsOperator() {
+        UserContextHolder.set(new LoginUser().setUserId(7L).setUsername("alice"));
+        InMemoryNotifyAdminRepository repository = new InMemoryNotifyAdminRepository();
+        RecordingAuditService auditService = new RecordingAuditService();
+        NotifyAdminService service = service(repository, null, auditService);
+
+        NotifyAdminService.ActionResult<Long> result = service.createTemplate(templateRequest(), null);
+
+        assertThat(result.success()).isTrue();
+        assertThat(auditService.action).isEqualTo("新增通知模板");
+        assertThat(auditService.params)
+                .containsEntry("id", result.data())
+                .containsEntry("operator", "alice");
+    }
+
+    @Test
+    void updateTemplateAuditsCurrentUserAsOperator() {
+        UserContextHolder.set(new LoginUser().setUserId(8L).setUsername("bob"));
+        InMemoryNotifyAdminRepository repository = new InMemoryNotifyAdminRepository();
+        Long templateId = repository.createTemplate(templateRequest());
+        RecordingAuditService auditService = new RecordingAuditService();
+        NotifyAdminService service = service(repository, null, auditService);
+
+        NotifyAdminService.ActionResult<String> result = service.updateTemplate(templateId, templateRequest(), null);
+
+        assertThat(result.success()).isTrue();
+        assertThat(auditService.action).isEqualTo("更新通知模板");
+        assertThat(auditService.params)
+                .containsEntry("id", templateId)
+                .containsEntry("operator", "bob");
+    }
+
+    @Test
+    void deleteTemplateDefaultsAuditOperatorWhenUserContextIsMissing() {
+        InMemoryNotifyAdminRepository repository = new InMemoryNotifyAdminRepository();
+        Long templateId = repository.createTemplate(templateRequest());
+        RecordingAuditService auditService = new RecordingAuditService();
+        NotifyAdminService service = service(repository, null, auditService);
+
+        NotifyAdminService.ActionResult<String> result = service.deleteTemplate(templateId, null);
+
+        assertThat(result.success()).isTrue();
+        assertThat(auditService.action).isEqualTo("删除通知模板");
+        assertThat(auditService.params)
+                .containsEntry("id", templateId)
+                .containsEntry("operator", "admin");
+    }
+
+    @Test
     void sendTestNormalizesReceiverAndWebhookOverridesBeforeSendingAndRecording() {
         InMemoryNotifyAdminRepository repository = new InMemoryNotifyAdminRepository();
         Long templateId = repository.createTemplate(templateRequest());
