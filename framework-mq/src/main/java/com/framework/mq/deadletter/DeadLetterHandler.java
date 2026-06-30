@@ -171,19 +171,17 @@ public class DeadLetterHandler {
      * 删除记录（从内存和 MySQL）
      */
     public boolean removeRecord(Long id) {
-        MqFailedMessage removed = failedMessageStore.remove(id);
         boolean deleted = repository.deleteById(id);
+        MqFailedMessage removed = failedMessageStore.remove(id);
         return removed != null || deleted;
     }
 
     public int cleanProcessedRecords() {
-        long before = failedMessageStore.size();
-        failedMessageStore.values().removeIf(m ->
-                MqFailedMessage.STATUS_SUCCESS.equals(m.getStatus()) ||
-                MqFailedMessage.STATUS_EXHAUSTED.equals(m.getStatus()) ||
-                MqFailedMessage.STATUS_MANUAL.equals(m.getStatus()));
         int deleted = repository.deleteProcessed();
-        return deleted > 0 ? deleted : Math.toIntExact(before - failedMessageStore.size());
+        long before = failedMessageStore.size();
+        failedMessageStore.values().removeIf(DeadLetterHandler::isProcessedRecord);
+        int removedFromStore = Math.toIntExact(before - failedMessageStore.size());
+        return deleted > 0 ? deleted : removedFromStore;
     }
 
     // ===== 私有方法 =====
@@ -226,6 +224,12 @@ public class DeadLetterHandler {
         } catch (Exception e) {
             log.warn("持久化失败消息到MySQL失败: {}", failureMessage(e));
         }
+    }
+
+    private static boolean isProcessedRecord(MqFailedMessage message) {
+        return MqFailedMessage.STATUS_SUCCESS.equals(message.getStatus())
+                || MqFailedMessage.STATUS_EXHAUSTED.equals(message.getStatus())
+                || MqFailedMessage.STATUS_MANUAL.equals(message.getStatus());
     }
 
     private String extractTraceId(MessageProperties props, String body) {

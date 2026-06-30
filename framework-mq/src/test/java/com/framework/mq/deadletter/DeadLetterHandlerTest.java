@@ -150,10 +150,58 @@ class DeadLetterHandlerTest {
         assertThat(record.getStatus()).isEqualTo(MqFailedMessage.STATUS_PENDING);
     }
 
+    @Test
+    void removeRecordKeepsMemoryWhenRepositoryDeleteFails() {
+        InMemoryRepository repository = new InMemoryRepository(List.of(
+                failedMessage(1L, MqFailedMessage.STATUS_EXHAUSTED)));
+        DeadLetterHandler handler = new DeadLetterHandler(repository, new MqProperties());
+        repository.failDeleteById = true;
+
+        assertThatThrownBy(() -> handler.removeRecord(1L))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("delete failed");
+
+        assertThat(handler.getById(1L)).isNotNull();
+        assertThat(repository.findById(1L)).isPresent();
+    }
+
+    @Test
+    void cleanProcessedRecordsKeepsMemoryWhenRepositoryDeleteFails() {
+        InMemoryRepository repository = new InMemoryRepository(List.of(
+                failedMessage(1L, MqFailedMessage.STATUS_PENDING),
+                failedMessage(2L, MqFailedMessage.STATUS_SUCCESS),
+                failedMessage(3L, MqFailedMessage.STATUS_MANUAL),
+                failedMessage(4L, MqFailedMessage.STATUS_EXHAUSTED)));
+        DeadLetterHandler handler = new DeadLetterHandler(repository, new MqProperties());
+        repository.failDeleteProcessed = true;
+
+        assertThatThrownBy(handler::cleanProcessedRecords)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("delete processed failed");
+
+        assertThat(handler.getFailedMessageStore().keySet()).containsExactlyInAnyOrder(1L, 2L, 3L, 4L);
+        assertThat(repository.findAll())
+                .extracting(MqFailedMessage::getId)
+                .containsExactly(1L, 2L, 3L, 4L);
+    }
+
     private static class InMemoryRepository implements MqFailedMessageRepository {
 
         private final List<MqFailedMessage> saved = new ArrayList<>();
         private long nextId = 1L;
+        private boolean failDeleteById;
+        private boolean failDeleteProcessed;
+
+        private InMemoryRepository() {
+        }
+
+        private InMemoryRepository(List<MqFailedMessage> initialMessages) {
+            saved.addAll(initialMessages);
+            initialMessages.stream()
+                    .map(MqFailedMessage::getId)
+                    .filter(id -> id != null && id >= nextId)
+                    .forEach(id -> nextId = id + 1);
+        }
 
         @Override
         public MqFailedMessage save(MqFailedMessage message) {
@@ -171,22 +219,44 @@ class DeadLetterHandlerTest {
 
         @Override
         public List<MqFailedMessage> findAll() {
-            return List.of();
+            return List.copyOf(saved);
         }
 
         @Override
         public boolean deleteById(Long id) {
+            if (failDeleteById) {
+                throw new IllegalStateException("delete failed");
+            }
             return saved.removeIf(message -> id.equals(message.getId()));
         }
 
         @Override
         public int deleteProcessed() {
-            return 0;
+            if (failDeleteProcessed) {
+                throw new IllegalStateException("delete processed failed");
+            }
+            int before = saved.size();
+            saved.removeIf(DeadLetterHandlerTest::isProcessedRecord);
+            return before - saved.size();
         }
 
         List<MqFailedMessage> saved() {
             return saved;
         }
+    }
+
+    private static MqFailedMessage failedMessage(Long id, String status) {
+        MqFailedMessage message = new MqFailedMessage();
+        message.setId(id);
+        message.setMessageId("msg-" + id);
+        message.setStatus(status);
+        return message;
+    }
+
+    private static boolean isProcessedRecord(MqFailedMessage message) {
+        return MqFailedMessage.STATUS_SUCCESS.equals(message.getStatus())
+                || MqFailedMessage.STATUS_EXHAUSTED.equals(message.getStatus())
+                || MqFailedMessage.STATUS_MANUAL.equals(message.getStatus());
     }
 
     private static class RecordingChannel {
