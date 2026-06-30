@@ -511,6 +511,7 @@
                   <el-select v-model="mqQuery.status" clearable placeholder="状态" class="filter">
                     <el-option label="PENDING" value="PENDING" />
                     <el-option label="RETRYING" value="RETRYING" />
+                    <el-option label="SUCCESS" value="SUCCESS" />
                     <el-option label="EXHAUSTED" value="EXHAUSTED" />
                     <el-option label="MANUAL" value="MANUAL" />
                   </el-select>
@@ -551,7 +552,7 @@
                   <el-button v-if="can('mq:retry')" :icon="Check" circle size="small" @click="manualSuccessMq(row)" />
                   <el-button v-if="can('mq:retry')" :icon="Close" circle size="small" @click="manualFailureMq(row)" />
                   <el-button v-if="can('mq:retry')" :icon="Delete" circle size="small" @click="deleteMq(row)" />
-                  <el-button :icon="View" circle size="small" @click="openDetail(row)" />
+                  <el-button :icon="View" circle size="small" @click="openMqDetail(row.id)" />
                 </template>
               </el-table-column>
             </el-table>
@@ -2301,6 +2302,11 @@ async function deleteMq(row: MqFailedMessage) {
   const message = await api.deleteMqMessage(row.id)
   ElMessage.success(message)
   await loadMq()
+}
+
+async function openMqDetail(id: number) {
+  const message = await api.mqFailedMessage(id)
+  openDetail(message)
 }
 
 async function cleanMq() {

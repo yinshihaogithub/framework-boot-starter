@@ -91,6 +91,7 @@ export interface MqFailedMessage {
   queueName?: string
   payload?: string
   errorMessage?: string
+  errorStack?: string
   retryCount?: number
   maxRetry?: number
   status?: string
@@ -530,6 +531,7 @@ export const api = {
   mqStats: () => getData<MqStats>('/admin/mq/stats'),
   mqFailedMessages: (params: Record<string, unknown>) =>
     getData<PageResult<MqFailedMessage>>('/admin/mq/failed-messages', params),
+  mqFailedMessage: (id: number) => getData<MqFailedMessage>(`/admin/mq/failed-messages/${id}`),
   retryMqMessage: (id: number, operator = 'admin', remark = '') =>
     postData<string>(`/admin/mq/failed-messages/${id}/retry`, null, { operator, remark }),
   batchRetryMqMessages: (ids: number[], operator = 'admin', remark = '') =>

@@ -35,6 +35,7 @@ public class MqAdminDTO {
         private String queueName;
         private String payload;
         private String errorMessage;
+        private String errorStack;
         private Integer retryCount;
         private Integer maxRetry;
         private String status;

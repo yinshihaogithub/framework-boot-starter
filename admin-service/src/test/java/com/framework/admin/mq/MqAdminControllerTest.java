@@ -74,6 +74,26 @@ class MqAdminControllerTest {
     }
 
     @Test
+    void listFailedMessagesSupportsSuccessStatusAndIncludesErrorStack() {
+        MqFailedMessage successMessage = failedMessage(10L, "trace-success", MqFailedMessage.STATUS_SUCCESS);
+        successMessage.setErrorStack("stack-trace");
+        DeadLetterHandler handler = new DeadLetterHandler(
+                new InMemoryMqFailedMessageRepository(List.of(
+                        successMessage,
+                        failedMessage(11L, "trace-success", MqFailedMessage.STATUS_PENDING))),
+                new MqProperties());
+        MqAdminController controller = controller(handler, new MqProperties(), null);
+
+        Result<PageResult<MqAdminDTO.MqFailedMessageVO>> result = controller.listFailedMessages(
+                null, " success ", "trace-success", null, null, 1, 20);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getData().getTotal()).isEqualTo(1);
+        assertThat(result.getData().getRecords().get(0).getStatus()).isEqualTo(MqFailedMessage.STATUS_SUCCESS);
+        assertThat(result.getData().getRecords().get(0).getErrorStack()).isEqualTo("stack-trace");
+    }
+
+    @Test
     void listFailedMessagesNormalizesFiltersAndKeepsNullCreateTimeLast() {
         MqFailedMessage nullTimeMessage = failedMessage(1L, "trace-a", MqFailedMessage.STATUS_PENDING);
         nullTimeMessage.setCreateTime(null);
@@ -327,6 +347,21 @@ class MqAdminControllerTest {
     }
 
     @Test
+    void detailReturnsErrorStackForFailedMessage() {
+        MqFailedMessage message = failedMessage(12L, "trace-z", MqFailedMessage.STATUS_EXHAUSTED);
+        message.setErrorStack("java.lang.IllegalStateException: boom");
+        DeadLetterHandler handler = new DeadLetterHandler(
+                new InMemoryMqFailedMessageRepository(List.of(message)), new MqProperties());
+        MqAdminController controller = controller(handler, new MqProperties(), null);
+
+        Result<MqAdminDTO.MqFailedMessageVO> result = controller.getFailedMessage(12L);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getData().getId()).isEqualTo(12L);
+        assertThat(result.getData().getErrorStack()).isEqualTo("java.lang.IllegalStateException: boom");
+    }
+
+    @Test
     void manualSuccessMarksMessageAsCompensatedAndAuditsStatusTransition() {
         InMemoryMqFailedMessageRepository repository = new InMemoryMqFailedMessageRepository(List.of(
                 withNextRetryTime(failedMessage(1L, "trace-a", MqFailedMessage.STATUS_EXHAUSTED))));
@@ -562,6 +597,7 @@ class MqAdminControllerTest {
         message.setRoutingKey("order.created");
         message.setQueueName("order.queue");
         message.setPayload("{}");
+        message.setErrorStack("stack-" + id);
         message.setRetryCount(0);
         message.setMaxRetry(3);
         message.setStatus(status);

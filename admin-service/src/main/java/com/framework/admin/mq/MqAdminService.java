@@ -393,6 +393,7 @@ public class MqAdminService {
                 .setQueueName(msg.getQueueName())
                 .setPayload(msg.getPayload())
                 .setErrorMessage(msg.getErrorMessage())
+                .setErrorStack(msg.getErrorStack())
                 .setRetryCount(msg.getRetryCount())
                 .setMaxRetry(msg.getMaxRetry())
                 .setStatus(msg.getStatus())
