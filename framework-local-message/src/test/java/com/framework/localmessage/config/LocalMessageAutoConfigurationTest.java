@@ -1,5 +1,8 @@
 package com.framework.localmessage.config;
 
+import com.framework.localmessage.mapper.LocalMessageMapper;
+import com.framework.localmessage.model.LocalMessage;
+import com.framework.localmessage.model.LocalMessageStatus;
 import com.framework.localmessage.repository.LocalMessageRepository;
 import com.framework.localmessage.scheduler.LocalMessageRetryScheduler;
 import com.framework.localmessage.service.LocalMessageService;
@@ -7,11 +10,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
-import javax.sql.DataSource;
-import java.io.PrintWriter;
-import java.sql.Connection;
-import java.sql.SQLFeatureNotSupportedException;
-import java.util.logging.Logger;
+import java.time.LocalDateTime;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -21,7 +21,7 @@ class LocalMessageAutoConfigurationTest {
             .withConfiguration(AutoConfigurations.of(LocalMessageAutoConfiguration.class));
 
     @Test
-    void autoConfigurationSkipsTableInfrastructureWithoutDataSource() {
+    void autoConfigurationSkipsTableInfrastructureWithoutMapper() {
         contextRunner.run(context -> assertThat(context)
                 .hasSingleBean(LocalMessageProperties.class)
                 .doesNotHaveBean(LocalMessageRepository.class)
@@ -30,15 +30,16 @@ class LocalMessageAutoConfigurationTest {
     }
 
     @Test
-    void autoConfigurationRegistersTableInfrastructureWithDataSource() {
+    void autoConfigurationRegistersTableInfrastructureWithMapper() {
         contextRunner
                 .withPropertyValues(
                         "framework.local-message.auto-create-table=false",
                         "framework.local-message.scheduler.enabled=false")
-                .withBean(DataSource.class, LocalMessageAutoConfigurationTest::dataSource)
+                .withBean(LocalMessageMapper.class, CapturingLocalMessageMapper::new)
                 .run(context -> {
                     assertThat(context)
                             .hasSingleBean(LocalMessageProperties.class)
+                            .hasSingleBean(LocalMessageMapper.class)
                             .hasSingleBean(LocalMessageRepository.class)
                             .hasSingleBean(LocalMessageService.class)
                             .doesNotHaveBean(LocalMessageRetryScheduler.class);
@@ -67,52 +68,41 @@ class LocalMessageAutoConfigurationTest {
                         .hasMessageContaining(message));
     }
 
-    private static DataSource dataSource() {
-        return new ThrowingDataSource();
-    }
+    private static class CapturingLocalMessageMapper implements LocalMessageMapper {
 
-    private static class ThrowingDataSource implements DataSource {
         @Override
-        public Connection getConnection() {
-            throw new UnsupportedOperationException("test data source should not be used");
+        public void createTableIfNotExists(String tableName) {
         }
 
         @Override
-        public Connection getConnection(String username, String password) {
-            throw new UnsupportedOperationException("test data source should not be used");
-        }
-
-        @Override
-        public PrintWriter getLogWriter() {
-            return null;
-        }
-
-        @Override
-        public void setLogWriter(PrintWriter out) {
-        }
-
-        @Override
-        public void setLoginTimeout(int seconds) {
-        }
-
-        @Override
-        public int getLoginTimeout() {
+        public int insert(String tableName, LocalMessage message) {
             return 0;
         }
 
         @Override
-        public Logger getParentLogger() throws SQLFeatureNotSupportedException {
-            throw new SQLFeatureNotSupportedException();
+        public int update(String tableName, LocalMessage message) {
+            return 0;
         }
 
         @Override
-        public <T> T unwrap(Class<T> iface) {
-            throw new UnsupportedOperationException();
+        public LocalMessage findById(String tableName, Long id) {
+            return null;
         }
 
         @Override
-        public boolean isWrapperFor(Class<?> iface) {
-            return false;
+        public List<LocalMessage> findDueMessages(String tableName, LocalMessageStatus status,
+                                                  LocalDateTime now, int limit) {
+            return List.of();
+        }
+
+        @Override
+        public List<LocalMessage> findAll(String tableName) {
+            return List.of();
+        }
+
+        @Override
+        public int delete(String tableName, Long id) {
+            return 0;
         }
     }
 }

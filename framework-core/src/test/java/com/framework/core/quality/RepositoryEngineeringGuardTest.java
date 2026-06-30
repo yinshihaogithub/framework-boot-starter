@@ -285,6 +285,59 @@ class RepositoryEngineeringGuardTest {
     }
 
     @Test
+    void localMessagePersistenceUsesAnnotationMapperInsteadOfJdbcTemplate() throws Exception {
+        Path localMessageMain = root.resolve("framework-local-message/src/main/java");
+        try (Stream<Path> files = Files.walk(localMessageMain)) {
+            List<Path> javaFiles = files
+                    .filter(Files::isRegularFile)
+                    .filter(path -> path.toString().endsWith(".java"))
+                    .toList();
+
+            assertThat(javaFiles).isNotEmpty();
+            for (Path javaFile : javaFiles) {
+                String content = read(javaFile);
+                assertThat(content)
+                        .as(javaFile + " must keep local-message persistence on annotation Mapper style")
+                        .doesNotContain("JdbcTemplate")
+                        .doesNotContain("GeneratedKeyHolder")
+                        .doesNotContain("JdbcLocalMessageRepository");
+            }
+        }
+
+        String autoConfiguration = read(root.resolve(
+                "framework-local-message/src/main/java/com/framework/localmessage/config/LocalMessageAutoConfiguration.java"));
+        String mapper = read(root.resolve(
+                "framework-local-message/src/main/java/com/framework/localmessage/mapper/LocalMessageMapper.java"));
+        String repository = read(root.resolve(
+                "framework-local-message/src/main/java/com/framework/localmessage/repository/MybatisLocalMessageRepository.java"));
+        String repositoryTest = read(root.resolve(
+                "framework-local-message/src/test/java/com/framework/localmessage/repository/MybatisLocalMessageRepositoryTest.java"));
+        String mapperTest = read(root.resolve(
+                "framework-local-message/src/test/java/com/framework/localmessage/mapper/LocalMessageMapperTest.java"));
+
+        assertThat(autoConfiguration)
+                .contains("@MapperScan(\"com.framework.localmessage.mapper\")")
+                .contains("LocalMessageMapper")
+                .contains("MybatisLocalMessageRepository");
+        assertThat(mapper)
+                .contains("@Mapper")
+                .contains("CREATE TABLE IF NOT EXISTS ${tableName}")
+                .contains("@Options(useGeneratedKeys = true, keyProperty = \"message.id\")")
+                .contains("WHERE status = #{status}")
+                .contains("LIMIT #{limit}");
+        assertThat(repository)
+                .contains("mapper.insert(tableName, message)")
+                .contains("mapper.findDueMessages(tableName, LocalMessageStatus.PENDING")
+                .contains("local message insert failed");
+        assertThat(repositoryTest)
+                .contains("insertDelegatesAllCompensationColumnsAndRequiresGeneratedKey")
+                .contains("insertFailsWhenMapperDoesNotReturnGeneratedKey");
+        assertThat(mapperTest)
+                .contains("mapperUsesAnnotationSqlAndGeneratedKeys")
+                .contains("defaultAutoCreateDdlMatchesPackagedMysqlScript");
+    }
+
+    @Test
     void localMessageAdminExposesSingleMessageManualRetry() throws Exception {
         String controller = read(root.resolve(
                 "admin-service/src/main/java/com/framework/admin/localmessage/LocalMessageAdminController.java"));

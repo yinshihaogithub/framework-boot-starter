@@ -12,8 +12,8 @@
 </dependency>
 ```
 
-> 需要业务应用提供 MySQL `DataSource`。模块只依赖 `spring-jdbc`，不会主动触发 Spring Boot 数据源自动配置。
-> JDBC 持久层和自动建表器会校验 `JdbcTemplate`，表名只允许字母、数字和下划线，避免动态 SQL 表名注入。
+> 需要业务应用提供 MySQL `DataSource` 和 MyBatis 运行环境。模块默认使用注解 Mapper，无需 XML Mapper。
+> Mapper repository 和自动建表器会校验动态表名，表名只允许字母、数字和下划线，避免动态 SQL 表名注入。
 
 ## 配置
 
@@ -41,7 +41,7 @@ framework:
 
 MySQL 初始化脚本：`framework-local-message/src/main/resources/db/mysql/framework_local_message.sql`。工程根目录也提供聚合脚本：`sql/mysql/framework_boot_starter_init.sql`。
 
-JDBC repository 会完整映射 `message_id`、`trace_id`、上游消息 ID、租户、操作人、来源系统、状态、重试次数和下次重试时间；补偿扫描只拉取 `PENDING` 且已到期的消息。
+Mapper repository 会完整映射 `message_id`、`trace_id`、上游消息 ID、租户、操作人、来源系统、状态、重试次数和下次重试时间；补偿扫描只拉取 `PENDING` 且已到期的消息。
 
 | 字段 | 说明 |
 |---|---|
