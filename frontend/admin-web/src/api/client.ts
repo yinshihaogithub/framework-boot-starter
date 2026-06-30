@@ -430,9 +430,9 @@ http.interceptors.request.use((config) => {
 
 http.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
     if (axios.isAxiosError(error) && error.response) {
-      const data = error.response.data as Partial<ApiResult<unknown>> | undefined
+      const data = await parseErrorPayload(error.response.data)
       const apiError = new ApiError(
         data?.message || error.message || '请求失败',
         data?.code,
@@ -447,6 +447,35 @@ http.interceptors.response.use(
     return Promise.reject(error)
   }
 )
+
+async function parseErrorPayload(data: unknown): Promise<Partial<ApiResult<unknown>> | undefined> {
+  if (data instanceof Blob) {
+    if (data.size <= 0) {
+      return undefined
+    }
+    return parseApiResultText(await data.text())
+  }
+  if (typeof data === 'string') {
+    return parseApiResultText(data)
+  }
+  return isApiResultLike(data) ? data : undefined
+}
+
+function parseApiResultText(text: string): Partial<ApiResult<unknown>> | undefined {
+  if (!text.trim()) {
+    return undefined
+  }
+  try {
+    const parsed: unknown = JSON.parse(text)
+    return isApiResultLike(parsed) ? parsed : undefined
+  } catch {
+    return undefined
+  }
+}
+
+function isApiResultLike(value: unknown): value is Partial<ApiResult<unknown>> {
+  return typeof value === 'object' && value !== null
+}
 
 function unwrap<T>(response: ApiResult<T>): T {
   if (response.code !== 200) {
