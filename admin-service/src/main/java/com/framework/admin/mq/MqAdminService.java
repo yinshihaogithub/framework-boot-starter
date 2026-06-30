@@ -267,10 +267,17 @@ public class MqAdminService {
             return ActionResult.fail(ResultCode.SERVICE_ERROR, "MQ死信存储未启用");
         }
         try {
+            MqFailedMessage message = handler.getById(id);
             boolean deleted = handler.removeRecord(id);
+            if (!deleted) {
+                return ActionResult.fail(ResultCode.NOT_FOUND, "消息不存在");
+            }
             auditSuccess(servletRequest, "删除MQ失败记录", "DELETE",
-                    auditService.params("id", id, "deleted", deleted));
-            return deleted ? ActionResult.success("删除成功") : ActionResult.fail(ResultCode.NOT_FOUND, "记录不存在");
+                    auditService.params("id", id, "messageId", message == null ? null : message.getMessageId(),
+                            "traceId", message == null ? null : message.getTraceId(),
+                            "status", message == null ? null : message.getStatus(),
+                            "deleted", true));
+            return ActionResult.success("删除成功");
         } catch (Exception e) {
             log.debug("删除MQ失败记录失败: {}", e.getMessage());
             return ActionResult.fail(ResultCode.SERVICE_ERROR, "MQ失败记录删除失败");

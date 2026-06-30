@@ -387,7 +387,8 @@ class MqAdminControllerTest {
         InMemoryMqFailedMessageRepository repository = new InMemoryMqFailedMessageRepository(List.of(
                 failedMessage(3L, "trace-c", MqFailedMessage.STATUS_EXHAUSTED)));
         DeadLetterHandler handler = new DeadLetterHandler(repository, new MqProperties());
-        MqAdminController controller = controller(handler, new MqProperties(), null);
+        RecordingAuditService auditService = new RecordingAuditService();
+        MqAdminController controller = controller(handler, new MqProperties(), null, null, auditService);
 
         Result<String> result = controller.deleteFailedMessage(3L, null);
 
@@ -395,6 +396,28 @@ class MqAdminControllerTest {
         assertThat(result.getData()).isEqualTo("删除成功");
         assertThat(handler.getById(3L)).isNull();
         assertThat(repository.findById(3L)).isEmpty();
+        assertThat(auditService.action).isEqualTo("删除MQ失败记录");
+        assertThat(auditService.params)
+                .containsEntry("id", 3L)
+                .containsEntry("messageId", "msg-3")
+                .containsEntry("traceId", "trace-c")
+                .containsEntry("status", MqFailedMessage.STATUS_EXHAUSTED)
+                .containsEntry("deleted", true);
+    }
+
+    @Test
+    void deleteFailedMessageReturnsNotFoundWhenMessageDoesNotExist() {
+        DeadLetterHandler handler = new DeadLetterHandler(
+                new InMemoryMqFailedMessageRepository(List.of()), new MqProperties());
+        RecordingAuditService auditService = new RecordingAuditService();
+        MqAdminController controller = controller(handler, new MqProperties(), null, null, auditService);
+
+        Result<String> result = controller.deleteFailedMessage(404L, null);
+
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getCode()).isEqualTo(ResultCode.NOT_FOUND.getCode());
+        assertThat(result.getMessage()).isEqualTo("消息不存在");
+        assertThat(auditService.action).isNull();
     }
 
     @Test
