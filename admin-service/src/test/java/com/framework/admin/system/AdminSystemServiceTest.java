@@ -208,6 +208,37 @@ class AdminSystemServiceTest {
     }
 
     @Test
+    void createUserRejectsInvalidRoleIdsBeforeRepositoryWrite() {
+        UserCreateRequest request = new UserCreateRequest();
+        request.setUsername("alice");
+        request.setPassword("Pass@123");
+        request.setRoleIds(List.of(1L, 0L));
+
+        Result<Long> result = service.createUser(request, null);
+
+        assertThat(result.getCode()).isEqualTo(ResultCode.PARAM_ERROR.getCode());
+        assertThat(result.getMessage()).isEqualTo("角色ID必须大于0");
+        assertThat(repository.createdUser).isNull();
+        assertThat(repository.checkedRoleIds).isEmpty();
+    }
+
+    @Test
+    void createUserReturnsNotFoundWhenRoleIdsDoNotExist() {
+        UserCreateRequest request = new UserCreateRequest();
+        request.setUsername("alice");
+        request.setPassword("Pass@123");
+        request.setRoleIds(List.of(2L, 2L, 3L));
+        repository.rolesExist = false;
+
+        Result<Long> result = service.createUser(request, null);
+
+        assertNotFound(result, "角色不存在");
+        assertThat(request.getRoleIds()).containsExactly(2L, 3L);
+        assertThat(repository.checkedRoleIds).containsExactly(2L, 3L);
+        assertThat(repository.createdUser).isNull();
+    }
+
+    @Test
     void updateUserRefreshesPermissionCacheAndForcesLogout() {
         FakePermissionCacheService permissionCacheService = new FakePermissionCacheService();
         FakeSessionManager sessionManager = new FakeSessionManager();
@@ -226,6 +257,35 @@ class AdminSystemServiceTest {
         assertThat(permissionCacheService.refreshedUserIds).containsExactly(9L);
         assertThat(sessionManager.forceLogoutUserIds).containsExactly(9L);
         assertThat(auditService.actions).containsExactly("更新用户");
+    }
+
+    @Test
+    void updateUserDeduplicatesRoleIdsBeforeRepositoryWrite() {
+        UserUpdateRequest request = new UserUpdateRequest();
+        request.setNickname("Alice");
+        request.setStatus("ENABLED");
+        request.setRoleIds(List.of(2L, 2L, 3L));
+
+        Result<String> result = service.updateUser(9L, request, null);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(repository.checkedRoleIds).containsExactly(2L, 3L);
+        assertThat(repository.updatedUser.getRoleIds()).containsExactly(2L, 3L);
+    }
+
+    @Test
+    void updateUserReturnsNotFoundWhenRoleIdsDoNotExist() {
+        UserUpdateRequest request = new UserUpdateRequest();
+        request.setNickname("Alice");
+        request.setStatus("ENABLED");
+        request.setRoleIds(List.of(2L));
+        repository.rolesExist = false;
+
+        Result<String> result = service.updateUser(9L, request, null);
+
+        assertNotFound(result, "角色不存在");
+        assertThat(repository.checkedRoleIds).containsExactly(2L);
+        assertThat(repository.updatedUserId).isNull();
     }
 
     @Test
@@ -461,6 +521,33 @@ class AdminSystemServiceTest {
         assertThat(repository.replacedRoleMenuRoleId).isEqualTo(8L);
         assertThat(permissionCacheService.batchRefreshedUserIds).isEmpty();
         assertThat(sessionManager.forceLogoutUserIds).isEmpty();
+        assertThat(auditService.actions).isEmpty();
+    }
+
+    @Test
+    void updateRoleMenusRejectsInvalidMenuIdsBeforeRepositoryWrite() {
+        RoleMenuRequest request = roleMenuRequest();
+        request.setMenuIds(List.of(1L, -1L));
+
+        Result<String> result = service.updateRoleMenus(8L, request, null);
+
+        assertThat(result.getCode()).isEqualTo(ResultCode.PARAM_ERROR.getCode());
+        assertThat(result.getMessage()).isEqualTo("菜单ID必须大于0");
+        assertThat(repository.checkedMenuIds).isEmpty();
+        assertThat(repository.replacedRoleMenuRoleId).isNull();
+    }
+
+    @Test
+    void updateRoleMenusReturnsNotFoundWhenMenuIdsDoNotExist() {
+        RoleMenuRequest request = roleMenuRequest();
+        request.setMenuIds(List.of(11L, 11L, 12L));
+        repository.menusExist = false;
+
+        Result<String> result = service.updateRoleMenus(8L, request, null);
+
+        assertNotFound(result, "菜单不存在");
+        assertThat(repository.checkedMenuIds).containsExactly(11L, 12L);
+        assertThat(repository.replacedRoleMenuRoleId).isNull();
         assertThat(auditService.actions).isEmpty();
     }
 
@@ -803,6 +890,10 @@ class AdminSystemServiceTest {
         private String updatedUserStatus;
         private Long deletedUserId;
         private List<Long> affectedUserIdsByRole = List.of();
+        private boolean rolesExist = true;
+        private boolean menusExist = true;
+        private List<Long> checkedRoleIds = List.of();
+        private List<Long> checkedMenuIds = List.of();
         private Long updatedRoleId;
         private RoleRequest updatedRole;
         private Long deletedRoleId;
@@ -973,6 +1064,13 @@ class AdminSystemServiceTest {
         }
 
         @Override
+        public boolean allRolesExist(List<Long> roleIds) {
+            failCommandIfNeeded();
+            this.checkedRoleIds = roleIds == null ? List.of() : List.copyOf(roleIds);
+            return rolesExist;
+        }
+
+        @Override
         public List<Role> listRoles() {
             failQueryIfNeeded();
             return List.of();
@@ -1011,6 +1109,13 @@ class AdminSystemServiceTest {
             this.replacedRoleMenuRoleId = roleId;
             this.replacedRoleMenuIds = menuIds == null ? List.of() : List.copyOf(menuIds);
             return replaceRoleMenusAffected;
+        }
+
+        @Override
+        public boolean allMenusExist(List<Long> menuIds) {
+            failCommandIfNeeded();
+            this.checkedMenuIds = menuIds == null ? List.of() : List.copyOf(menuIds);
+            return menusExist;
         }
 
         @Override

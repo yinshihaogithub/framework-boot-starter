@@ -179,6 +179,16 @@ public interface AdminSystemMapper {
     @Select("SELECT COUNT(*) FROM sys_user WHERE tenant_id = #{tenantId}")
     long countUsersByTenant(@Param("tenantId") Long tenantId);
 
+    @Select("""
+            <script>
+            SELECT COUNT(*)
+            FROM sys_role
+            WHERE id IN
+            <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+            </script>
+            """)
+    long countRolesByIds(@Param("ids") List<Long> ids);
+
     @Delete("DELETE FROM sys_dept WHERE tenant_id = #{tenantId}")
     int deleteDeptsByTenantId(@Param("tenantId") Long tenantId);
 
@@ -264,6 +274,16 @@ public interface AdminSystemMapper {
 
     @Select("SELECT COUNT(*) FROM sys_role WHERE id = #{roleId}")
     long countRoleById(@Param("roleId") Long roleId);
+
+    @Select("""
+            <script>
+            SELECT COUNT(*)
+            FROM sys_menu
+            WHERE id IN
+            <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+            </script>
+            """)
+    long countMenusByIds(@Param("ids") List<Long> ids);
 
     @Select("""
             SELECT menu_id

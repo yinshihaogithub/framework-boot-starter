@@ -115,6 +115,7 @@ class AdminSystemRepositoryTest {
 
         assertThat(ids).containsExactly(100L, 101L, 102L, 103L, 104L, 105L, 106L, 107L);
         assertThat(mapper.operations).containsExactly(
+                "countRolesByIds:[2, 3]",
                 "insertUser",
                 "deleteUserRoles:100",
                 "insertUserRole:100=2",
@@ -155,7 +156,17 @@ class AdminSystemRepositoryTest {
         assertThatThrownBy(() -> repository.createUser(userRequest(List.of(2L)), "password-hash"))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("system user insert failed");
-        assertThat(mapper.operations).containsExactly("insertUser");
+        assertThat(mapper.operations).containsExactly("countRolesByIds:[2]", "insertUser");
+    }
+
+    @Test
+    void createUserThrowsBeforeInsertWhenRoleReferenceIsMissing() {
+        mapper.countRolesByIdsResult = 1L;
+
+        assertThatThrownBy(() -> repository.createUser(userRequest(List.of(2L, 3L)), "password-hash"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("system role reference missing");
+        assertThat(mapper.operations).containsExactly("countRolesByIds:[2, 3]");
     }
 
     @Test
@@ -166,9 +177,23 @@ class AdminSystemRepositoryTest {
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("system user role insert failed");
         assertThat(mapper.operations).containsExactly(
+                "countRolesByIds:[1]",
                 "insertUser",
                 "deleteUserRoles:100",
                 "insertUserRole:100=1");
+    }
+
+    @Test
+    void createUserDeduplicatesRoleBindings() {
+        Long userId = repository.createUser(userRequest(List.of(2L, 2L, 3L)), "password-hash");
+
+        assertThat(userId).isEqualTo(100L);
+        assertThat(mapper.operations).containsExactly(
+                "countRolesByIds:[2, 3]",
+                "insertUser",
+                "deleteUserRoles:100",
+                "insertUserRole:100=2",
+                "insertUserRole:100=3");
     }
 
     @Test
@@ -180,6 +205,7 @@ class AdminSystemRepositoryTest {
                 .hasMessage("system role menu insert failed");
         assertThat(mapper.operations).containsExactly(
                 "countRoleById:9",
+                "countMenusByIds:[11]",
                 "deleteRoleMenus:9",
                 "insertRoleMenu:9=11");
     }
@@ -202,6 +228,31 @@ class AdminSystemRepositoryTest {
         assertThat(mapper.operations).containsExactly(
                 "countRoleById:9",
                 "deleteRoleMenus:9");
+    }
+
+    @Test
+    void replaceRoleMenusThrowsBeforeClearingWhenMenuReferenceIsMissing() {
+        mapper.countMenusByIdsResult = 1L;
+
+        assertThatThrownBy(() -> repository.replaceRoleMenus(9L, List.of(11L, 12L)))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("system menu reference missing");
+        assertThat(mapper.operations).containsExactly(
+                "countRoleById:9",
+                "countMenusByIds:[11, 12]");
+    }
+
+    @Test
+    void replaceRoleMenusDeduplicatesMenuBindings() {
+        boolean replaced = repository.replaceRoleMenus(9L, List.of(11L, 11L, 12L));
+
+        assertThat(replaced).isTrue();
+        assertThat(mapper.operations).containsExactly(
+                "countRoleById:9",
+                "countMenusByIds:[11, 12]",
+                "deleteRoleMenus:9",
+                "insertRoleMenu:9=11",
+                "insertRoleMenu:9=12");
     }
 
     @Test
@@ -384,6 +435,8 @@ class AdminSystemRepositoryTest {
         private int insertUserRoleResult = 1;
         private int insertRoleMenuResult = 1;
         private long roleCountById = 1L;
+        private Long countRolesByIdsResult;
+        private Long countMenusByIdsResult;
         private Integer deleteDeptIdsResult;
         private Integer deleteMenuIdsResult;
         private String dictCodeById = "sys_status";
@@ -461,6 +514,10 @@ class AdminSystemRepositoryTest {
                             operations.add("insertRoleMenu:" + args[0] + "=" + args[1]);
                             yield insertRoleMenuResult;
                         }
+                        case "countRolesByIds" -> {
+                            operations.add("countRolesByIds:" + args[0]);
+                            yield countRolesByIdsResult == null ? (long) ((List<?>) args[0]).size() : countRolesByIdsResult;
+                        }
                         case "deleteTenant" -> {
                             operations.add("deleteTenant:" + args[0]);
                             yield deleteTenantResult;
@@ -484,6 +541,10 @@ class AdminSystemRepositoryTest {
                         case "countRoleById" -> {
                             operations.add("countRoleById:" + args[0]);
                             yield roleCountById;
+                        }
+                        case "countMenusByIds" -> {
+                            operations.add("countMenusByIds:" + args[0]);
+                            yield countMenusByIdsResult == null ? (long) ((List<?>) args[0]).size() : countMenusByIdsResult;
                         }
                         case "clearUserDeptIds" -> {
                             operations.add("clearUserDeptIds:" + args[0]);

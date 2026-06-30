@@ -235,7 +235,15 @@ public class AdminSystemService {
         if (passwordError != null) {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), passwordError);
         }
+        Result<String> roleIdValidation = validatePositiveIds(request.getRoleIds(), "角色");
+        if (roleIdValidation != null) {
+            return Result.fail(roleIdValidation.getCode(), roleIdValidation.getMessage());
+        }
+        request.setRoleIds(distinctIds(request.getRoleIds()));
         try {
+            if (!request.getRoleIds().isEmpty() && !repository.allRolesExist(request.getRoleIds())) {
+                return Result.fail(ResultCode.NOT_FOUND.getCode(), "角色不存在");
+            }
             Long userId = repository.createUser(request, PasswordUtils.hash(request.getPassword()));
             refreshPermissionCache(userId);
             auditSuccess(servletRequest, "新增用户", "INSERT",
@@ -260,7 +268,15 @@ public class AdminSystemService {
         if (isBuiltInAdmin(id) && "DISABLED".equals(request.getStatus())) {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), "内置管理员不能禁用");
         }
+        Result<String> roleIdValidation = validatePositiveIds(request.getRoleIds(), "角色");
+        if (roleIdValidation != null) {
+            return roleIdValidation;
+        }
+        request.setRoleIds(distinctIds(request.getRoleIds()));
         try {
+            if (!request.getRoleIds().isEmpty() && !repository.allRolesExist(request.getRoleIds())) {
+                return resourceNotFound("角色");
+            }
             if (!repository.updateUser(id, request)) {
                 return resourceNotFound("用户");
             }
@@ -463,15 +479,23 @@ public class AdminSystemService {
         if (invalidId != null) {
             return invalidId;
         }
+        List<Long> menuIds = request == null ? List.of() : distinctIds(request.getMenuIds());
+        Result<String> menuIdValidation = validatePositiveIds(menuIds, "菜单");
+        if (menuIdValidation != null) {
+            return menuIdValidation;
+        }
         try {
+            if (!menuIds.isEmpty() && !repository.allMenusExist(menuIds)) {
+                return resourceNotFound("菜单");
+            }
             List<Long> affectedUserIds = repository.listUserIdsByRoleId(id);
-            if (!repository.replaceRoleMenus(id, request == null ? List.of() : request.getMenuIds())) {
+            if (!repository.replaceRoleMenus(id, menuIds)) {
                 return resourceNotFound("角色");
             }
             refreshPermissionCache(affectedUserIds);
             forceLogoutUsers(affectedUserIds);
             auditSuccess(servletRequest, "角色菜单授权", "UPDATE",
-                    "roleId", id, "menuIds", request == null ? List.of() : request.getMenuIds());
+                    "roleId", id, "menuIds", menuIds);
             return Result.success("已授权");
         } catch (RuntimeException e) {
             return serviceError("角色菜单授权", "角色授权失败", e);
@@ -788,6 +812,25 @@ public class AdminSystemService {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), "用户ID必须大于0");
         }
         return null;
+    }
+
+    private Result<String> validatePositiveIds(List<Long> ids, String resourceName) {
+        if (ids == null || ids.isEmpty()) {
+            return null;
+        }
+        for (Long id : ids) {
+            if (id == null || id <= 0) {
+                return Result.fail(ResultCode.PARAM_ERROR.getCode(), resourceName + "ID必须大于0");
+            }
+        }
+        return null;
+    }
+
+    private List<Long> distinctIds(List<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return List.of();
+        }
+        return ids.stream().distinct().toList();
     }
 
     private boolean isValidStatus(String status) {

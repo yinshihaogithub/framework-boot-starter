@@ -73,6 +73,8 @@ public class AdminSystemRepository {
 
     public Long createUser(AdminSystemModels.UserCreateRequest request, String passwordHash) {
         return inTransaction(() -> {
+            List<Long> roleIds = normalizedUserRoleIds(request.getRoleIds());
+            requireAllRolesExist(roleIds);
             AdminUser user = new AdminUser()
                     .setTenantId(DEFAULT_TENANT_ID)
                     .setDeptId(request.getDeptId())
@@ -83,13 +85,15 @@ public class AdminSystemRepository {
                     .setPasswordHash(passwordHash)
                     .setStatus("ENABLED");
             Long userId = createdId("system user", mapper.insertUser(user), user.getId());
-            replaceUserRoles(userId, request.getRoleIds());
+            replaceUserRoles(userId, roleIds);
             return userId;
         });
     }
 
     public boolean updateUser(Long userId, UserUpdateRequest request) {
         return inTransaction(() -> {
+            List<Long> roleIds = normalizedUserRoleIds(request.getRoleIds());
+            requireAllRolesExist(roleIds);
             int updated = mapper.updateUser(new AdminUser()
                     .setId(userId)
                     .setDeptId(request.getDeptId())
@@ -100,7 +104,7 @@ public class AdminSystemRepository {
             if (updated <= 0) {
                 return false;
             }
-            replaceUserRoles(userId, request.getRoleIds());
+            replaceUserRoles(userId, roleIds);
             return true;
         });
     }
@@ -274,15 +278,27 @@ public class AdminSystemRepository {
             if (mapper.countRoleById(roleId) <= 0) {
                 return false;
             }
+            List<Long> safeMenuIds = distinctIds(menuIds);
+            requireAllMenusExist(safeMenuIds);
             mapper.deleteRoleMenus(roleId);
-            if (menuIds == null || menuIds.isEmpty()) {
+            if (safeMenuIds.isEmpty()) {
                 return true;
             }
-            for (Long menuId : menuIds) {
+            for (Long menuId : safeMenuIds) {
                 requireAffected("system role menu insert", mapper.insertRoleMenu(roleId, menuId));
             }
             return true;
         });
+    }
+
+    public boolean allRolesExist(List<Long> roleIds) {
+        List<Long> ids = distinctIds(roleIds);
+        return ids.isEmpty() || mapper.countRolesByIds(ids) == ids.size();
+    }
+
+    public boolean allMenusExist(List<Long> menuIds) {
+        List<Long> ids = distinctIds(menuIds);
+        return ids.isEmpty() || mapper.countMenusByIds(ids) == ids.size();
     }
 
     public List<Menu> listMenuTree() {
@@ -429,12 +445,32 @@ public class AdminSystemRepository {
 
     private void replaceUserRoles(Long userId, List<Long> roleIds) {
         mapper.deleteUserRoles(userId);
-        if (roleIds == null || roleIds.isEmpty()) {
-            requireAffected("system user role insert", mapper.insertUserRole(userId, DEFAULT_ROLE_ID));
-            return;
-        }
         for (Long roleId : roleIds) {
             requireAffected("system user role insert", mapper.insertUserRole(userId, roleId));
+        }
+    }
+
+    private List<Long> normalizedUserRoleIds(List<Long> roleIds) {
+        List<Long> ids = distinctIds(roleIds);
+        return ids.isEmpty() ? List.of(DEFAULT_ROLE_ID) : ids;
+    }
+
+    private List<Long> distinctIds(List<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return List.of();
+        }
+        return ids.stream().distinct().toList();
+    }
+
+    private void requireAllRolesExist(List<Long> roleIds) {
+        if (!allRolesExist(roleIds)) {
+            throw new IllegalStateException("system role reference missing");
+        }
+    }
+
+    private void requireAllMenusExist(List<Long> menuIds) {
+        if (!allMenusExist(menuIds)) {
+            throw new IllegalStateException("system menu reference missing");
         }
     }
 
