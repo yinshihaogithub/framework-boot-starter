@@ -517,6 +517,10 @@ public class AdminSystemService {
             return Result.fail(validation.getCode(), validation.getMessage());
         }
         try {
+            Result<String> parentValidation = validateMenuParent(null, request);
+            if (parentValidation != null) {
+                return Result.fail(parentValidation.getCode(), parentValidation.getMessage());
+            }
             Long menuId = repository.createMenu(request);
             clearPermissionCache();
             forceLogoutAllUsers();
@@ -537,10 +541,11 @@ public class AdminSystemService {
         if (validation != null) {
             return validation;
         }
-        if (id.equals(request.getParentId())) {
-            return Result.fail(ResultCode.PARAM_ERROR.getCode(), "上级菜单不能选择自己");
-        }
         try {
+            Result<String> parentValidation = validateMenuParent(id, request);
+            if (parentValidation != null) {
+                return parentValidation;
+            }
             if (!repository.updateMenu(id, request)) {
                 return resourceNotFound("菜单");
             }
@@ -1016,6 +1021,26 @@ public class AdminSystemService {
         }
         if (!"MENU".equals(request.getMenuType()) && !"BUTTON".equals(request.getMenuType())) {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), "菜单类型只能是 MENU 或 BUTTON");
+        }
+        if (request.getParentId() != null && request.getParentId() < 0) {
+            return Result.fail(ResultCode.PARAM_ERROR.getCode(), "上级菜单ID不能小于0");
+        }
+        return null;
+    }
+
+    private Result<String> validateMenuParent(Long currentMenuId, MenuRequest request) {
+        Long parentId = request.getParentId();
+        if (parentId == null || parentId == 0) {
+            return null;
+        }
+        if (currentMenuId != null && currentMenuId.equals(parentId)) {
+            return Result.fail(ResultCode.PARAM_ERROR.getCode(), "上级菜单不能选择自己");
+        }
+        if (!repository.allMenusExist(List.of(parentId))) {
+            return Result.fail(ResultCode.NOT_FOUND.getCode(), "上级菜单不存在");
+        }
+        if (currentMenuId != null && repository.isMenuDescendant(currentMenuId, parentId)) {
+            return Result.fail(ResultCode.PARAM_ERROR.getCode(), "上级菜单不能选择自己的下级");
         }
         return null;
     }

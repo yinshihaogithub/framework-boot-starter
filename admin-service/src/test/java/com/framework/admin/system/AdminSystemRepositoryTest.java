@@ -383,6 +383,18 @@ class AdminSystemRepositoryTest {
     }
 
     @Test
+    void isMenuDescendantDetectsNestedMenuSubtree() {
+        mapper.allMenus = List.of(menu(11L, 0L), menu(12L, 11L), menu(13L, 12L), menu(14L, 0L));
+
+        assertThat(repository.isMenuDescendant(11L, 13L)).isTrue();
+        assertThat(repository.isMenuDescendant(11L, 14L)).isFalse();
+        assertThat(repository.isMenuDescendant(11L, 11L)).isFalse();
+        assertThat(mapper.operations).containsExactly(
+                "listAllMenus",
+                "listAllMenus");
+    }
+
+    @Test
     void deleteDictTypeDeletesItemsThenTypeAndValidatesTypeDelete() {
         boolean deleted = repository.deleteDictType(5L);
 

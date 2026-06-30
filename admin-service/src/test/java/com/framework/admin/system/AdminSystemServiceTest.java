@@ -572,6 +572,35 @@ class AdminSystemServiceTest {
     }
 
     @Test
+    void createMenuReturnsNotFoundWhenParentMenuDoesNotExist() {
+        MenuRequest request = menuRequest();
+        request.setParentId(99L);
+        repository.menusExist = false;
+
+        Result<Long> result = service.createMenu(request, null);
+
+        assertNotFound(result, "上级菜单不存在");
+        assertThat(repository.checkedMenuIds).containsExactly(99L);
+        assertThat(repository.createdMenu).isNull();
+    }
+
+    @Test
+    void updateMenuRejectsDescendantParentBeforeRepositoryWrite() {
+        MenuRequest request = menuRequest();
+        request.setParentId(12L);
+        repository.menuDescendant = true;
+
+        Result<String> result = service.updateMenu(11L, request, null);
+
+        assertThat(result.getCode()).isEqualTo(ResultCode.PARAM_ERROR.getCode());
+        assertThat(result.getMessage()).isEqualTo("上级菜单不能选择自己的下级");
+        assertThat(repository.checkedMenuIds).containsExactly(12L);
+        assertThat(repository.checkedMenuId).isEqualTo(11L);
+        assertThat(repository.checkedDescendantMenuId).isEqualTo(12L);
+        assertThat(repository.updatedMenuId).isNull();
+    }
+
+    @Test
     void createMenuClearsAllPermissionCacheAndForcesAllSessionsOffline() {
         FakePermissionCacheService permissionCacheService = new FakePermissionCacheService();
         FakeSessionManager sessionManager = new FakeSessionManager();
@@ -892,8 +921,11 @@ class AdminSystemServiceTest {
         private List<Long> affectedUserIdsByRole = List.of();
         private boolean rolesExist = true;
         private boolean menusExist = true;
+        private boolean menuDescendant;
         private List<Long> checkedRoleIds = List.of();
         private List<Long> checkedMenuIds = List.of();
+        private Long checkedMenuId;
+        private Long checkedDescendantMenuId;
         private Long updatedRoleId;
         private RoleRequest updatedRole;
         private Long deletedRoleId;
@@ -1116,6 +1148,14 @@ class AdminSystemServiceTest {
             failCommandIfNeeded();
             this.checkedMenuIds = menuIds == null ? List.of() : List.copyOf(menuIds);
             return menusExist;
+        }
+
+        @Override
+        public boolean isMenuDescendant(Long menuId, Long possibleDescendantId) {
+            failCommandIfNeeded();
+            this.checkedMenuId = menuId;
+            this.checkedDescendantMenuId = possibleDescendantId;
+            return menuDescendant;
         }
 
         @Override

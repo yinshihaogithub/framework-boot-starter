@@ -301,6 +301,14 @@ public class AdminSystemRepository {
         return ids.isEmpty() || mapper.countMenusByIds(ids) == ids.size();
     }
 
+    public boolean isMenuDescendant(Long menuId, Long possibleDescendantId) {
+        if (menuId == null || possibleDescendantId == null
+                || DEFAULT_PARENT_ID.equals(possibleDescendantId) || menuId.equals(possibleDescendantId)) {
+            return false;
+        }
+        return collectMenuSubtreeIds(menuId).contains(possibleDescendantId);
+    }
+
     public List<Menu> listMenuTree() {
         return buildMenuTree(mapper.listAllMenus());
     }
@@ -524,6 +532,9 @@ public class AdminSystemRepository {
     }
 
     private void collectMenuSubtreeIds(Long parentId, List<Menu> menus, List<Long> ids) {
+        if (ids.contains(parentId)) {
+            return;
+        }
         for (Menu menu : menus) {
             if (menu.getId().equals(parentId)) {
                 ids.add(menu.getId());
