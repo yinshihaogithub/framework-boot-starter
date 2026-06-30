@@ -85,4 +85,35 @@ public class MqFailedMessage implements Serializable {
     public static final String SOURCE_CONSUME_FAIL = "CONSUME_FAIL";
     public static final String SOURCE_DEAD_LETTER = "DEAD_LETTER";
     public static final String SOURCE_TTL_EXPIRE = "TTL_EXPIRE";
+
+    public MqFailedMessage copy() {
+        MqFailedMessage copy = new MqFailedMessage();
+        copy.setId(id);
+        copy.setMessageId(messageId);
+        copy.setTraceId(traceId);
+        copy.setParentMessageId(parentMessageId);
+        copy.setBusinessKey(businessKey);
+        copy.setMessageType(messageType);
+        copy.setExchange(exchange);
+        copy.setRoutingKey(routingKey);
+        copy.setQueueName(queueName);
+        copy.setPayload(payload);
+        copy.setErrorMessage(errorMessage);
+        copy.setErrorStack(errorStack);
+        copy.setRetryCount(retryCount);
+        copy.setMaxRetry(maxRetry);
+        copy.setStatus(status);
+        copy.setNextRetryTime(copyDate(nextRetryTime));
+        copy.setSource(source);
+        copy.setTenantId(tenantId);
+        copy.setCreateTime(copyDate(createTime));
+        copy.setUpdateTime(copyDate(updateTime));
+        copy.setOperator(operator);
+        copy.setCompensateRemark(compensateRemark);
+        return copy;
+    }
+
+    private static Date copyDate(Date date) {
+        return date == null ? null : new Date(date.getTime());
+    }
 }

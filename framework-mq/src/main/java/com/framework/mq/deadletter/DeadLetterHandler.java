@@ -162,9 +162,10 @@ public class DeadLetterHandler {
      * 更新记录状态并同步到 MySQL
      */
     public void updateRecord(MqFailedMessage record) {
-        record.setUpdateTime(new Date());
-        repository.save(record);
-        failedMessageStore.put(record.getId(), record);
+        MqFailedMessage updated = record.copy();
+        updated.setUpdateTime(new Date());
+        repository.save(updated);
+        failedMessageStore.put(updated.getId(), updated);
     }
 
     /**

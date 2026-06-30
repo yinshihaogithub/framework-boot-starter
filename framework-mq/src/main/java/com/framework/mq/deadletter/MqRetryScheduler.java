@@ -83,46 +83,49 @@ public class MqRetryScheduler {
      */
     private void retryMessage(MqFailedMessage msg) {
         try {
-            msg.setStatus(MqFailedMessage.STATUS_RETRYING);
-            msg.setUpdateTime(new Date());
+            MqFailedMessage retrying = msg.copy();
+            retrying.setStatus(MqFailedMessage.STATUS_RETRYING);
+            retrying.setUpdateTime(new Date());
 
             // 重发到原交换机，保留原始消息链路元数据。
-            senderRegistry.activeSender().send(msg.getExchange(), msg.getRoutingKey(), restoreWrapper(msg));
+            senderRegistry.activeSender().send(retrying.getExchange(), retrying.getRoutingKey(), restoreWrapper(retrying));
 
-            int newRetryCount = msg.getRetryCount() + 1;
-            msg.setRetryCount(newRetryCount);
+            int newRetryCount = retryCount(retrying) + 1;
+            retrying.setRetryCount(newRetryCount);
 
             if (newRetryCount >= maxRetry) {
                 // 已达最大重试次数，标记为耗尽（等待人工处理）
-                msg.setStatus(MqFailedMessage.STATUS_EXHAUSTED);
-                log.warn("[重试耗尽] id={}, messageId={}, 已重试{}次", msg.getId(), msg.getMessageId(), newRetryCount);
+                retrying.setStatus(MqFailedMessage.STATUS_EXHAUSTED);
+                log.warn("[重试耗尽] id={}, messageId={}, 已重试{}次", retrying.getId(), retrying.getMessageId(), newRetryCount);
             } else {
                 // 发送成功但未达最大次数，保持 PENDING 等待消费端确认
                 // 如果消费端再次失败，会通过死信机制回到失败记录
-                msg.setStatus(MqFailedMessage.STATUS_PENDING);
-                msg.setNextRetryTime(calculateNextRetryTime(newRetryCount));
-                log.info("[重试发送] id={}, messageId={}, 第{}次重试已发送，等待消费确认", msg.getId(), msg.getMessageId(), newRetryCount);
+                retrying.setStatus(MqFailedMessage.STATUS_PENDING);
+                retrying.setNextRetryTime(calculateNextRetryTime(newRetryCount));
+                log.info("[重试发送] id={}, messageId={}, 第{}次重试已发送，等待消费确认",
+                        retrying.getId(), retrying.getMessageId(), newRetryCount);
             }
 
-            msg.setUpdateTime(new Date());
-            deadLetterHandler.updateRecord(msg);
+            retrying.setUpdateTime(new Date());
+            deadLetterHandler.updateRecord(retrying);
 
         } catch (Exception e) {
             String failureMessage = failureMessage(e);
             log.error("[重试失败] id={}, messageId={}, error={}", msg.getId(), msg.getMessageId(), failureMessage);
 
-            int newRetryCount = msg.getRetryCount() + 1;
-            msg.setRetryCount(newRetryCount);
+            MqFailedMessage failed = msg.copy();
+            int newRetryCount = retryCount(failed) + 1;
+            failed.setRetryCount(newRetryCount);
 
             if (newRetryCount >= maxRetry) {
-                msg.setStatus(MqFailedMessage.STATUS_EXHAUSTED);
-                msg.setErrorMessage(appendErrorMessage(msg.getErrorMessage(), "重试失败: " + failureMessage));
+                failed.setStatus(MqFailedMessage.STATUS_EXHAUSTED);
+                failed.setErrorMessage(appendErrorMessage(failed.getErrorMessage(), "重试失败: " + failureMessage));
             } else {
-                msg.setStatus(MqFailedMessage.STATUS_PENDING);
-                msg.setNextRetryTime(calculateNextRetryTime(newRetryCount));
+                failed.setStatus(MqFailedMessage.STATUS_PENDING);
+                failed.setNextRetryTime(calculateNextRetryTime(newRetryCount));
             }
-            msg.setUpdateTime(new Date());
-            deadLetterHandler.updateRecord(msg);
+            failed.setUpdateTime(new Date());
+            deadLetterHandler.updateRecord(failed);
         }
     }
 
@@ -157,15 +160,16 @@ public class MqRetryScheduler {
 
         try {
             senderRegistry.activeSender().send(msg.getExchange(), msg.getRoutingKey(), restoreWrapper(msg));
-            msg.setStatus(MqFailedMessage.STATUS_MANUAL);
-            msg.setOperator(normalizedOperator);
-            msg.setCompensateRemark(normalizedRemark);
-            msg.setRetryCount(retryCount(msg) + 1);
-            msg.setNextRetryTime(null);
-            msg.setUpdateTime(new Date());
-            deadLetterHandler.updateRecord(msg);
+            MqFailedMessage updated = msg.copy();
+            updated.setStatus(MqFailedMessage.STATUS_MANUAL);
+            updated.setOperator(normalizedOperator);
+            updated.setCompensateRemark(normalizedRemark);
+            updated.setRetryCount(retryCount(updated) + 1);
+            updated.setNextRetryTime(null);
+            updated.setUpdateTime(new Date());
+            deadLetterHandler.updateRecord(updated);
             log.info("[手动重发] id={}, messageId={}, traceId={}, operator={}",
-                    id, msg.getMessageId(), msg.getTraceId(), normalizedOperator);
+                    id, updated.getMessageId(), updated.getTraceId(), normalizedOperator);
             return true;
         } catch (Exception e) {
             String failureMessage = failureMessage(e);
@@ -176,20 +180,21 @@ public class MqRetryScheduler {
     }
 
     private void recordManualRetryFailure(MqFailedMessage msg, String operator, String remark, Exception exception) {
-        int newRetryCount = retryCount(msg) + 1;
-        msg.setRetryCount(newRetryCount);
-        msg.setOperator(operator);
-        msg.setCompensateRemark(remark == null ? "手动重发失败" : remark);
-        msg.setErrorMessage(appendErrorMessage(msg.getErrorMessage(), "手动重发失败: " + failureMessage(exception)));
-        if (newRetryCount >= retryLimit(msg)) {
-            msg.setStatus(MqFailedMessage.STATUS_EXHAUSTED);
-            msg.setNextRetryTime(null);
+        MqFailedMessage updated = msg.copy();
+        int newRetryCount = retryCount(updated) + 1;
+        updated.setRetryCount(newRetryCount);
+        updated.setOperator(operator);
+        updated.setCompensateRemark(remark == null ? "手动重发失败" : remark);
+        updated.setErrorMessage(appendErrorMessage(updated.getErrorMessage(), "手动重发失败: " + failureMessage(exception)));
+        if (newRetryCount >= retryLimit(updated)) {
+            updated.setStatus(MqFailedMessage.STATUS_EXHAUSTED);
+            updated.setNextRetryTime(null);
         } else {
-            msg.setStatus(MqFailedMessage.STATUS_PENDING);
-            msg.setNextRetryTime(calculateNextRetryTime(newRetryCount));
+            updated.setStatus(MqFailedMessage.STATUS_PENDING);
+            updated.setNextRetryTime(calculateNextRetryTime(newRetryCount));
         }
-        msg.setUpdateTime(new Date());
-        deadLetterHandler.updateRecord(msg);
+        updated.setUpdateTime(new Date());
+        deadLetterHandler.updateRecord(updated);
     }
 
     /**

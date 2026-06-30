@@ -78,6 +78,32 @@ class MqRetrySchedulerTest {
     }
 
     @Test
+    void manualRetryKeepsOriginalMessageWhenPersistingSuccessFails() {
+        MqFailedMessage failedMessage = failedMessage("{\"legacy\":true}");
+        failedMessage.setStatus(MqFailedMessage.STATUS_EXHAUSTED);
+        failedMessage.setRetryCount(2);
+        InMemoryMqFailedMessageRepository repository = new InMemoryMqFailedMessageRepository(List.of(failedMessage));
+        DeadLetterHandler deadLetterHandler = new DeadLetterHandler(repository, new MqProperties());
+        MqRetryScheduler scheduler = new MqRetryScheduler(
+                deadLetterHandler,
+                new MqMessageSenderRegistry(properties(MqProperties.Provider.RABBIT), List.of(new RecordingSender())),
+                3
+        );
+        repository.failOnSave = true;
+
+        assertThatThrownBy(() -> scheduler.manualRetry(1L, "ops-user", "retry now"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("save failed");
+
+        MqFailedMessage stored = deadLetterHandler.getById(1L);
+        assertThat(stored.getStatus()).isEqualTo(MqFailedMessage.STATUS_EXHAUSTED);
+        assertThat(stored.getRetryCount()).isEqualTo(2);
+        assertThat(stored.getOperator()).isNull();
+        assertThat(stored.getCompensateRemark()).isNull();
+        assertThat(stored.getErrorMessage()).isEqualTo("failed");
+    }
+
+    @Test
     void manualRetryRejectsInvalidIdBeforeLookup() {
         MqRetryScheduler scheduler = new MqRetryScheduler(
                 new DeadLetterHandler(new InMemoryMqFailedMessageRepository(List.of()), new MqProperties()),
@@ -116,6 +142,32 @@ class MqRetrySchedulerTest {
         assertThat(saved.getCompensateRemark()).isEqualTo("retry now");
         assertThat(saved.getErrorMessage()).contains("failed", "手动重发失败: broker unavailable");
         assertThat(saved.getNextRetryTime()).isNotNull();
+    }
+
+    @Test
+    void manualRetryKeepsOriginalMessageWhenPersistingFailureFails() {
+        MqFailedMessage failedMessage = failedMessage("{\"legacy\":true}");
+        failedMessage.setRetryCount(1);
+        InMemoryMqFailedMessageRepository repository = new InMemoryMqFailedMessageRepository(List.of(failedMessage));
+        DeadLetterHandler deadLetterHandler = new DeadLetterHandler(repository, new MqProperties());
+        MqRetryScheduler scheduler = new MqRetryScheduler(
+                deadLetterHandler,
+                new MqMessageSenderRegistry(properties(MqProperties.Provider.RABBIT),
+                        List.of(new FailingSender("broker unavailable"))),
+                3
+        );
+        repository.failOnSave = true;
+
+        assertThatThrownBy(() -> scheduler.manualRetry(1L, "ops-user", "retry now"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("save failed");
+
+        MqFailedMessage stored = deadLetterHandler.getById(1L);
+        assertThat(stored.getStatus()).isEqualTo(MqFailedMessage.STATUS_PENDING);
+        assertThat(stored.getRetryCount()).isEqualTo(1);
+        assertThat(stored.getOperator()).isNull();
+        assertThat(stored.getCompensateRemark()).isNull();
+        assertThat(stored.getErrorMessage()).isEqualTo("failed");
     }
 
     @Test
@@ -250,6 +302,34 @@ class MqRetrySchedulerTest {
     }
 
     @Test
+    void scanAndRetryKeepsOriginalMessageWhenPersistingRetryStateFails() {
+        MqFailedMessage failedMessage = failedMessage("{\"legacy\":true}");
+        failedMessage.setRetryCount(1);
+        Date nextRetryTime = new Date(System.currentTimeMillis() - 1000);
+        failedMessage.setNextRetryTime(nextRetryTime);
+        InMemoryMqFailedMessageRepository repository = new InMemoryMqFailedMessageRepository(List.of(failedMessage));
+        DeadLetterHandler deadLetterHandler = new DeadLetterHandler(repository, new MqProperties());
+        RecordingSender sender = new RecordingSender();
+        MqRetryScheduler scheduler = new MqRetryScheduler(
+                deadLetterHandler,
+                new MqMessageSenderRegistry(properties(MqProperties.Provider.RABBIT), List.of(sender)),
+                3
+        );
+        repository.failOnSave = true;
+
+        assertThatThrownBy(scheduler::scanAndRetry)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("save failed");
+
+        assertThat(sender.wrapper).isNotNull();
+        MqFailedMessage stored = deadLetterHandler.getById(1L);
+        assertThat(stored.getStatus()).isEqualTo(MqFailedMessage.STATUS_PENDING);
+        assertThat(stored.getRetryCount()).isEqualTo(1);
+        assertThat(stored.getErrorMessage()).isEqualTo("failed");
+        assertThat(stored.getNextRetryTime()).isEqualTo(nextRetryTime);
+    }
+
+    @Test
     void batchManualRetryRejectsNullIdsWithClearException() {
         MqRetryScheduler scheduler = new MqRetryScheduler(
                 new DeadLetterHandler(new InMemoryMqFailedMessageRepository(List.of()), new MqProperties()),
@@ -368,6 +448,7 @@ class MqRetrySchedulerTest {
     private static class InMemoryMqFailedMessageRepository implements MqFailedMessageRepository {
 
         private final Map<Long, MqFailedMessage> messages = new LinkedHashMap<>();
+        private boolean failOnSave;
 
         private InMemoryMqFailedMessageRepository(List<MqFailedMessage> initialMessages) {
             initialMessages.forEach(message -> messages.put(message.getId(), message));
@@ -375,6 +456,9 @@ class MqRetrySchedulerTest {
 
         @Override
         public MqFailedMessage save(MqFailedMessage message) {
+            if (failOnSave) {
+                throw new IllegalStateException("save failed");
+            }
             messages.put(message.getId(), message);
             return message;
         }

@@ -210,15 +210,16 @@ public class MqAdminService {
                 return ActionResult.fail(ResultCode.NOT_FOUND, "消息不存在");
             }
             String beforeStatus = message.getStatus();
-            message.setStatus(MqFailedMessage.STATUS_MANUAL);
-            message.setNextRetryTime(null);
-            message.setOperator(operator(operator));
-            message.setCompensateRemark(remark(remark, "人工补偿完成"));
-            handler.updateRecord(message);
+            MqFailedMessage updated = message.copy();
+            updated.setStatus(MqFailedMessage.STATUS_MANUAL);
+            updated.setNextRetryTime(null);
+            updated.setOperator(operator(operator));
+            updated.setCompensateRemark(remark(remark, "人工补偿完成"));
+            handler.updateRecord(updated);
             auditSuccess(servletRequest, "人工补偿完成MQ消息", "UPDATE",
-                    auditService.params("id", id, "messageId", message.getMessageId(), "traceId", message.getTraceId(),
-                            "operator", message.getOperator(), "remark", message.getCompensateRemark(),
-                            "beforeStatus", beforeStatus, "afterStatus", message.getStatus()));
+                    auditService.params("id", id, "messageId", updated.getMessageId(), "traceId", updated.getTraceId(),
+                            "operator", updated.getOperator(), "remark", updated.getCompensateRemark(),
+                            "beforeStatus", beforeStatus, "afterStatus", updated.getStatus()));
             return ActionResult.success("已人工补偿完成");
         } catch (Exception e) {
             log.debug("人工补偿MQ消息失败: {}", e.getMessage());
@@ -241,15 +242,16 @@ public class MqAdminService {
                 return ActionResult.fail(ResultCode.NOT_FOUND, "消息不存在");
             }
             String beforeStatus = message.getStatus();
-            message.setStatus(MqFailedMessage.STATUS_EXHAUSTED);
-            message.setNextRetryTime(null);
-            message.setOperator(operator(operator));
-            message.setCompensateRemark(remark(remark, "人工终止"));
-            handler.updateRecord(message);
+            MqFailedMessage updated = message.copy();
+            updated.setStatus(MqFailedMessage.STATUS_EXHAUSTED);
+            updated.setNextRetryTime(null);
+            updated.setOperator(operator(operator));
+            updated.setCompensateRemark(remark(remark, "人工终止"));
+            handler.updateRecord(updated);
             auditSuccess(servletRequest, "人工终止MQ消息", "UPDATE",
-                    auditService.params("id", id, "messageId", message.getMessageId(), "traceId", message.getTraceId(),
-                            "operator", message.getOperator(), "remark", message.getCompensateRemark(),
-                            "beforeStatus", beforeStatus, "afterStatus", message.getStatus()));
+                    auditService.params("id", id, "messageId", updated.getMessageId(), "traceId", updated.getTraceId(),
+                            "operator", updated.getOperator(), "remark", updated.getCompensateRemark(),
+                            "beforeStatus", beforeStatus, "afterStatus", updated.getStatus()));
             return ActionResult.success("已人工终止");
         } catch (Exception e) {
             log.debug("人工终止MQ消息失败: {}", e.getMessage());
