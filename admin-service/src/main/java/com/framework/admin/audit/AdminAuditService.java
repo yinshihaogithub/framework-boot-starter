@@ -2,6 +2,7 @@ package com.framework.admin.audit;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.framework.admin.support.AdminClientIpResolver;
+import com.framework.admin.support.AdminTextSupport;
 import com.framework.auth.context.UserContextHolder;
 import com.framework.core.trace.TraceContext;
 import com.framework.log.entity.OperationLogEntity;
@@ -138,10 +139,10 @@ public class AdminAuditService {
     }
 
     private Object parseJsonText(String value) {
-        if (value == null || value.isBlank()) {
+        String text = AdminTextSupport.trimToNull(value);
+        if (text == null) {
             return null;
         }
-        String text = value.trim();
         if (!text.startsWith("{") && !text.startsWith("[")) {
             return null;
         }

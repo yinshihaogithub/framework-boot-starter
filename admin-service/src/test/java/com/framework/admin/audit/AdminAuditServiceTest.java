@@ -101,7 +101,8 @@ class AdminAuditServiceTest {
     @Test
     void paramsMaskSensitiveValuesInsideJsonStrings() {
         service.success(null, "MQ管理", "人工补偿", "UPDATE",
-                service.params("payload", "{\"password\":\"Admin@123\",\"profile\":{\"apiKey\":\"api-key-value\"}}",
+                service.params("payload",
+                        "\u00A0{\"password\":\"Admin@123\",\"profile\":{\"apiKey\":\"api-key-value\"}}\u3000",
                         "plain", "not-json-token-value"));
 
         assertThat(mapper.inserted.getParams())
