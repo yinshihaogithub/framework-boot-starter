@@ -446,12 +446,15 @@ public class MqAdminService {
     }
 
     private String operator(String operator) {
+        String username = text(UserContextHolder.getUsername());
+        if (username != null) {
+            return username;
+        }
         String normalizedOperator = text(operator);
         if (normalizedOperator != null) {
             return normalizedOperator;
         }
-        String username = text(UserContextHolder.getUsername());
-        return username == null ? "admin" : username;
+        return "admin";
     }
 
     private String remark(String remark, String defaultRemark) {

@@ -331,6 +331,50 @@ class MqAdminControllerTest {
     }
 
     @Test
+    void manualMqActionsUseCurrentUserBeforeRequestOperator() {
+        UserContextHolder.set(new LoginUser().setUserId(7L).setUsername("alice"));
+        MqProperties properties = new MqProperties();
+        MqMessageSender sender = sender(MqProperties.Provider.RABBIT);
+        InMemoryMqFailedMessageRepository repository = new InMemoryMqFailedMessageRepository(List.of(
+                failedMessage(21L, "trace-batch", MqFailedMessage.STATUS_EXHAUSTED),
+                failedMessage(22L, "trace-success", MqFailedMessage.STATUS_EXHAUSTED),
+                failedMessage(23L, "trace-failure", MqFailedMessage.STATUS_PENDING)));
+        DeadLetterHandler handler = new DeadLetterHandler(repository, properties);
+        MqRetryScheduler scheduler = new MqRetryScheduler(
+                handler, new MqMessageSenderRegistry(properties, List.of(sender)), properties.getMaxRetry());
+        RecordingAuditService auditService = new RecordingAuditService();
+        MqAdminController controller = controller(handler, properties, sender, scheduler, auditService);
+
+        MqAdminDTO.ManualRetryRequest batchRequest = new MqAdminDTO.ManualRetryRequest()
+                .setIds(List.of(21L))
+                .setOperator("request-user")
+                .setRemark("batch retry");
+        Result<MqAdminDTO.ManualRetryResult> batchResult = controller.batchRetry(batchRequest, null);
+        assertThat(batchResult.isSuccess()).isTrue();
+        assertThat(repository.findById(21L).orElseThrow().getOperator()).isEqualTo("alice");
+        assertThat(auditService.action).isEqualTo("批量重发MQ消息");
+        assertThat(auditService.params).containsEntry("operator", "alice");
+
+        MqAdminController.ManualCompensationRequest successRequest = new MqAdminController.ManualCompensationRequest();
+        successRequest.setOperator("request-user");
+        successRequest.setRemark("checked");
+        Result<String> successResult = controller.manualSuccess(22L, successRequest, null);
+        assertThat(successResult.isSuccess()).isTrue();
+        assertThat(repository.findById(22L).orElseThrow().getOperator()).isEqualTo("alice");
+        assertThat(auditService.action).isEqualTo("人工补偿完成MQ消息");
+        assertThat(auditService.params).containsEntry("operator", "alice");
+
+        MqAdminController.ManualCompensationRequest failureRequest = new MqAdminController.ManualCompensationRequest();
+        failureRequest.setOperator("request-user");
+        failureRequest.setRemark("stop");
+        Result<String> failureResult = controller.manualFailure(23L, failureRequest, null);
+        assertThat(failureResult.isSuccess()).isTrue();
+        assertThat(repository.findById(23L).orElseThrow().getOperator()).isEqualTo("alice");
+        assertThat(auditService.action).isEqualTo("人工终止MQ消息");
+        assertThat(auditService.params).containsEntry("operator", "alice");
+    }
+
+    @Test
     void singleMessageOperationsRejectInvalidIdsBeforeProviderLookup() {
         MqAdminController controller = controller(null, new MqProperties(), null);
 
