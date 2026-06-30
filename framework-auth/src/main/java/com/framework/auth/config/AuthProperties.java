@@ -1,5 +1,6 @@
 package com.framework.auth.config;
 
+import com.framework.auth.support.AuthTextSupport;
 import lombok.Data;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -46,7 +47,8 @@ public class AuthProperties implements InitializingBean {
     }
 
     private void validateJwt(Jwt jwt) {
-        if (!hasText(jwt.getSecret()) || jwt.getSecret().length() < 32) {
+        jwt.setSecret(AuthTextSupport.trimToNull(jwt.getSecret()));
+        if (!AuthTextSupport.hasText(jwt.getSecret()) || jwt.getSecret().length() < 32) {
             throw new IllegalArgumentException("framework.auth.jwt.secret must be at least 32 characters");
         }
         if (jwt.getAccessTokenExpire() <= 0) {
@@ -61,14 +63,18 @@ public class AuthProperties implements InitializingBean {
         if (whiteList == null) {
             throw new IllegalArgumentException("framework.auth.white-list must not be null");
         }
+        List<String> normalizedWhiteList = new ArrayList<>();
         for (String path : whiteList) {
-            if (!hasText(path)) {
+            String normalizedPath = AuthTextSupport.trimToNull(path);
+            if (normalizedPath == null) {
                 throw new IllegalArgumentException("framework.auth.white-list must not contain blank paths");
             }
-            if (!path.trim().startsWith("/")) {
+            if (!normalizedPath.startsWith("/")) {
                 throw new IllegalArgumentException("framework.auth.white-list paths must start with /");
             }
+            normalizedWhiteList.add(normalizedPath);
         }
+        whiteList = normalizedWhiteList;
     }
 
     private void validateLogin(Login login) {
@@ -102,23 +108,21 @@ public class AuthProperties implements InitializingBean {
         if (!oauth2.isEnabled()) {
             return;
         }
-        requireText(oauth2.getAuthorizationUri(), "framework.auth.oauth2.authorization-uri");
-        requireText(oauth2.getTokenUri(), "framework.auth.oauth2.token-uri");
-        requireText(oauth2.getUserInfoUri(), "framework.auth.oauth2.user-info-uri");
-        requireText(oauth2.getClientId(), "framework.auth.oauth2.client-id");
-        requireText(oauth2.getClientSecret(), "framework.auth.oauth2.client-secret");
-        requireText(oauth2.getRedirectUri(), "framework.auth.oauth2.redirect-uri");
-        requireText(oauth2.getScopes(), "framework.auth.oauth2.scopes");
+        oauth2.setAuthorizationUri(requireText(oauth2.getAuthorizationUri(), "framework.auth.oauth2.authorization-uri"));
+        oauth2.setTokenUri(requireText(oauth2.getTokenUri(), "framework.auth.oauth2.token-uri"));
+        oauth2.setUserInfoUri(requireText(oauth2.getUserInfoUri(), "framework.auth.oauth2.user-info-uri"));
+        oauth2.setClientId(requireText(oauth2.getClientId(), "framework.auth.oauth2.client-id"));
+        oauth2.setClientSecret(requireText(oauth2.getClientSecret(), "framework.auth.oauth2.client-secret"));
+        oauth2.setRedirectUri(requireText(oauth2.getRedirectUri(), "framework.auth.oauth2.redirect-uri"));
+        oauth2.setScopes(requireText(oauth2.getScopes(), "framework.auth.oauth2.scopes"));
     }
 
-    private void requireText(String value, String propertyName) {
-        if (!hasText(value)) {
+    private String requireText(String value, String propertyName) {
+        String normalizedValue = AuthTextSupport.trimToNull(value);
+        if (normalizedValue == null) {
             throw new IllegalArgumentException(propertyName + " must not be blank");
         }
-    }
-
-    private boolean hasText(String value) {
-        return value != null && !value.isBlank();
+        return normalizedValue;
     }
 
     @Data

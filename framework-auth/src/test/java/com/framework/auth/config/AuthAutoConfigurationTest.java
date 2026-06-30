@@ -36,6 +36,19 @@ class AuthAutoConfigurationTest {
     }
 
     @Test
+    void productionProfileRejectsDefaultJwtSecretWithBoundarySpaces() {
+        contextRunner
+                .withPropertyValues(
+                        "spring.profiles.active=prod",
+                        "framework.auth.jwt.secret=\u00A0"
+                                + AuthProperties.DEFAULT_JWT_SECRET
+                                + "\u3000")
+                .run(context -> assertThat(context).hasFailed()
+                        .getFailure()
+                        .hasMessageContaining("framework.auth.jwt.secret must be configured in production"));
+    }
+
+    @Test
     void autoConfigurationRegistersDefaultSmsSender() {
         contextRunner
                 .withPropertyValues("framework.auth.jwt.secret=test-secret-key-must-be-at-least-32-chars")
@@ -54,6 +67,7 @@ class AuthAutoConfigurationTest {
         assertInvalidProperty("framework.auth.sms.resend-interval-seconds=0", "framework.auth.sms.resend-interval-seconds");
         assertInvalidProperty("framework.auth.password.expire-days=-1", "framework.auth.password.expire-days");
         assertInvalidProperty("framework.auth.white-list[0]=auth/**", "framework.auth.white-list paths must start with /");
+        assertInvalidProperty("framework.auth.white-list[0]=\u3000", "framework.auth.white-list must not contain blank paths");
     }
 
     @Test
@@ -67,10 +81,40 @@ class AuthAutoConfigurationTest {
                         "framework.auth.oauth2.user-info-uri=https://oauth.example.com/userinfo",
                         "framework.auth.oauth2.client-id=client",
                         "framework.auth.oauth2.client-secret=secret",
-                        "framework.auth.oauth2.redirect-uri= ")
+                        "framework.auth.oauth2.redirect-uri=\u00A0")
                 .run(context -> assertThat(context).hasFailed()
                         .getFailure()
                         .hasMessageContaining("framework.auth.oauth2.redirect-uri"));
+    }
+
+    @Test
+    void autoConfigurationNormalizesBoundarySpacesInAuthProperties() {
+        contextRunner
+                .withPropertyValues(
+                        "framework.auth.jwt.secret=\u00A0test-secret-key-must-be-at-least-32-chars\u3000",
+                        "framework.auth.white-list[0]=\u3000/auth/**\u00A0",
+                        "framework.auth.white-list[1]=\u00A0/public/**\u3000",
+                        "framework.auth.oauth2.enabled=true",
+                        "framework.auth.oauth2.authorization-uri=\u00A0https://oauth.example.com/authorize\u3000",
+                        "framework.auth.oauth2.token-uri=\u3000https://oauth.example.com/token\u00A0",
+                        "framework.auth.oauth2.user-info-uri=\u00A0https://oauth.example.com/userinfo\u3000",
+                        "framework.auth.oauth2.client-id=\u3000client\u00A0",
+                        "framework.auth.oauth2.client-secret=\u00A0secret\u3000",
+                        "framework.auth.oauth2.redirect-uri=\u3000https://app.example.com/callback\u00A0",
+                        "framework.auth.oauth2.scopes=\u00A0read:user\u3000")
+                .run(context -> {
+                    AuthProperties properties = context.getBean(AuthProperties.class);
+
+                    assertThat(properties.getJwt().getSecret())
+                            .isEqualTo("test-secret-key-must-be-at-least-32-chars");
+                    assertThat(properties.getWhiteList())
+                            .containsExactly("/auth/**", "/public/**");
+                    assertThat(properties.getOauth2().getAuthorizationUri())
+                            .isEqualTo("https://oauth.example.com/authorize");
+                    assertThat(properties.getOauth2().getRedirectUri())
+                            .isEqualTo("https://app.example.com/callback");
+                    assertThat(properties.getOauth2().getScopes()).isEqualTo("read:user");
+                });
     }
 
     private void assertInvalidProperty(String property, String message) {

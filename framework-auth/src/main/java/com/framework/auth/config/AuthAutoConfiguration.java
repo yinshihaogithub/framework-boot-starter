@@ -10,6 +10,7 @@ import com.framework.auth.service.PasswordExpireService;
 import com.framework.auth.service.SessionManager;
 import com.framework.auth.service.SmsCodeService;
 import com.framework.auth.service.SmsSender;
+import com.framework.auth.support.AuthTextSupport;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -22,7 +23,6 @@ import org.springframework.core.Ordered;
 import org.springframework.core.env.Environment;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.util.StringUtils;
 
 import java.util.Arrays;
 import java.util.HashSet;
@@ -109,8 +109,8 @@ public class AuthAutoConfiguration {
     }
 
     private void validateJwtSecret(AuthProperties.Jwt jwt, Environment environment) {
-        String secret = jwt.getSecret();
-        if (!StringUtils.hasText(secret) || secret.length() < 32) {
+        String secret = AuthTextSupport.trimToNull(jwt.getSecret());
+        if (secret == null || secret.length() < 32) {
             throw new IllegalStateException("framework.auth.jwt.secret must be at least 32 characters");
         }
         boolean productionProfile = Arrays.stream(environment.getActiveProfiles())
