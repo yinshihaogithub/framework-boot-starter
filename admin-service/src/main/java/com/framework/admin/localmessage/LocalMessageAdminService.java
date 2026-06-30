@@ -3,6 +3,7 @@ package com.framework.admin.localmessage;
 import com.framework.admin.audit.AdminAuditService;
 import com.framework.admin.support.AdminPageSupport;
 import com.framework.admin.support.AdminTextSupport;
+import com.framework.auth.context.UserContextHolder;
 import com.framework.core.result.PageResult;
 import com.framework.core.result.ResultCode;
 import com.framework.core.trace.TraceContext;
@@ -124,8 +125,10 @@ public class LocalMessageAdminService {
             return ActionResult.fail(ResultCode.SERVICE_ERROR, "本地消息服务未启用");
         }
         try {
+            String operator = operator();
             int count = service.retryDueMessages();
-            auditSuccess(servletRequest, "扫描并重试到期本地消息", "UPDATE", "count", count);
+            auditSuccess(servletRequest, "扫描并重试到期本地消息", "UPDATE",
+                    "operator", operator, "count", count);
             return ActionResult.success(count);
         } catch (Exception ignored) {
             return ActionResult.fail(ResultCode.SERVICE_ERROR, "本地消息重试失败");
@@ -146,17 +149,19 @@ public class LocalMessageAdminService {
             if (message == null) {
                 return ActionResult.fail(ResultCode.NOT_FOUND, "消息不存在");
             }
+            String operator = operator();
             LocalMessage updated = copyForUpdate(message);
             updated.setStatus(LocalMessageStatus.PENDING);
             updated.setRetryCount(0);
             updated.setErrorMessage(null);
             updated.setNextRetryTime(LocalDateTime.now());
+            updated.setOperator(operator);
             if (!repository.update(updated)) {
                 return ActionResult.fail(ResultCode.NOT_FOUND, "消息不存在");
             }
             auditSuccess(servletRequest, "人工立即重试本地消息", "UPDATE",
                     "id", id, "messageId", updated.getMessageId(),
-                    "traceId", updated.getTraceId(), "status", updated.getStatus());
+                    "traceId", updated.getTraceId(), "status", updated.getStatus(), "operator", operator);
             return ActionResult.success("已加入重试队列");
         } catch (Exception ignored) {
             return ActionResult.fail(ResultCode.SERVICE_ERROR, "本地消息操作失败");
@@ -177,16 +182,19 @@ public class LocalMessageAdminService {
             if (message == null) {
                 return ActionResult.fail(ResultCode.NOT_FOUND, "消息不存在");
             }
+            String operator = operator();
             LocalMessage updated = copyForUpdate(message);
             updated.setStatus(LocalMessageStatus.SUCCESS);
             updated.setRetryCount(0);
             updated.setErrorMessage(null);
             updated.setNextRetryTime(null);
+            updated.setOperator(operator);
             if (!repository.update(updated)) {
                 return ActionResult.fail(ResultCode.NOT_FOUND, "消息不存在");
             }
             auditSuccess(servletRequest, "人工标记本地消息成功", "UPDATE",
-                    "id", id, "messageId", updated.getMessageId(), "traceId", updated.getTraceId());
+                    "id", id, "messageId", updated.getMessageId(),
+                    "traceId", updated.getTraceId(), "operator", operator);
             return ActionResult.success("已标记成功");
         } catch (Exception ignored) {
             return ActionResult.fail(ResultCode.SERVICE_ERROR, "本地消息操作失败");
@@ -211,17 +219,19 @@ public class LocalMessageAdminService {
             if (safeReason == null) {
                 safeReason = "manual terminate";
             }
+            String operator = operator();
             LocalMessage updated = copyForUpdate(message);
             updated.setStatus(LocalMessageStatus.FAILED);
             updated.setRetryCount(0);
             updated.setErrorMessage(safeReason);
             updated.setNextRetryTime(null);
+            updated.setOperator(operator);
             if (!repository.update(updated)) {
                 return ActionResult.fail(ResultCode.NOT_FOUND, "消息不存在");
             }
             auditSuccess(servletRequest, "人工标记本地消息失败", "UPDATE",
                     "id", id, "messageId", updated.getMessageId(), "traceId", updated.getTraceId(),
-                    "reason", safeReason);
+                    "operator", operator, "reason", safeReason);
             return ActionResult.success("已标记失败");
         } catch (Exception ignored) {
             return ActionResult.fail(ResultCode.SERVICE_ERROR, "本地消息操作失败");
@@ -242,12 +252,13 @@ public class LocalMessageAdminService {
             if (message == null) {
                 return ActionResult.fail(ResultCode.NOT_FOUND, "消息不存在");
             }
+            String operator = operator();
             if (!repository.delete(id)) {
                 return ActionResult.fail(ResultCode.NOT_FOUND, "消息不存在");
             }
             auditSuccess(servletRequest, "删除本地消息", "DELETE",
                     "id", id, "messageId", message.getMessageId(),
-                    "traceId", message.getTraceId(), "status", message.getStatus());
+                    "traceId", message.getTraceId(), "status", message.getStatus(), "operator", operator);
             return ActionResult.success("已删除");
         } catch (Exception ignored) {
             return ActionResult.fail(ResultCode.SERVICE_ERROR, "本地消息操作失败");
@@ -264,6 +275,11 @@ public class LocalMessageAdminService {
 
     private String trimToNull(String value) {
         return AdminTextSupport.trimToNull(value);
+    }
+
+    private String operator() {
+        String username = trimToNull(UserContextHolder.getUsername());
+        return username == null ? "admin" : username;
     }
 
     private String normalizeTraceIdFilter(String traceId) {

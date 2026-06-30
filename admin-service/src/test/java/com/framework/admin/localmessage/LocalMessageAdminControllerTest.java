@@ -1,6 +1,8 @@
 package com.framework.admin.localmessage;
 
 import com.framework.admin.audit.AdminAuditService;
+import com.framework.auth.context.LoginUser;
+import com.framework.auth.context.UserContextHolder;
 import com.framework.core.result.PageResult;
 import com.framework.core.result.Result;
 import com.framework.core.result.ResultCode;
@@ -10,6 +12,7 @@ import com.framework.localmessage.repository.LocalMessageRepository;
 import com.framework.localmessage.service.LocalMessageService;
 import com.framework.security.annotation.RequirePermission;
 import jakarta.servlet.http.HttpServletRequest;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 
@@ -25,6 +28,11 @@ import java.util.stream.Stream;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class LocalMessageAdminControllerTest {
+
+    @AfterEach
+    void tearDown() {
+        UserContextHolder.clear();
+    }
 
     @Test
     void writeEndpointsRequireBothViewAndRetryPermissions() throws NoSuchMethodException {
@@ -120,6 +128,54 @@ class LocalMessageAdminControllerTest {
         assertThat(saved.getRetryCount()).isZero();
         assertThat(saved.getErrorMessage()).isNull();
         assertThat(saved.getNextRetryTime()).isNotNull();
+    }
+
+    @Test
+    void manualActionsUseCurrentUserAsOperator() {
+        UserContextHolder.set(new LoginUser().setUserId(7L).setUsername("alice"));
+        InMemoryLocalMessageRepository repository = new InMemoryLocalMessageRepository();
+        repository.save(localMessage(21L)
+                .setStatus(LocalMessageStatus.FAILED)
+                .setRetryCount(3)
+                .setErrorMessage("handler missing")
+                .setNextRetryTime(null));
+        repository.save(localMessage(22L)
+                .setStatus(LocalMessageStatus.PENDING)
+                .setErrorMessage("old error")
+                .setNextRetryTime(LocalDateTime.now().plusMinutes(5)));
+        repository.save(localMessage(23L)
+                .setStatus(LocalMessageStatus.PENDING)
+                .setRetryCount(1)
+                .setNextRetryTime(LocalDateTime.now().plusMinutes(5)));
+        repository.save(localMessage(24L).setStatus(LocalMessageStatus.SUCCESS));
+        RecordingAuditService auditService = new RecordingAuditService();
+        LocalMessageAdminController controller = controller(repository, auditService);
+
+        Result<String> retryResult = controller.retryNow(21L, null);
+        assertThat(retryResult.isSuccess()).isTrue();
+        assertThat(repository.findById(21L).orElseThrow().getOperator()).isEqualTo("alice");
+        assertThat(auditService.action).isEqualTo("人工立即重试本地消息");
+        assertThat(auditService.params).containsEntry("operator", "alice");
+
+        Result<String> successResult = controller.markSuccess(22L, null);
+        assertThat(successResult.isSuccess()).isTrue();
+        assertThat(repository.findById(22L).orElseThrow().getOperator()).isEqualTo("alice");
+        assertThat(auditService.action).isEqualTo("人工标记本地消息成功");
+        assertThat(auditService.params).containsEntry("operator", "alice");
+
+        LocalMessageAdminController.FailureRequest request = new LocalMessageAdminController.FailureRequest();
+        request.setReason("manual stop");
+        Result<String> failureResult = controller.markFailure(23L, request, null);
+        assertThat(failureResult.isSuccess()).isTrue();
+        assertThat(repository.findById(23L).orElseThrow().getOperator()).isEqualTo("alice");
+        assertThat(auditService.action).isEqualTo("人工标记本地消息失败");
+        assertThat(auditService.params).containsEntry("operator", "alice");
+
+        Result<String> deleteResult = controller.delete(24L, null);
+        assertThat(deleteResult.isSuccess()).isTrue();
+        assertThat(repository.findById(24L)).isEmpty();
+        assertThat(auditService.action).isEqualTo("删除本地消息");
+        assertThat(auditService.params).containsEntry("operator", "alice");
     }
 
     @Test
@@ -644,6 +700,22 @@ class LocalMessageAdminControllerTest {
         @Override
         public void success(HttpServletRequest request, String module, String action, String operationType, Object params) {
             throw new IllegalStateException("audit unavailable");
+        }
+    }
+
+    private static class RecordingAuditService extends AdminAuditService {
+        private String action;
+        private Map<String, Object> params;
+
+        private RecordingAuditService() {
+            super(null, null);
+        }
+
+        @Override
+        @SuppressWarnings("unchecked")
+        public void success(HttpServletRequest request, String module, String action, String operationType, Object params) {
+            this.action = action;
+            this.params = (Map<String, Object>) params;
         }
     }
 
