@@ -72,10 +72,11 @@ public class DefaultLocalMessageService implements LocalMessageService {
     public void markSuccess(Long id) {
         requireId(id);
         repository.findById(id).ifPresent(message -> {
-            message.setStatus(LocalMessageStatus.SUCCESS);
-            message.setErrorMessage(null);
-            message.setNextRetryTime(null);
-            repository.save(message);
+            LocalMessage updated = copyForUpdate(message);
+            updated.setStatus(LocalMessageStatus.SUCCESS);
+            updated.setErrorMessage(null);
+            updated.setNextRetryTime(null);
+            repository.save(updated);
         });
     }
 
@@ -98,22 +99,27 @@ public class DefaultLocalMessageService implements LocalMessageService {
 
     private void dispatch(LocalMessage message, LocalMessageHandler handler) {
         Long messageId = message.getId();
-        message.setStatus(LocalMessageStatus.PROCESSING);
-        message.setNextRetryTime(null);
-        repository.save(message);
+        LocalMessage processing = copyForUpdate(message);
+        processing.setStatus(LocalMessageStatus.PROCESSING);
+        processing.setNextRetryTime(null);
+        repository.save(processing);
         Map<String, String> previousContext = TraceContext.copyContextMap();
-        TraceContext.getOrCreateTraceId(message.getTraceId());
+        TraceContext.getOrCreateTraceId(processing.getTraceId());
         try {
-            handler.handle(copyForHandler(message));
+            handler.handle(copyForHandler(processing));
             markSuccess(messageId);
         } catch (Exception e) {
-            markFailure(message, e);
+            markFailure(processing, e);
         } finally {
             TraceContext.restore(previousContext);
         }
     }
 
     private LocalMessage copyForHandler(LocalMessage message) {
+        return copyMessage(message);
+    }
+
+    private LocalMessage copyMessage(LocalMessage message) {
         return new LocalMessage()
                 .setId(message.getId())
                 .setMessageId(message.getMessageId())
@@ -137,26 +143,28 @@ public class DefaultLocalMessageService implements LocalMessageService {
     private void retryMessage(LocalMessage message) {
         String topic = normalize(message.getTopic());
         LocalMessageHandler handler = handlers.get(topic);
-        message.setTopic(topic);
+        LocalMessage updated = copyForUpdate(message);
+        updated.setTopic(topic);
         if (handler == null) {
-            markFailure(message, new IllegalStateException("No LocalMessageHandler registered for topic: " + topic));
+            markFailure(updated, new IllegalStateException("No LocalMessageHandler registered for topic: " + topic));
             return;
         }
-        dispatch(message, handler);
+        dispatch(updated, handler);
     }
 
     private void markFailure(LocalMessage message, Exception exception) {
-        int retryCount = message.getRetryCount() + 1;
-        message.setRetryCount(retryCount);
-        message.setErrorMessage(errorMessage(exception));
-        if (retryCount >= message.getMaxRetry()) {
-            message.setStatus(LocalMessageStatus.FAILED);
-            message.setNextRetryTime(null);
+        LocalMessage updated = copyForUpdate(message);
+        int retryCount = updated.getRetryCount() + 1;
+        updated.setRetryCount(retryCount);
+        updated.setErrorMessage(errorMessage(exception));
+        if (retryCount >= updated.getMaxRetry()) {
+            updated.setStatus(LocalMessageStatus.FAILED);
+            updated.setNextRetryTime(null);
         } else {
-            message.setStatus(LocalMessageStatus.PENDING);
-            message.setNextRetryTime(LocalDateTime.now().plus(properties.getRetryInterval()));
+            updated.setStatus(LocalMessageStatus.PENDING);
+            updated.setNextRetryTime(LocalDateTime.now().plus(properties.getRetryInterval()));
         }
-        repository.save(message);
+        repository.save(updated);
     }
 
     private void prepareForPublish(LocalMessage message) {
@@ -212,6 +220,10 @@ public class DefaultLocalMessageService implements LocalMessageService {
                 || properties.getRetryInterval().isNegative()) {
             throw new IllegalArgumentException("framework.local-message.retry-interval must be greater than 0");
         }
+    }
+
+    private LocalMessage copyForUpdate(LocalMessage message) {
+        return copyMessage(message);
     }
 
     private void requireId(Long id) {

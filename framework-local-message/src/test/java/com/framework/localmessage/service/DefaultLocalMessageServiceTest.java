@@ -321,11 +321,91 @@ class DefaultLocalMessageServiceTest {
     }
 
     @Test
+    void retryNowDoesNotMutateMessageWhenProcessingSaveFails() {
+        InMemoryLocalMessageRepository repository = new InMemoryLocalMessageRepository();
+        AtomicInteger handled = new AtomicInteger();
+        DefaultLocalMessageService service = new DefaultLocalMessageService(repository, properties(), List.of(handler(
+                "order.created",
+                message -> handled.incrementAndGet()
+        )));
+        LocalMessage message = service.publish("order.created", "ORD-1", "{}");
+        message.setStatus(LocalMessageStatus.FAILED);
+        message.setRetryCount(2);
+        message.setErrorMessage("old error");
+        message.setNextRetryTime(null);
+        repository.save(message);
+        repository.failOnSave = true;
+
+        assertThatThrownBy(() -> service.retryNow(message.getId()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("save failed");
+
+        assertThat(handled).hasValue(0);
+        LocalMessage saved = repository.findById(message.getId()).orElseThrow();
+        assertThat(saved.getStatus()).isEqualTo(LocalMessageStatus.FAILED);
+        assertThat(saved.getRetryCount()).isEqualTo(2);
+        assertThat(saved.getErrorMessage()).isEqualTo("old error");
+        assertThat(saved.getNextRetryTime()).isNull();
+    }
+
+    @Test
     void retryNowReturnsFalseWhenMessageDoesNotExist() {
         DefaultLocalMessageService service = new DefaultLocalMessageService(
                 new InMemoryLocalMessageRepository(), properties(), List.of());
 
         assertThat(service.retryNow(404L)).isFalse();
+    }
+
+    @Test
+    void markSuccessDoesNotMutateFetchedMessageWhenSaveFails() {
+        InMemoryLocalMessageRepository repository = new InMemoryLocalMessageRepository();
+        DefaultLocalMessageService service = new DefaultLocalMessageService(repository, properties(), List.of());
+        LocalDateTime nextRetryTime = LocalDateTime.now().plusMinutes(5);
+        LocalMessage message = repository.save(new LocalMessage()
+                .setTopic("order.created")
+                .setPayload("{}")
+                .setStatus(LocalMessageStatus.PENDING)
+                .setRetryCount(1)
+                .setMaxRetry(2)
+                .setNextRetryTime(nextRetryTime)
+                .setErrorMessage("old error"));
+        repository.failOnSave = true;
+
+        assertThatThrownBy(() -> service.markSuccess(message.getId()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("save failed");
+
+        LocalMessage saved = repository.findById(message.getId()).orElseThrow();
+        assertThat(saved.getStatus()).isEqualTo(LocalMessageStatus.PENDING);
+        assertThat(saved.getRetryCount()).isEqualTo(1);
+        assertThat(saved.getErrorMessage()).isEqualTo("old error");
+        assertThat(saved.getNextRetryTime()).isEqualTo(nextRetryTime);
+    }
+
+    @Test
+    void markFailureDoesNotMutateFetchedMessageWhenSaveFails() {
+        InMemoryLocalMessageRepository repository = new InMemoryLocalMessageRepository();
+        DefaultLocalMessageService service = new DefaultLocalMessageService(repository, properties(), List.of());
+        LocalDateTime nextRetryTime = LocalDateTime.now().plusMinutes(5);
+        LocalMessage message = repository.save(new LocalMessage()
+                .setTopic("order.created")
+                .setPayload("{}")
+                .setStatus(LocalMessageStatus.PENDING)
+                .setRetryCount(1)
+                .setMaxRetry(2)
+                .setNextRetryTime(nextRetryTime)
+                .setErrorMessage("old error"));
+        repository.failOnSave = true;
+
+        assertThatThrownBy(() -> service.markFailure(message.getId(), new IllegalStateException("manual failure")))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("save failed");
+
+        LocalMessage saved = repository.findById(message.getId()).orElseThrow();
+        assertThat(saved.getStatus()).isEqualTo(LocalMessageStatus.PENDING);
+        assertThat(saved.getRetryCount()).isEqualTo(1);
+        assertThat(saved.getErrorMessage()).isEqualTo("old error");
+        assertThat(saved.getNextRetryTime()).isEqualTo(nextRetryTime);
     }
 
     @Test
@@ -373,6 +453,61 @@ class DefaultLocalMessageServiceTest {
         assertThat(repository.findById(message.getId()).orElseThrow().getTopic()).isEqualTo("order.created");
         assertThat(repository.findById(message.getId()).orElseThrow().getStatus())
                 .isEqualTo(LocalMessageStatus.SUCCESS);
+    }
+
+    @Test
+    void retryDueMessagesDoesNotMutateDueMessageWhenProcessingSaveFails() {
+        InMemoryLocalMessageRepository repository = new InMemoryLocalMessageRepository();
+        AtomicInteger handled = new AtomicInteger();
+        DefaultLocalMessageService service = new DefaultLocalMessageService(repository, properties(), List.of(handler(
+                "order.created",
+                message -> handled.incrementAndGet()
+        )));
+        LocalDateTime nextRetryTime = LocalDateTime.now().minusSeconds(1);
+        LocalMessage message = repository.save(new LocalMessage()
+                .setTopic("order.created")
+                .setPayload("{}")
+                .setStatus(LocalMessageStatus.PENDING)
+                .setRetryCount(1)
+                .setMaxRetry(2)
+                .setNextRetryTime(nextRetryTime)
+                .setErrorMessage("old error"));
+        repository.failOnSave = true;
+
+        assertThatThrownBy(service::retryDueMessages)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("save failed");
+
+        assertThat(handled).hasValue(0);
+        LocalMessage saved = repository.findById(message.getId()).orElseThrow();
+        assertThat(saved.getStatus()).isEqualTo(LocalMessageStatus.PENDING);
+        assertThat(saved.getRetryCount()).isEqualTo(1);
+        assertThat(saved.getErrorMessage()).isEqualTo("old error");
+        assertThat(saved.getNextRetryTime()).isEqualTo(nextRetryTime);
+    }
+
+    @Test
+    void retryDueMessagesDoesNotNormalizeTopicInPlaceWhenFailureSaveFails() {
+        InMemoryLocalMessageRepository repository = new InMemoryLocalMessageRepository();
+        DefaultLocalMessageService service = new DefaultLocalMessageService(repository, properties(), List.of());
+        LocalMessage message = repository.save(new LocalMessage()
+                .setTopic(" order.created ")
+                .setPayload("{}")
+                .setStatus(LocalMessageStatus.PENDING)
+                .setRetryCount(1)
+                .setMaxRetry(2)
+                .setNextRetryTime(LocalDateTime.now().minusSeconds(1)));
+        repository.failOnSave = true;
+
+        assertThatThrownBy(service::retryDueMessages)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("save failed");
+
+        LocalMessage saved = repository.findById(message.getId()).orElseThrow();
+        assertThat(saved.getTopic()).isEqualTo(" order.created ");
+        assertThat(saved.getStatus()).isEqualTo(LocalMessageStatus.PENDING);
+        assertThat(saved.getRetryCount()).isEqualTo(1);
+        assertThat(saved.getErrorMessage()).isNull();
     }
 
     @Test
@@ -503,9 +638,13 @@ class DefaultLocalMessageServiceTest {
         private final Map<Long, LocalMessage> messages = new LinkedHashMap<>();
         private long nextId = 1;
         private int findByIdCalls;
+        private boolean failOnSave;
 
         @Override
         public LocalMessage save(LocalMessage message) {
+            if (failOnSave) {
+                throw new IllegalStateException("save failed");
+            }
             if (message.getId() == null) {
                 message.setId(nextId++);
             }
