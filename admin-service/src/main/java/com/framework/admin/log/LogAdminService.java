@@ -4,6 +4,7 @@ import com.framework.admin.system.AdminSystemModels.LoginLog;
 import com.framework.admin.system.AdminSystemRepository;
 import com.framework.admin.support.AdminPageSupport;
 import com.framework.core.result.PageResult;
+import com.framework.core.trace.TraceContext;
 import com.framework.log.entity.OperationLogEntity;
 import com.framework.log.mapper.OperationLogMapper;
 import lombok.extern.slf4j.Slf4j;
@@ -41,6 +42,12 @@ public class LogAdminService {
                                                Boolean success, String traceId, int pageNum, int pageSize) {
         int safePageNum = AdminPageSupport.safePageNum(pageNum);
         int safePageSize = AdminPageSupport.safePageSize(pageSize);
+        String safeModule = trimToNull(module);
+        String safeLogType = trimToNull(logType);
+        String safeTraceId = TraceContext.normalizeTraceId(traceId);
+        if (hasText(traceId) && safeTraceId == null) {
+            return PageResult.empty(safePageNum, safePageSize);
+        }
         OperationLogMapper mapper = availableMapper();
         if (mapper == null) {
             return PageResult.empty(safePageNum, safePageSize);
@@ -48,8 +55,8 @@ public class LogAdminService {
         int offset = (safePageNum - 1) * safePageSize;
         try {
             List<OperationLogEntity> records = mapper.selectList(
-                    module, logType, operatorId, success, traceId, offset, safePageSize);
-            long total = mapper.count(module, logType, operatorId, success, traceId);
+                    safeModule, safeLogType, operatorId, success, safeTraceId, offset, safePageSize);
+            long total = mapper.count(safeModule, safeLogType, operatorId, success, safeTraceId);
             return PageResult.of(records, total, safePageNum, safePageSize);
         } catch (Exception ignored) {
             return PageResult.empty(safePageNum, safePageSize);
@@ -63,14 +70,26 @@ public class LogAdminService {
     public PageResult<LoginLog> loginLogs(String username, Boolean success, int pageNum, int pageSize) {
         int safePageNum = AdminPageSupport.safePageNum(pageNum);
         int safePageSize = AdminPageSupport.safePageSize(pageSize);
+        String safeUsername = trimToNull(username);
         try {
-            List<LoginLog> records = systemRepository.listLoginLogs(username, success, safePageNum, safePageSize);
-            long total = systemRepository.countLoginLogs(username, success);
+            List<LoginLog> records = systemRepository.listLoginLogs(safeUsername, success, safePageNum, safePageSize);
+            long total = systemRepository.countLoginLogs(safeUsername, success);
             return PageResult.of(records, total, safePageNum, safePageSize);
         } catch (RuntimeException e) {
             log.warn("[日志中心] 登录日志查询失败 error={}", e.getMessage());
             return PageResult.empty(safePageNum, safePageSize);
         }
+    }
+
+    private String trimToNull(String value) {
+        if (!hasText(value)) {
+            return null;
+        }
+        return value.trim();
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 
     private OperationLogMapper availableMapper() {
