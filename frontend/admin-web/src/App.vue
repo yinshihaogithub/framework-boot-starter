@@ -797,6 +797,14 @@
             <div class="metric"><span>本地消息</span><strong>{{ traceDetail?.summary?.localMessages ?? 0 }}</strong></div>
             <div class="metric"><span>失败节点</span><strong>{{ traceDetail?.summary?.failed ?? 0 }}</strong></div>
           </div>
+          <el-alert
+            v-if="traceDetail?.warnings?.length"
+            class="trace-warnings"
+            type="warning"
+            show-icon
+            :closable="false"
+            :title="traceDetail.warnings.join('；')"
+          />
 
           <el-card shadow="never">
             <template #header>
@@ -3367,6 +3375,10 @@ function formatHealthDetails(details?: Record<string, unknown>) {
 
 .trace-timeline {
   padding: 8px 6px 0;
+}
+
+.trace-warnings {
+  margin-bottom: 12px;
 }
 
 .trace-event {

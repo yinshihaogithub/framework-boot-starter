@@ -17,6 +17,7 @@ public class TraceAdminModels {
     public static class TraceDetail {
         private String traceId;
         private Map<String, Long> summary;
+        private List<String> warnings;
         private List<TraceEvent> timeline;
         private List<OperationLogEntity> logs;
         private List<MqFailedMessage> mqMessages;

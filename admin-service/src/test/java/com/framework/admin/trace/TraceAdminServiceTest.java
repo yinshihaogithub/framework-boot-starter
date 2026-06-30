@@ -130,6 +130,7 @@ class TraceAdminServiceTest {
         assertThat(detail.getLogs()).isEmpty();
         assertThat(detail.getMqMessages()).isEmpty();
         assertThat(detail.getLocalMessages()).isEmpty();
+        assertThat(detail.getWarnings()).isEmpty();
     }
 
     @Test
@@ -147,6 +148,31 @@ class TraceAdminServiceTest {
         assertThat(detail.getLogs()).isEmpty();
         assertThat(detail.getMqMessages()).isEmpty();
         assertThat(detail.getLocalMessages()).isEmpty();
+        assertThat(detail.getWarnings())
+                .containsExactly(
+                        "操作日志数据不可用: trace optional provider unavailable",
+                        "MQ失败消息数据不可用: trace optional provider unavailable",
+                        "本地消息数据不可用: trace optional provider unavailable");
+    }
+
+    @Test
+    void returnsWarningsWhenTraceDataQueriesFail() {
+        TraceAdminService service = new TraceAdminService(
+                provider(failingMapper()),
+                provider(null),
+                provider(failingLocalMessageService()));
+
+        TraceDetail detail = service.detail("trace-query-failed");
+
+        assertThat(detail.getSummary())
+                .containsEntry("logs", 0L)
+                .containsEntry("mqMessages", 0L)
+                .containsEntry("localMessages", 0L)
+                .containsEntry("failed", 0L);
+        assertThat(detail.getWarnings())
+                .containsExactly(
+                        "操作日志数据不可用: operation log table unavailable",
+                        "本地消息数据不可用: local message table unavailable");
     }
 
     private static TraceAdminService service(List<OperationLogEntity> logs,
@@ -222,6 +248,34 @@ class TraceAdminServiceTest {
         };
     }
 
+    private static OperationLogMapper failingMapper() {
+        return new OperationLogMapper() {
+            @Override
+            public void createTableIfNotExists() {
+            }
+
+            @Override
+            public void insert(OperationLogEntity entity) {
+            }
+
+            @Override
+            public List<OperationLogEntity> selectList(String module, String logType, Long operatorId,
+                                                       Boolean success, String traceId, int offset, int pageSize) {
+                throw new IllegalStateException("operation log table unavailable");
+            }
+
+            @Override
+            public long count(String module, String logType, Long operatorId, Boolean success, String traceId) {
+                return 0;
+            }
+
+            @Override
+            public int deleteBefore(Date beforeDate) {
+                return 0;
+            }
+        };
+    }
+
     private static LocalMessageService localMessageService(List<LocalMessage> messages) {
         return new LocalMessageService() {
             @Override
@@ -255,6 +309,43 @@ class TraceAdminServiceTest {
             @Override
             public List<LocalMessage> findAll() {
                 return messages;
+            }
+        };
+    }
+
+    private static LocalMessageService failingLocalMessageService() {
+        return new LocalMessageService() {
+            @Override
+            public LocalMessage publish(String topic, String businessKey, String payload) {
+                return null;
+            }
+
+            @Override
+            public int retryDueMessages() {
+                return 0;
+            }
+
+            @Override
+            public boolean retryNow(Long id) {
+                return false;
+            }
+
+            @Override
+            public void markSuccess(Long id) {
+            }
+
+            @Override
+            public void markFailure(Long id, Exception exception) {
+            }
+
+            @Override
+            public Optional<LocalMessage> findById(Long id) {
+                return Optional.empty();
+            }
+
+            @Override
+            public List<LocalMessage> findAll() {
+                throw new IllegalStateException("local message table unavailable");
             }
         };
     }

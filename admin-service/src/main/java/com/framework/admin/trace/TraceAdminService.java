@@ -25,6 +25,9 @@ import java.util.Map;
 public class TraceAdminService {
 
     private static final int TRACE_LIMIT = 200;
+    private static final String LOG_WARNING = "操作日志数据不可用";
+    private static final String MQ_WARNING = "MQ失败消息数据不可用";
+    private static final String LOCAL_MESSAGE_WARNING = "本地消息数据不可用";
 
     private final ObjectProvider<OperationLogMapper> operationLogMapperProvider;
     private final ObjectProvider<DeadLetterHandler> deadLetterHandlerProvider;
@@ -39,32 +42,35 @@ public class TraceAdminService {
     }
 
     public TraceDetail detail(String traceId) {
-        List<OperationLogEntity> logs = findLogs(traceId);
-        List<MqFailedMessage> mqMessages = findMqMessages(traceId);
-        List<LocalMessage> localMessages = findLocalMessages(traceId);
+        List<String> warnings = new ArrayList<>();
+        List<OperationLogEntity> logs = findLogs(traceId, warnings);
+        List<MqFailedMessage> mqMessages = findMqMessages(traceId, warnings);
+        List<LocalMessage> localMessages = findLocalMessages(traceId, warnings);
         return new TraceDetail()
                 .setTraceId(traceId)
                 .setSummary(summary(logs, mqMessages, localMessages))
+                .setWarnings(warnings)
                 .setTimeline(buildTimeline(logs, mqMessages, localMessages))
                 .setLogs(logs)
                 .setMqMessages(mqMessages)
                 .setLocalMessages(localMessages.stream().map(LocalMessageVO::from).toList());
     }
 
-    private List<OperationLogEntity> findLogs(String traceId) {
-        OperationLogMapper mapper = available(operationLogMapperProvider);
+    private List<OperationLogEntity> findLogs(String traceId, List<String> warnings) {
+        OperationLogMapper mapper = available(operationLogMapperProvider, LOG_WARNING, warnings);
         if (mapper == null) {
             return List.of();
         }
         try {
             return mapper.selectList(null, null, null, null, traceId, 0, TRACE_LIMIT);
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+            warnings.add(warning(LOG_WARNING, e));
             return List.of();
         }
     }
 
-    private List<MqFailedMessage> findMqMessages(String traceId) {
-        DeadLetterHandler handler = available(deadLetterHandlerProvider);
+    private List<MqFailedMessage> findMqMessages(String traceId, List<String> warnings) {
+        DeadLetterHandler handler = available(deadLetterHandlerProvider, MQ_WARNING, warnings);
         if (handler == null) {
             return List.of();
         }
@@ -74,13 +80,14 @@ public class TraceAdminService {
                     .sorted(Comparator.comparing(MqFailedMessage::getCreateTime, newestFirst()))
                     .limit(TRACE_LIMIT)
                     .toList();
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+            warnings.add(warning(MQ_WARNING, e));
             return List.of();
         }
     }
 
-    private List<LocalMessage> findLocalMessages(String traceId) {
-        LocalMessageService service = available(localMessageServiceProvider);
+    private List<LocalMessage> findLocalMessages(String traceId, List<String> warnings) {
+        LocalMessageService service = available(localMessageServiceProvider, LOCAL_MESSAGE_WARNING, warnings);
         if (service == null) {
             return List.of();
         }
@@ -90,20 +97,27 @@ public class TraceAdminService {
                     .sorted(Comparator.comparing(LocalMessage::getCreateTime, newestFirst()))
                     .limit(TRACE_LIMIT)
                     .toList();
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+            warnings.add(warning(LOCAL_MESSAGE_WARNING, e));
             return List.of();
         }
     }
 
-    private <T> T available(ObjectProvider<T> provider) {
+    private <T> T available(ObjectProvider<T> provider, String source, List<String> warnings) {
         if (provider == null) {
             return null;
         }
         try {
             return provider.getIfAvailable();
-        } catch (RuntimeException ignored) {
+        } catch (RuntimeException e) {
+            warnings.add(warning(source, e));
             return null;
         }
+    }
+
+    private String warning(String source, Exception exception) {
+        String message = exception == null ? null : exception.getMessage();
+        return source + (message == null || message.isBlank() ? "" : ": " + message);
     }
 
     private Map<String, Long> summary(List<OperationLogEntity> logs,

@@ -281,6 +281,7 @@ export interface TraceEvent {
 export interface TraceDetail {
   traceId: string
   summary: Record<string, number>
+  warnings: string[]
   timeline: TraceEvent[]
   logs: OperationLog[]
   mqMessages: MqFailedMessage[]
