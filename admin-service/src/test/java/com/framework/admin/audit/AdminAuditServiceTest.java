@@ -69,6 +69,24 @@ class AdminAuditServiceTest {
     }
 
     @Test
+    void operationLogDefaultsOperatorNameWhenUserContextIsMissing() {
+        service.success(null, "系统管理", "删除角色", "DELETE", null);
+
+        assertThat(mapper.inserted.getOperatorId()).isNull();
+        assertThat(mapper.inserted.getOperatorName()).isEqualTo("admin");
+    }
+
+    @Test
+    void operationLogTrimsOperatorNameBeforeWriting() {
+        UserContextHolder.set(new LoginUser().setUserId(7L).setUsername("\u00A0alice\u3000"));
+
+        service.success(null, "系统管理", "更新用户", "UPDATE", null);
+
+        assertThat(mapper.inserted.getOperatorId()).isEqualTo(7L);
+        assertThat(mapper.inserted.getOperatorName()).isEqualTo("alice");
+    }
+
+    @Test
     void unsafeForwardedClientIpFallsBackToRemoteAddress() {
         MockHttpServletRequest request = new MockHttpServletRequest("POST", "/admin/system/users");
         request.setRemoteAddr("127.0.0.1");

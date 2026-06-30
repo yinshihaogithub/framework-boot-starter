@@ -69,7 +69,7 @@ public class AdminAuditService {
             entity.setErrorMessage(truncate(errorMessage));
             entity.setElapsedMs(0L);
             entity.setOperatorId(UserContextHolder.getUserId());
-            entity.setOperatorName(UserContextHolder.getUsername());
+            entity.setOperatorName(currentOperatorName());
             entity.setClientIp(AdminClientIpResolver.resolve(request));
             entity.setTraceId(TraceContext.ensureTraceId());
             entity.setCreateTime(new Date());
@@ -171,5 +171,10 @@ public class AdminAuditService {
             return value;
         }
         return value.substring(0, MAX_TEXT_LENGTH);
+    }
+
+    private String currentOperatorName() {
+        String username = AdminTextSupport.trimToNull(UserContextHolder.getUsername());
+        return username == null ? "admin" : username;
     }
 }
