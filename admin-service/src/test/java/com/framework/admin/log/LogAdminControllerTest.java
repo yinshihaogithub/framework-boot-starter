@@ -18,7 +18,7 @@ class LogAdminControllerTest {
         RecordingLogAdminService service = new RecordingLogAdminService();
         LogAdminController controller = new LogAdminController(service);
 
-        Result<PageResult<OperationLogEntity>> result = controller.trace(" ", 1, 50);
+        Result<PageResult<OperationLogEntity>> result = controller.trace("\u00A0\u3000", 1, 50);
 
         assertThat(result.isSuccess()).isFalse();
         assertThat(result.getCode()).isEqualTo(ResultCode.PARAM_ERROR.getCode());
@@ -44,7 +44,7 @@ class LogAdminControllerTest {
         RecordingLogAdminService service = new RecordingLogAdminService();
         LogAdminController controller = new LogAdminController(service);
 
-        Result<PageResult<OperationLogEntity>> result = controller.trace(" trace-a ", -1, 500);
+        Result<PageResult<OperationLogEntity>> result = controller.trace("\u00A0trace-a\u3000", -1, 500);
 
         assertThat(result.isSuccess()).isTrue();
         assertThat(service.traceId).isEqualTo("trace-a");

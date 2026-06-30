@@ -3,6 +3,7 @@ package com.framework.admin.log;
 import com.framework.admin.system.AdminSystemModels.LoginLog;
 import com.framework.admin.system.AdminSystemRepository;
 import com.framework.admin.support.AdminPageSupport;
+import com.framework.admin.support.AdminTextSupport;
 import com.framework.core.result.PageResult;
 import com.framework.core.trace.TraceContext;
 import com.framework.log.entity.OperationLogEntity;
@@ -89,14 +90,11 @@ public class LogAdminService {
     }
 
     private String trimToNull(String value) {
-        if (!hasText(value)) {
-            return null;
-        }
-        return value.trim();
+        return AdminTextSupport.trimToNull(value);
     }
 
     private boolean hasText(String value) {
-        return value != null && !value.isBlank();
+        return AdminTextSupport.hasText(value);
     }
 
     private String normalizeLogTypeFilter(String logType) {

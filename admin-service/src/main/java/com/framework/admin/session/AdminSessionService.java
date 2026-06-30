@@ -1,6 +1,7 @@
 package com.framework.admin.session;
 
 import com.framework.admin.audit.AdminAuditService;
+import com.framework.admin.support.AdminTextSupport;
 import com.framework.auth.context.LoginUser;
 import com.framework.auth.context.UserContextHolder;
 import com.framework.auth.service.SessionManager;
@@ -87,12 +88,8 @@ public class AdminSessionService {
                 && deviceId.equals(current.getDeviceId());
     }
 
-    private boolean isBlank(String value) {
-        return value == null || value.isBlank();
-    }
-
     private String text(String value) {
-        return isBlank(value) ? null : value.trim();
+        return AdminTextSupport.trimToNull(value);
     }
 
     public record ActionResult<T>(boolean success, int code, String message, T data) {

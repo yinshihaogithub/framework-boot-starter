@@ -2,6 +2,7 @@ package com.framework.admin.file;
 
 import com.framework.admin.audit.AdminAuditService;
 import com.framework.admin.support.AdminPageSupport;
+import com.framework.admin.support.AdminTextSupport;
 import com.framework.auth.context.UserContextHolder;
 import com.framework.core.result.PageResult;
 import com.framework.core.result.Result;
@@ -242,7 +243,7 @@ public class FileAdminService {
     }
 
     private String text(String value) {
-        return value == null || value.isBlank() ? null : value.trim();
+        return AdminTextSupport.trimToNull(value);
     }
 
     private String text(String value, String fallback) {

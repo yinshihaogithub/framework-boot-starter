@@ -68,7 +68,8 @@ class LogAdminServiceTest {
                 operationLog(1L, "system", "OPERATION", true, "trace-a"),
                 operationLog(2L, "mq", "API", false, "trace-b")))), systemRepository(List.of()));
 
-        PageResult<OperationLogEntity> page = service.list(" system ", " operation ", null, true, " trace-a ", 1, 20);
+        PageResult<OperationLogEntity> page = service.list(
+                "\u00A0system\u3000", "\u3000operation\u00A0", null, true, "\u00A0trace-a\u3000", 1, 20);
 
         assertThat(page.getTotal()).isEqualTo(1);
         assertThat(page.getRecords()).extracting(OperationLogEntity::getId).containsExactly(1L);
@@ -153,7 +154,7 @@ class LogAdminServiceTest {
                 new LoginLog().setId(1L).setUsername("admin").setSuccess(true),
                 new LoginLog().setId(2L).setUsername("ops").setSuccess(true))));
 
-        PageResult<LoginLog> page = service.loginLogs(" admin ", true, 1, 20);
+        PageResult<LoginLog> page = service.loginLogs("\u00A0admin\u3000", true, 1, 20);
 
         assertThat(page.getTotal()).isEqualTo(1);
         assertThat(page.getRecords()).extracting(LoginLog::getUsername).containsExactly("admin");

@@ -1,5 +1,7 @@
 package com.framework.admin.file;
 
+import com.framework.admin.support.AdminTextSupport;
+
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -50,10 +52,7 @@ public class FileAdminRepository {
     }
 
     private static String text(String value) {
-        if (value == null || value.isBlank()) {
-            return null;
-        }
-        return value.trim();
+        return AdminTextSupport.trimToNull(value);
     }
 
     private static String like(String value) {

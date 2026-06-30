@@ -32,7 +32,7 @@ class TraceAdminServiceTest {
     void controllerRejectsBlankTraceId() {
         TraceAdminController controller = new TraceAdminController(service(List.of(), List.of(), List.of()));
 
-        Result<TraceDetail> result = controller.detail(" ");
+        Result<TraceDetail> result = controller.detail("\u00A0\u3000");
 
         assertThat(result.isSuccess()).isFalse();
         assertThat(result.getCode()).isEqualTo(ResultCode.PARAM_ERROR.getCode());
@@ -54,7 +54,7 @@ class TraceAdminServiceTest {
     void controllerNormalizesTraceIdBeforeQueryingDetail() {
         TraceAdminController controller = new TraceAdminController(service(List.of(), List.of(), List.of()));
 
-        Result<TraceDetail> result = controller.detail(" trace-a ");
+        Result<TraceDetail> result = controller.detail("\u00A0trace-a\u3000");
 
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getData().getTraceId()).isEqualTo("trace-a");
@@ -107,12 +107,12 @@ class TraceAdminServiceTest {
     @Test
     void timelineMessagesAreSingleLineAndBounded() {
         OperationLogEntity log = operationLog("trace-a", false, "删除用户", "/admin/users/1", new Date(1_000));
-        log.setErrorMessage("log line\n" + "x".repeat(1500));
+        log.setErrorMessage("log\u00A0line\n" + "x".repeat(1500));
         MqFailedMessage mqMessage = mqMessage(1L, "trace-a", MqFailedMessage.STATUS_EXHAUSTED, new Date(2_000));
-        mqMessage.setErrorMessage("mq line\n" + "y".repeat(1500));
+        mqMessage.setErrorMessage("mq\u3000line\n" + "y".repeat(1500));
         LocalMessage localMessage = localMessage(1L, "trace-a", LocalMessageStatus.FAILED,
                 LocalDateTime.of(2026, 1, 1, 12, 0));
-        localMessage.setErrorMessage("local line\n" + "z".repeat(1500));
+        localMessage.setErrorMessage("local\u00A0line\n" + "z".repeat(1500));
         TraceAdminService service = service(List.of(log), List.of(mqMessage), List.of(localMessage));
 
         TraceDetail detail = service.detail("trace-a");
@@ -122,7 +122,30 @@ class TraceAdminServiceTest {
                 .extracting("message")
                 .allSatisfy(message -> assertThat((String) message)
                         .hasSize(1024)
-                        .doesNotContain("\n"));
+                        .doesNotContain("\n")
+                        .doesNotContain("\u00A0")
+                        .doesNotContain("\u3000"));
+    }
+
+    @Test
+    void timelineTitlesTrimUnicodeBoundarySpaceAndSkipUnicodeBlankValues() {
+        OperationLogEntity log = operationLog("trace-a", true, "\u00A0\u3000", "\u3000/admin/users\u00A0",
+                new Date(1_000));
+        MqFailedMessage mqMessage = mqMessage(1L, "trace-a", MqFailedMessage.STATUS_PENDING, new Date(2_000));
+        mqMessage.setMessageType("\u3000OrderCreated\u00A0");
+        LocalMessage localMessage = localMessage(1L, "trace-a", LocalMessageStatus.PENDING,
+                LocalDateTime.of(2026, 1, 1, 12, 0));
+        localMessage.setTopic("\u00A0order.created\u3000");
+        TraceAdminService service = service(List.of(log), List.of(mqMessage), List.of(localMessage));
+
+        TraceDetail detail = service.detail("trace-a");
+
+        assertThat(detail.getTimeline())
+                .extracting("source", "title")
+                .contains(
+                        tuple("LOG", "/admin/users"),
+                        tuple("MQ", "OrderCreated"),
+                        tuple("LOCAL_MESSAGE", "order.created"));
     }
 
     @Test
@@ -267,7 +290,7 @@ class TraceAdminServiceTest {
     @Test
     void warningMessagesAreSingleLineAndBounded() {
         TraceAdminService service = new TraceAdminService(
-                failingProvider("provider line\n" + "x".repeat(900)),
+                failingProvider("provider\u00A0line\n" + "x".repeat(900)),
                 provider(null),
                 provider(null));
 
@@ -277,7 +300,8 @@ class TraceAdminServiceTest {
         assertThat(detail.getWarnings().get(0))
                 .startsWith("操作日志数据不可用: provider line ")
                 .hasSize("操作日志数据不可用: ".length() + 512)
-                .doesNotContain("\n");
+                .doesNotContain("\n")
+                .doesNotContain("\u00A0");
     }
 
     private static TraceAdminService service(List<OperationLogEntity> logs,

@@ -1,6 +1,7 @@
 package com.framework.admin.trace;
 
 import com.framework.admin.localmessage.LocalMessageVO;
+import com.framework.admin.support.AdminTextSupport;
 import com.framework.admin.trace.TraceAdminModels.TraceDetail;
 import com.framework.admin.trace.TraceAdminModels.TraceEvent;
 import com.framework.localmessage.model.LocalMessage;
@@ -233,13 +234,11 @@ public class TraceAdminService {
     }
 
     private String summarize(String value, int maxLength) {
-        if (value == null) {
+        String text = AdminTextSupport.trimToNull(value);
+        if (text == null) {
             return null;
         }
-        String normalized = value.replaceAll("\\s+", " ").trim();
-        if (normalized.isEmpty()) {
-            return null;
-        }
+        String normalized = text.replaceAll("[\\s\\p{Zs}]+", " ");
         if (normalized.length() <= maxLength) {
             return normalized;
         }
@@ -259,8 +258,9 @@ public class TraceAdminService {
             return "";
         }
         for (String value : values) {
-            if (value != null && !value.isBlank()) {
-                return value;
+            String text = AdminTextSupport.trimToNull(value);
+            if (text != null) {
+                return text;
             }
         }
         return "";

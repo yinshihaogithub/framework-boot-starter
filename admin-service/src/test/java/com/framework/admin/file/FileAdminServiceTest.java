@@ -39,7 +39,8 @@ class FileAdminServiceTest {
         repository.count = 1;
         repository.stats = Map.of("active", 1L, "deleted", 0L, "totalSize", 3L);
 
-        PageResult<FileAdminModels.FileRecord> page = service.list(" a ", " system ", " order-1 ", " text ", -1, 500);
+        PageResult<FileAdminModels.FileRecord> page = service.list(
+                "\u00A0a\u3000", "\u3000system\u00A0", "\u00A0order-1\u3000", "\u3000text\u00A0", -1, 500);
 
         assertThat(page.getPageNum()).isEqualTo(1);
         assertThat(page.getPageSize()).isEqualTo(200);
@@ -55,7 +56,7 @@ class FileAdminServiceTest {
 
     @Test
     void listTreatsBlankFiltersAsNull() {
-        service.list("   ", "\t", "\n", "", 1, 20);
+        service.list("\u00A0\u3000", "\t", "\n", "", 1, 20);
 
         assertThat(repository.listKeyword).isNull();
         assertThat(repository.listBusinessType).isNull();
@@ -118,6 +119,23 @@ class FileAdminServiceTest {
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getData().getHeaders().getContentDisposition().getFilename()).isEqualTo("hello.txt");
         assertThat(result.getData().getBody().getInputStream().readAllBytes()).isEqualTo("abc".getBytes());
+    }
+
+    @Test
+    void downloadUsesFallbackMetadataWhenStoredMetadataIsUnicodeBlank() {
+        repository.record = new FileAdminModels.FileRecord()
+                .setId(9L)
+                .setFileKey("file-key")
+                .setOriginalFilename("\u00A0\u3000")
+                .setContentType("\u3000")
+                .setFileSize(3L);
+        storageService.bytes = "abc".getBytes();
+
+        Result<ResponseEntity<Resource>> result = service.download(9L);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getData().getHeaders().getContentDisposition().getFilename()).isEqualTo("file");
+        assertThat(result.getData().getHeaders().getContentType().toString()).isEqualTo("application/octet-stream");
     }
 
     @Test

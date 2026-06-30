@@ -1,5 +1,6 @@
 package com.framework.admin.log;
 
+import com.framework.admin.support.AdminTextSupport;
 import com.framework.admin.system.AdminSystemModels.LoginLog;
 import com.framework.core.result.PageResult;
 import com.framework.core.result.Result;
@@ -57,7 +58,7 @@ public class LogAdminController {
     public Result<PageResult<OperationLogEntity>> trace(@PathVariable String traceId,
                                                         @RequestParam(defaultValue = "1") int pageNum,
                                                         @RequestParam(defaultValue = "50") int pageSize) {
-        if (traceId == null || traceId.isBlank()) {
+        if (!AdminTextSupport.hasText(traceId)) {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), "traceId 不能为空");
         }
         String normalizedTraceId = TraceContext.normalizeTraceId(traceId);

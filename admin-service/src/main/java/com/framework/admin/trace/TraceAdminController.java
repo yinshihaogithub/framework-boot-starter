@@ -1,5 +1,6 @@
 package com.framework.admin.trace;
 
+import com.framework.admin.support.AdminTextSupport;
 import com.framework.admin.trace.TraceAdminModels.TraceDetail;
 import com.framework.core.result.Result;
 import com.framework.core.result.ResultCode;
@@ -27,7 +28,7 @@ public class TraceAdminController {
     @Operation(summary = "traceId 链路详情")
     @GetMapping("/{traceId}")
     public Result<TraceDetail> detail(@PathVariable String traceId) {
-        if (traceId == null || traceId.isBlank()) {
+        if (!AdminTextSupport.hasText(traceId)) {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), "traceId 不能为空");
         }
         String normalizedTraceId = TraceContext.normalizeTraceId(traceId);

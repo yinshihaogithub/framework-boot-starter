@@ -72,7 +72,7 @@ class AdminSessionServiceTest {
     void kickSessionTrimsDeviceIdBeforeLookupAndForceLogout() {
         sessionManager.sessions = List.of(new SessionManager.OnlineSession(2L, "bob", "1", "web", 100L, 3600L));
 
-        AdminSessionService.ActionResult<String> result = sessionService.kickSession(2L, " web ", null);
+        AdminSessionService.ActionResult<String> result = sessionService.kickSession(2L, "\u00A0web\u3000", null);
 
         assertThat(result.success()).isTrue();
         assertThat(sessionManager.kicked).containsExactly("2:web");
@@ -106,7 +106,7 @@ class AdminSessionServiceTest {
     void kickSessionRejectsBlankDeviceIdBeforeSessionLookup() {
         sessionManager.listFailure = new RuntimeException("redis down");
 
-        AdminSessionService.ActionResult<String> result = sessionService.kickSession(2L, " ", null);
+        AdminSessionService.ActionResult<String> result = sessionService.kickSession(2L, "\u00A0\u3000", null);
 
         assertThat(result.success()).isFalse();
         assertThat(result.code()).isEqualTo(ResultCode.PARAM_ERROR.getCode());
