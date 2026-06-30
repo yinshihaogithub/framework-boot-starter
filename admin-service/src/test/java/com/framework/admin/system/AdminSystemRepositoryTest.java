@@ -4,6 +4,7 @@ import com.framework.admin.system.AdminSystemModels.ConfigItem;
 import com.framework.admin.system.AdminSystemModels.ConfigRequest;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.lang.reflect.Proxy;
 import java.util.List;
 
@@ -77,10 +78,31 @@ class AdminSystemRepositoryTest {
         assertThat(mapper.preserveValue).isFalse();
     }
 
+    @Test
+    void deleteTenantSkipsDeptCleanupWhenTenantDoesNotExist() {
+        mapper.deleteTenantResult = 0;
+
+        boolean deleted = repository.deleteTenant(9L);
+
+        assertThat(deleted).isFalse();
+        assertThat(mapper.operations).containsExactly("deleteTenant:9");
+    }
+
+    @Test
+    void deleteUserDeletesUserBeforeRoleBindingsAndReportsAffectedRows() {
+        boolean deleted = repository.deleteUser(7L);
+
+        assertThat(deleted).isTrue();
+        assertThat(mapper.operations).containsExactly("deleteUser:7", "deleteUserRoles:7");
+    }
+
     private static class RecordingMapper {
         private List<ConfigItem> configs = List.of();
         private ConfigItem updatedConfig;
         private boolean preserveValue;
+        private int deleteTenantResult = 1;
+        private int deleteUserResult = 1;
+        private final List<String> operations = new ArrayList<>();
 
         private AdminSystemMapper proxy() {
             return (AdminSystemMapper) Proxy.newProxyInstance(
@@ -91,6 +113,22 @@ class AdminSystemRepositoryTest {
                         case "updateConfig" -> {
                             updatedConfig = (ConfigItem) args[0];
                             preserveValue = (Boolean) args[1];
+                            yield 1;
+                        }
+                        case "deleteTenant" -> {
+                            operations.add("deleteTenant:" + args[0]);
+                            yield deleteTenantResult;
+                        }
+                        case "deleteDeptsByTenantId" -> {
+                            operations.add("deleteDeptsByTenantId:" + args[0]);
+                            yield 1;
+                        }
+                        case "deleteUser" -> {
+                            operations.add("deleteUser:" + args[0]);
+                            yield deleteUserResult;
+                        }
+                        case "deleteUserRoles" -> {
+                            operations.add("deleteUserRoles:" + args[0]);
                             yield 1;
                         }
                         default -> defaultValue(method.getReturnType());

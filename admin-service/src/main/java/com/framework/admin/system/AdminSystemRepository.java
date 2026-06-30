@@ -88,31 +88,39 @@ public class AdminSystemRepository {
         });
     }
 
-    public void updateUser(Long userId, UserUpdateRequest request) {
-        inTransaction(() -> {
-            mapper.updateUser(new AdminUser()
+    public boolean updateUser(Long userId, UserUpdateRequest request) {
+        return inTransaction(() -> {
+            int updated = mapper.updateUser(new AdminUser()
                     .setId(userId)
                     .setDeptId(request.getDeptId())
                     .setNickname(request.getNickname())
                     .setMobile(request.getMobile())
                     .setEmail(request.getEmail())
                     .setStatus(enabledStatus(request.getStatus())));
+            if (updated <= 0) {
+                return false;
+            }
             replaceUserRoles(userId, request.getRoleIds());
+            return true;
         });
     }
 
-    public void updateUserStatus(Long userId, String status) {
-        mapper.updateUserStatus(userId, status);
+    public boolean updateUserStatus(Long userId, String status) {
+        return mapper.updateUserStatus(userId, status) > 0;
     }
 
-    public void resetPassword(Long userId, String passwordHash) {
-        mapper.resetPassword(userId, passwordHash);
+    public boolean resetPassword(Long userId, String passwordHash) {
+        return mapper.resetPassword(userId, passwordHash) > 0;
     }
 
-    public void deleteUser(Long userId) {
-        inTransaction(() -> {
+    public boolean deleteUser(Long userId) {
+        return inTransaction(() -> {
+            int deleted = mapper.deleteUser(userId);
+            if (deleted <= 0) {
+                return false;
+            }
             mapper.deleteUserRoles(userId);
-            mapper.deleteUser(userId);
+            return true;
         });
     }
 
@@ -150,22 +158,26 @@ public class AdminSystemRepository {
         return tenant.getId();
     }
 
-    public void updateTenant(Long id, TenantRequest request) {
-        mapper.updateTenant(new Tenant()
+    public boolean updateTenant(Long id, TenantRequest request) {
+        return mapper.updateTenant(new Tenant()
                 .setId(id)
                 .setTenantCode(request.getTenantCode())
                 .setTenantName(request.getTenantName())
-                .setStatus(enabledStatus(request.getStatus())));
+                .setStatus(enabledStatus(request.getStatus()))) > 0;
     }
 
     public long countUsersByTenant(Long tenantId) {
         return mapper.countUsersByTenant(tenantId);
     }
 
-    public void deleteTenant(Long id) {
-        inTransaction(() -> {
+    public boolean deleteTenant(Long id) {
+        return inTransaction(() -> {
+            int deleted = mapper.deleteTenant(id);
+            if (deleted <= 0) {
+                return false;
+            }
             mapper.deleteDeptsByTenantId(id);
-            mapper.deleteTenant(id);
+            return true;
         });
     }
 
@@ -185,24 +197,25 @@ public class AdminSystemRepository {
         return dept.getId();
     }
 
-    public void updateDept(Long id, DeptRequest request) {
-        mapper.updateDept(new Dept()
+    public boolean updateDept(Long id, DeptRequest request) {
+        return mapper.updateDept(new Dept()
                 .setId(id)
                 .setTenantId(request.getTenantId() == null ? DEFAULT_TENANT_ID : request.getTenantId())
                 .setParentId(defaultLong(request.getParentId()))
                 .setDeptName(request.getDeptName())
                 .setSortOrder(defaultInt(request.getSortOrder()))
-                .setStatus(enabledStatus(request.getStatus())));
+                .setStatus(enabledStatus(request.getStatus()))) > 0;
     }
 
-    public void deleteDept(Long id) {
-        inTransaction(() -> {
+    public boolean deleteDept(Long id) {
+        return inTransaction(() -> {
             List<Long> ids = collectDeptSubtreeIds(id);
             if (ids.isEmpty()) {
-                return;
+                return false;
             }
             mapper.clearUserDeptIds(ids);
             mapper.deleteDeptIds(ids);
+            return true;
         });
     }
 
@@ -221,20 +234,24 @@ public class AdminSystemRepository {
         return role.getId();
     }
 
-    public void updateRole(Long roleId, RoleRequest request) {
-        mapper.updateRole(new Role()
+    public boolean updateRole(Long roleId, RoleRequest request) {
+        return mapper.updateRole(new Role()
                 .setId(roleId)
                 .setRoleCode(request.getRoleCode())
                 .setRoleName(request.getRoleName())
                 .setSortOrder(defaultInt(request.getSortOrder()))
-                .setStatus(enabledStatus(request.getStatus())));
+                .setStatus(enabledStatus(request.getStatus()))) > 0;
     }
 
-    public void deleteRole(Long roleId) {
-        inTransaction(() -> {
+    public boolean deleteRole(Long roleId) {
+        return inTransaction(() -> {
+            int deleted = mapper.deleteRole(roleId);
+            if (deleted <= 0) {
+                return false;
+            }
             mapper.deleteRoleMenus(roleId);
             mapper.deleteUserRolesByRoleId(roleId);
-            mapper.deleteRole(roleId);
+            return true;
         });
     }
 
@@ -264,18 +281,19 @@ public class AdminSystemRepository {
         return menu.getId();
     }
 
-    public void updateMenu(Long menuId, MenuRequest request) {
-        mapper.updateMenu(toMenu(menuId, request));
+    public boolean updateMenu(Long menuId, MenuRequest request) {
+        return mapper.updateMenu(toMenu(menuId, request)) > 0;
     }
 
-    public void deleteMenu(Long menuId) {
-        inTransaction(() -> {
+    public boolean deleteMenu(Long menuId) {
+        return inTransaction(() -> {
             List<Long> ids = collectMenuSubtreeIds(menuId);
             if (ids.isEmpty()) {
-                return;
+                return false;
             }
             mapper.deleteRoleMenusByMenuIds(ids);
             mapper.deleteMenuIds(ids);
+            return true;
         });
     }
 
@@ -312,21 +330,23 @@ public class AdminSystemRepository {
         return dictType.getId();
     }
 
-    public void updateDictType(Long id, DictTypeRequest request) {
-        mapper.updateDictType(new DictType()
+    public boolean updateDictType(Long id, DictTypeRequest request) {
+        return mapper.updateDictType(new DictType()
                 .setId(id)
                 .setDictCode(request.getDictCode())
                 .setDictName(request.getDictName())
-                .setStatus(enabledStatus(request.getStatus())));
+                .setStatus(enabledStatus(request.getStatus()))) > 0;
     }
 
-    public void deleteDictType(Long id) {
-        inTransaction(() -> {
+    public boolean deleteDictType(Long id) {
+        return inTransaction(() -> {
             String dictCode = mapper.findDictCodeById(id);
-            if (dictCode != null) {
-                mapper.deleteDictItemsByCode(dictCode);
+            if (dictCode == null) {
+                return false;
             }
+            mapper.deleteDictItemsByCode(dictCode);
             mapper.deleteDictType(id);
+            return true;
         });
     }
 
@@ -345,18 +365,18 @@ public class AdminSystemRepository {
         return item.getId();
     }
 
-    public void updateDictItem(Long id, DictItemRequest request) {
-        mapper.updateDictItem(new DictItem()
+    public boolean updateDictItem(Long id, DictItemRequest request) {
+        return mapper.updateDictItem(new DictItem()
                 .setId(id)
                 .setDictCode(request.getDictCode())
                 .setItemLabel(request.getItemLabel())
                 .setItemValue(request.getItemValue())
                 .setSortOrder(defaultInt(request.getSortOrder()))
-                .setStatus(enabledStatus(request.getStatus())));
+                .setStatus(enabledStatus(request.getStatus()))) > 0;
     }
 
-    public void deleteDictItem(Long id) {
-        mapper.deleteDictItem(id);
+    public boolean deleteDictItem(Long id) {
+        return mapper.deleteDictItem(id) > 0;
     }
 
     public List<ConfigItem> listConfigs() {
@@ -378,23 +398,23 @@ public class AdminSystemRepository {
         return config.getId();
     }
 
-    public void updateConfig(Long id, ConfigRequest request) {
-        mapper.updateConfig(new ConfigItem()
+    public boolean updateConfig(Long id, ConfigRequest request) {
+        return mapper.updateConfig(new ConfigItem()
                         .setId(id)
                         .setConfigKey(request.getConfigKey())
                         .setConfigName(request.getConfigName())
                         .setConfigValue(request.getConfigValue())
                         .setSensitive(defaultBoolean(request.getSensitive()))
                         .setRemark(request.getRemark()),
-                isMaskedSensitiveValue(request));
+                isMaskedSensitiveValue(request)) > 0;
     }
 
     public void updateConfigValue(String configKey, String configValue) {
         mapper.updateConfigValue(configKey, configValue);
     }
 
-    public void deleteConfig(Long id) {
-        mapper.deleteConfig(id);
+    public boolean deleteConfig(Long id) {
+        return mapper.deleteConfig(id) > 0;
     }
 
     private void replaceUserRoles(Long userId, List<Long> roleIds) {

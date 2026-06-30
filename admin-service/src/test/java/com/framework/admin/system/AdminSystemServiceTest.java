@@ -610,9 +610,57 @@ class AdminSystemServiceTest {
         assertThat(auditService.actions).isEmpty();
     }
 
+    @Test
+    void updateAndDeleteEndpointsReturnNotFoundWhenRepositoryAffectsNoRows() {
+        repository.updateTenantAffected = false;
+        repository.deleteTenantAffected = false;
+        repository.updateDeptAffected = false;
+        repository.deleteDeptAffected = false;
+        repository.updateUserAffected = false;
+        repository.updateUserStatusAffected = false;
+        repository.resetPasswordAffected = false;
+        repository.deleteUserAffected = false;
+        repository.updateRoleAffected = false;
+        repository.deleteRoleAffected = false;
+        repository.updateMenuAffected = false;
+        repository.deleteMenuAffected = false;
+        repository.updateDictTypeAffected = false;
+        repository.deleteDictTypeAffected = false;
+        repository.updateDictItemAffected = false;
+        repository.deleteDictItemAffected = false;
+        repository.updateConfigAffected = false;
+        repository.deleteConfigAffected = false;
+
+        assertNotFound(service.updateTenant(9L, tenantRequest(), null), "租户不存在");
+        assertNotFound(service.deleteTenant(9L, null), "租户不存在");
+        assertNotFound(service.updateDept(9L, deptRequest(), null), "部门不存在");
+        assertNotFound(service.deleteDept(9L, null), "部门不存在");
+        assertNotFound(service.updateUser(9L, userUpdateRequest(), null), "用户不存在");
+        assertNotFound(service.updateUserStatus(9L, userStatusRequest(), null), "用户不存在");
+        assertNotFound(service.resetPassword(9L, resetPasswordRequest(), null), "用户不存在");
+        assertNotFound(service.deleteUser(9L, null), "用户不存在");
+        assertNotFound(service.updateRole(9L, roleRequest(), null), "角色不存在");
+        assertNotFound(service.deleteRole(9L, null), "角色不存在");
+        assertNotFound(service.updateMenu(9L, menuRequest(), null), "菜单不存在");
+        assertNotFound(service.deleteMenu(9L, null), "菜单不存在");
+        assertNotFound(service.updateDictType(9L, dictTypeRequest(), null), "字典类型不存在");
+        assertNotFound(service.deleteDictType(9L, null), "字典类型不存在");
+        assertNotFound(service.updateDictItem(9L, dictItemRequest(), null), "字典项不存在");
+        assertNotFound(service.deleteDictItem(9L, null), "字典项不存在");
+        assertNotFound(service.updateConfig(9L, configRequest(), null), "系统参数不存在");
+        assertNotFound(service.deleteConfig(9L, null), "系统参数不存在");
+        assertThat(auditService.actions).isEmpty();
+    }
+
     private static void assertServiceError(Result<?> result, String message) {
         assertThat(result.isSuccess()).isFalse();
         assertThat(result.getCode()).isEqualTo(ResultCode.SERVICE_ERROR.getCode());
+        assertThat(result.getMessage()).isEqualTo(message);
+    }
+
+    private static void assertNotFound(Result<?> result, String message) {
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getCode()).isEqualTo(ResultCode.NOT_FOUND.getCode());
         assertThat(result.getMessage()).isEqualTo(message);
     }
 
@@ -752,6 +800,24 @@ class AdminSystemServiceTest {
         private Long deletedDictItemId;
         private Long updatedConfigId;
         private Long deletedConfigId;
+        private boolean updateTenantAffected = true;
+        private boolean deleteTenantAffected = true;
+        private boolean updateDeptAffected = true;
+        private boolean deleteDeptAffected = true;
+        private boolean updateUserAffected = true;
+        private boolean updateUserStatusAffected = true;
+        private boolean resetPasswordAffected = true;
+        private boolean deleteUserAffected = true;
+        private boolean updateRoleAffected = true;
+        private boolean deleteRoleAffected = true;
+        private boolean updateMenuAffected = true;
+        private boolean deleteMenuAffected = true;
+        private boolean updateDictTypeAffected = true;
+        private boolean deleteDictTypeAffected = true;
+        private boolean updateDictItemAffected = true;
+        private boolean deleteDictItemAffected = true;
+        private boolean updateConfigAffected = true;
+        private boolean deleteConfigAffected = true;
         private RuntimeException queryFailure;
         private RuntimeException commandFailure;
 
@@ -802,9 +868,10 @@ class AdminSystemServiceTest {
         }
 
         @Override
-        public void updateTenant(Long id, TenantRequest request) {
+        public boolean updateTenant(Long id, TenantRequest request) {
             failCommandIfNeeded();
             this.updatedTenantId = id;
+            return updateTenantAffected;
         }
 
         @Override
@@ -814,9 +881,10 @@ class AdminSystemServiceTest {
         }
 
         @Override
-        public void deleteTenant(Long id) {
+        public boolean deleteTenant(Long id) {
             failCommandIfNeeded();
             this.deletedTenantId = id;
+            return deleteTenantAffected;
         }
 
         @Override
@@ -826,15 +894,17 @@ class AdminSystemServiceTest {
         }
 
         @Override
-        public void updateDept(Long id, DeptRequest request) {
+        public boolean updateDept(Long id, DeptRequest request) {
             failCommandIfNeeded();
             this.updatedDeptId = id;
+            return updateDeptAffected;
         }
 
         @Override
-        public void deleteDept(Long id) {
+        public boolean deleteDept(Long id) {
             failCommandIfNeeded();
             this.deletedDeptId = id;
+            return deleteDeptAffected;
         }
 
         @Override
@@ -846,30 +916,34 @@ class AdminSystemServiceTest {
         }
 
         @Override
-        public void updateUser(Long userId, UserUpdateRequest request) {
+        public boolean updateUser(Long userId, UserUpdateRequest request) {
             failCommandIfNeeded();
             this.updatedUserId = userId;
             this.updatedUser = request;
+            return updateUserAffected;
         }
 
         @Override
-        public void updateUserStatus(Long userId, String status) {
+        public boolean updateUserStatus(Long userId, String status) {
             failCommandIfNeeded();
             this.updatedUserStatusId = userId;
             this.updatedUserStatus = status;
+            return updateUserStatusAffected;
         }
 
         @Override
-        public void resetPassword(Long userId, String passwordHash) {
+        public boolean resetPassword(Long userId, String passwordHash) {
             failCommandIfNeeded();
             this.resetPasswordUserId = userId;
             this.resetPasswordHash = passwordHash;
+            return resetPasswordAffected;
         }
 
         @Override
-        public void deleteUser(Long userId) {
+        public boolean deleteUser(Long userId) {
             failCommandIfNeeded();
             this.deletedUserId = userId;
+            return deleteUserAffected;
         }
 
         @Override
@@ -886,10 +960,11 @@ class AdminSystemServiceTest {
         }
 
         @Override
-        public void updateRole(Long roleId, RoleRequest request) {
+        public boolean updateRole(Long roleId, RoleRequest request) {
             failCommandIfNeeded();
             this.updatedRoleId = roleId;
             this.updatedRole = request;
+            return updateRoleAffected;
         }
 
         @Override
@@ -899,9 +974,10 @@ class AdminSystemServiceTest {
         }
 
         @Override
-        public void deleteRole(Long roleId) {
+        public boolean deleteRole(Long roleId) {
             failCommandIfNeeded();
             this.deletedRoleId = roleId;
+            return deleteRoleAffected;
         }
 
         @Override
@@ -931,16 +1007,18 @@ class AdminSystemServiceTest {
         }
 
         @Override
-        public void updateMenu(Long menuId, MenuRequest request) {
+        public boolean updateMenu(Long menuId, MenuRequest request) {
             failCommandIfNeeded();
             this.updatedMenuId = menuId;
             this.updatedMenu = request;
+            return updateMenuAffected;
         }
 
         @Override
-        public void deleteMenu(Long menuId) {
+        public boolean deleteMenu(Long menuId) {
             failCommandIfNeeded();
             this.deletedMenuId = menuId;
+            return deleteMenuAffected;
         }
 
         @Override
@@ -968,15 +1046,17 @@ class AdminSystemServiceTest {
         }
 
         @Override
-        public void updateDictType(Long id, DictTypeRequest request) {
+        public boolean updateDictType(Long id, DictTypeRequest request) {
             failCommandIfNeeded();
             this.updatedDictTypeId = id;
+            return updateDictTypeAffected;
         }
 
         @Override
-        public void deleteDictType(Long id) {
+        public boolean deleteDictType(Long id) {
             failCommandIfNeeded();
             this.deletedDictTypeId = id;
+            return deleteDictTypeAffected;
         }
 
         @Override
@@ -986,15 +1066,17 @@ class AdminSystemServiceTest {
         }
 
         @Override
-        public void updateDictItem(Long id, DictItemRequest request) {
+        public boolean updateDictItem(Long id, DictItemRequest request) {
             failCommandIfNeeded();
             this.updatedDictItemId = id;
+            return updateDictItemAffected;
         }
 
         @Override
-        public void deleteDictItem(Long id) {
+        public boolean deleteDictItem(Long id) {
             failCommandIfNeeded();
             this.deletedDictItemId = id;
+            return deleteDictItemAffected;
         }
 
         @Override
@@ -1004,15 +1086,17 @@ class AdminSystemServiceTest {
         }
 
         @Override
-        public void updateConfig(Long id, ConfigRequest request) {
+        public boolean updateConfig(Long id, ConfigRequest request) {
             failCommandIfNeeded();
             this.updatedConfigId = id;
+            return updateConfigAffected;
         }
 
         @Override
-        public void deleteConfig(Long id) {
+        public boolean deleteConfig(Long id) {
             failCommandIfNeeded();
             this.deletedConfigId = id;
+            return deleteConfigAffected;
         }
 
         private void failQueryIfNeeded() {

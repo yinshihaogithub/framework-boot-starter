@@ -548,12 +548,13 @@ class AdminAuthServiceTest {
         }
 
         @Override
-        public void resetPassword(Long userId, String passwordHash) {
+        public boolean resetPassword(Long userId, String passwordHash) {
             if (resetPasswordFailure != null) {
                 throw resetPasswordFailure;
             }
             this.resetPasswordUserId = userId;
             this.resetPasswordHash = passwordHash;
+            return true;
         }
 
         @Override

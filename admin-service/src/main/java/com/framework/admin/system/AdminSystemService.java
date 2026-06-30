@@ -105,7 +105,9 @@ public class AdminSystemService {
             return validation;
         }
         try {
-            repository.updateTenant(id, request);
+            if (!repository.updateTenant(id, request)) {
+                return resourceNotFound("租户");
+            }
             auditSuccess(servletRequest, "更新租户", "UPDATE",
                     "tenantId", id, "tenantCode", request.getTenantCode(), "status", request.getStatus());
             return Result.success("已更新");
@@ -126,7 +128,9 @@ public class AdminSystemService {
             if (repository.countUsersByTenant(id) > 0) {
                 return Result.fail(ResultCode.PARAM_ERROR.getCode(), "租户下存在用户，不能删除");
             }
-            repository.deleteTenant(id);
+            if (!repository.deleteTenant(id)) {
+                return resourceNotFound("租户");
+            }
             auditSuccess(servletRequest, "删除租户", "DELETE", "tenantId", id);
             return Result.success("已删除");
         } catch (RuntimeException e) {
@@ -171,7 +175,9 @@ public class AdminSystemService {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), "上级部门不能选择自己");
         }
         try {
-            repository.updateDept(id, request);
+            if (!repository.updateDept(id, request)) {
+                return resourceNotFound("部门");
+            }
             auditSuccess(servletRequest, "更新部门", "UPDATE",
                     "deptId", id, "tenantId", request.getTenantId(), "deptName", request.getDeptName(),
                     "status", request.getStatus());
@@ -190,7 +196,9 @@ public class AdminSystemService {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), "总部部门不能删除");
         }
         try {
-            repository.deleteDept(id);
+            if (!repository.deleteDept(id)) {
+                return resourceNotFound("部门");
+            }
             auditSuccess(servletRequest, "删除部门", "DELETE", "deptId", id);
             return Result.success("已删除");
         } catch (RuntimeException e) {
@@ -253,7 +261,9 @@ public class AdminSystemService {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), "内置管理员不能禁用");
         }
         try {
-            repository.updateUser(id, request);
+            if (!repository.updateUser(id, request)) {
+                return resourceNotFound("用户");
+            }
             refreshPermissionCache(id);
             forceLogoutUser(id);
             auditSuccess(servletRequest, "更新用户", "UPDATE",
@@ -278,7 +288,9 @@ public class AdminSystemService {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), "内置管理员不能禁用");
         }
         try {
-            repository.updateUserStatus(id, status);
+            if (!repository.updateUserStatus(id, status)) {
+                return resourceNotFound("用户");
+            }
             refreshPermissionCache(id);
             forceLogoutUser(id);
             auditSuccess(servletRequest, "更新用户状态", "UPDATE", "userId", id, "status", status);
@@ -301,7 +313,9 @@ public class AdminSystemService {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), passwordError);
         }
         try {
-            repository.resetPassword(id, PasswordUtils.hash(request.getPassword()));
+            if (!repository.resetPassword(id, PasswordUtils.hash(request.getPassword()))) {
+                return resourceNotFound("用户");
+            }
             forceLogoutUser(id);
             auditSuccess(servletRequest, "重置用户密码", "UPDATE", "userId", id);
             return Result.success("已重置");
@@ -319,7 +333,9 @@ public class AdminSystemService {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), "内置管理员不能删除");
         }
         try {
-            repository.deleteUser(id);
+            if (!repository.deleteUser(id)) {
+                return resourceNotFound("用户");
+            }
             refreshPermissionCache(id);
             forceLogoutUser(id);
             auditSuccess(servletRequest, "删除用户", "DELETE", "userId", id);
@@ -395,7 +411,9 @@ public class AdminSystemService {
         }
         try {
             List<Long> affectedUserIds = repository.listUserIdsByRoleId(id);
-            repository.updateRole(id, request);
+            if (!repository.updateRole(id, request)) {
+                return resourceNotFound("角色");
+            }
             refreshPermissionCache(affectedUserIds);
             forceLogoutUsers(affectedUserIds);
             auditSuccess(servletRequest, "更新角色", "UPDATE",
@@ -416,7 +434,9 @@ public class AdminSystemService {
         }
         try {
             List<Long> affectedUserIds = repository.listUserIdsByRoleId(id);
-            repository.deleteRole(id);
+            if (!repository.deleteRole(id)) {
+                return resourceNotFound("角色");
+            }
             refreshPermissionCache(affectedUserIds);
             forceLogoutUsers(affectedUserIds);
             auditSuccess(servletRequest, "删除角色", "DELETE", "roleId", id);
@@ -495,7 +515,9 @@ public class AdminSystemService {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), "上级菜单不能选择自己");
         }
         try {
-            repository.updateMenu(id, request);
+            if (!repository.updateMenu(id, request)) {
+                return resourceNotFound("菜单");
+            }
             clearPermissionCache();
             forceLogoutAllUsers();
             auditSuccess(servletRequest, "更新菜单", "UPDATE",
@@ -512,7 +534,9 @@ public class AdminSystemService {
             return invalidId;
         }
         try {
-            repository.deleteMenu(id);
+            if (!repository.deleteMenu(id)) {
+                return resourceNotFound("菜单");
+            }
             clearPermissionCache();
             forceLogoutAllUsers();
             auditSuccess(servletRequest, "删除菜单", "DELETE", "menuId", id);
@@ -556,7 +580,9 @@ public class AdminSystemService {
             return validation;
         }
         try {
-            repository.updateDictType(id, request);
+            if (!repository.updateDictType(id, request)) {
+                return resourceNotFound("字典类型");
+            }
             auditSuccess(servletRequest, "更新字典类型", "UPDATE",
                     "dictTypeId", id, "dictCode", request.getDictCode(), "status", request.getStatus());
             return Result.success("已更新");
@@ -571,7 +597,9 @@ public class AdminSystemService {
             return invalidId;
         }
         try {
-            repository.deleteDictType(id);
+            if (!repository.deleteDictType(id)) {
+                return resourceNotFound("字典类型");
+            }
             auditSuccess(servletRequest, "删除字典类型", "DELETE", "dictTypeId", id);
             return Result.success("已删除");
         } catch (RuntimeException e) {
@@ -614,7 +642,9 @@ public class AdminSystemService {
             return validation;
         }
         try {
-            repository.updateDictItem(id, request);
+            if (!repository.updateDictItem(id, request)) {
+                return resourceNotFound("字典项");
+            }
             auditSuccess(servletRequest, "更新字典项", "UPDATE",
                     "dictItemId", id, "dictCode", request.getDictCode(),
                     "itemValue", request.getItemValue());
@@ -630,7 +660,9 @@ public class AdminSystemService {
             return invalidId;
         }
         try {
-            repository.deleteDictItem(id);
+            if (!repository.deleteDictItem(id)) {
+                return resourceNotFound("字典项");
+            }
             auditSuccess(servletRequest, "删除字典项", "DELETE", "dictItemId", id);
             return Result.success("已删除");
         } catch (RuntimeException e) {
@@ -673,7 +705,9 @@ public class AdminSystemService {
             return validation;
         }
         try {
-            repository.updateConfig(id, request);
+            if (!repository.updateConfig(id, request)) {
+                return resourceNotFound("系统参数");
+            }
             auditSuccess(servletRequest, "更新系统参数", "UPDATE",
                     "configId", id, "configKey", request.getConfigKey(),
                     "sensitive", request.getSensitive());
@@ -689,7 +723,9 @@ public class AdminSystemService {
             return invalidId;
         }
         try {
-            repository.deleteConfig(id);
+            if (!repository.deleteConfig(id)) {
+                return resourceNotFound("系统参数");
+            }
             auditSuccess(servletRequest, "删除系统参数", "DELETE", "configId", id);
             return Result.success("已删除");
         } catch (RuntimeException e) {
@@ -711,6 +747,10 @@ public class AdminSystemService {
     private <T> Result<T> serviceError(String action, String message, RuntimeException exception) {
         log.warn("[系统管理] {}失败 error={}", action, exception.getMessage());
         return Result.fail(ResultCode.SERVICE_ERROR.getCode(), message);
+    }
+
+    private Result<String> resourceNotFound(String resourceName) {
+        return Result.fail(ResultCode.NOT_FOUND.getCode(), resourceName + "不存在");
     }
 
     private boolean isBlank(String value) {
