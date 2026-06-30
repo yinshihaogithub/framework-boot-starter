@@ -25,10 +25,26 @@ class TraceContextTest {
     }
 
     @Test
+    void getOrCreateTraceIdTrimsUnicodeBoundarySpaces() {
+        String traceId = TraceContext.getOrCreateTraceId("\u00A0trace-from-gateway\u3000");
+
+        assertThat(traceId).isEqualTo("trace-from-gateway");
+        assertThat(MDC.get(FrameworkConstants.TRACE_ID_MDC_KEY)).isEqualTo("trace-from-gateway");
+    }
+
+    @Test
     void getOrCreateTraceIdGeneratesTraceIdWhenMissing() {
         String traceId = TraceContext.getOrCreateTraceId(" ");
 
         assertThat(traceId).isNotBlank();
+        assertThat(MDC.get(FrameworkConstants.TRACE_ID_MDC_KEY)).isEqualTo(traceId);
+    }
+
+    @Test
+    void getOrCreateTraceIdGeneratesTraceIdWhenIncomingTraceIdOnlyContainsUnicodeSpaces() {
+        String traceId = TraceContext.getOrCreateTraceId("\u00A0\u3000");
+
+        assertThat(traceId).matches("[0-9a-f]{32}");
         assertThat(MDC.get(FrameworkConstants.TRACE_ID_MDC_KEY)).isEqualTo(traceId);
     }
 
