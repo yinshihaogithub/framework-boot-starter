@@ -455,17 +455,17 @@ function unwrap<T>(response: ApiResult<T>): T {
 }
 
 async function getData<T>(url: string, params?: Record<string, unknown>): Promise<T> {
-  const response = await http.get<ApiResult<T>>(url, { params })
+  const response = await http.get<ApiResult<T>>(url, { params: normalizeQueryParams(params) })
   return unwrap(response.data)
 }
 
 async function postData<T>(url: string, data?: unknown, params?: Record<string, unknown>): Promise<T> {
-  const response = await http.post<ApiResult<T>>(url, data, { params })
+  const response = await http.post<ApiResult<T>>(url, data, { params: normalizeQueryParams(params) })
   return unwrap(response.data)
 }
 
 async function putData<T>(url: string, data?: unknown, params?: Record<string, unknown>): Promise<T> {
-  const response = await http.put<ApiResult<T>>(url, data, { params })
+  const response = await http.put<ApiResult<T>>(url, data, { params: normalizeQueryParams(params) })
   return unwrap(response.data)
 }
 
@@ -482,6 +482,37 @@ async function postForm<T>(url: string, data: FormData): Promise<T> {
 async function getBlob(url: string): Promise<Blob> {
   const response = await http.get<Blob>(url, { responseType: 'blob' })
   return response.data
+}
+
+function normalizeQueryParams(params?: Record<string, unknown>) {
+  if (!params) {
+    return undefined
+  }
+  const normalized: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(params)) {
+    const nextValue = normalizeQueryValue(value)
+    if (nextValue !== undefined) {
+      normalized[key] = nextValue
+    }
+  }
+  return Object.keys(normalized).length > 0 ? normalized : undefined
+}
+
+function normalizeQueryValue(value: unknown): unknown {
+  if (value === undefined || value === null) {
+    return undefined
+  }
+  if (typeof value === 'string') {
+    const text = value.trim()
+    return text ? text : undefined
+  }
+  if (Array.isArray(value)) {
+    const items = value
+      .map((item) => normalizeQueryValue(item))
+      .filter((item) => item !== undefined)
+    return items.length > 0 ? items : undefined
+  }
+  return value
 }
 
 export const api = {
