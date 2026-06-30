@@ -24,6 +24,12 @@ class PermissionCacheServiceTest {
     }
 
     @Test
+    void writeFailuresDoNotLeakToBusinessFlow() {
+        assertThatCode(() -> service.cacheRoles(1L, new String[]{"ADMIN"})).doesNotThrowAnyException();
+        assertThatCode(() -> service.cachePermissions(1L, new String[]{"system:user:view"})).doesNotThrowAnyException();
+    }
+
+    @Test
     void deleteFailuresDoNotLeakToBusinessFlow() {
         assertThatCode(() -> service.refresh(1L)).doesNotThrowAnyException();
         assertThatCode(() -> service.refreshBatch(java.util.List.of(1L, 2L))).doesNotThrowAnyException();

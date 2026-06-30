@@ -1269,6 +1269,8 @@ class RepositoryEngineeringGuardTest {
 
         assertThat(cacheService)
                 .as("permission cache is an enhancement and Redis outages must not break callers")
+                .contains("log.warn(\"[权限缓存] 缓存角色失败")
+                .contains("log.warn(\"[权限缓存] 缓存权限失败")
                 .contains("log.warn(\"[权限缓存] 读取角色失败")
                 .contains("log.warn(\"[权限缓存] 读取权限失败")
                 .contains("log.warn(\"[权限缓存] 刷新失败")
@@ -1277,6 +1279,7 @@ class RepositoryEngineeringGuardTest {
                 .contains("return false");
         assertThat(cacheServiceTest)
                 .contains("readFailuresFallbackToMissingCache")
+                .contains("writeFailuresDoNotLeakToBusinessFlow")
                 .contains("deleteFailuresDoNotLeakToBusinessFlow")
                 .contains("redis unavailable");
     }

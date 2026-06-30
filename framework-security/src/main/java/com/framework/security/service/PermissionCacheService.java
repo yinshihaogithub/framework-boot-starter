@@ -37,7 +37,7 @@ public class PermissionCacheService {
             String json = objectMapper.writeValueAsString(roles);
             redis.opsForValue().set(ROLE_CACHE_PREFIX + userId, json, CACHE_TTL, TimeUnit.SECONDS);
         } catch (Exception e) {
-            log.error("[权限缓存] 缓存角色失败 userId={}", userId, e);
+            log.warn("[权限缓存] 缓存角色失败 userId={}, error={}", userId, e.getMessage());
         }
     }
 
@@ -65,7 +65,7 @@ public class PermissionCacheService {
             String json = objectMapper.writeValueAsString(permissions);
             redis.opsForValue().set(PERM_CACHE_PREFIX + userId, json, CACHE_TTL, TimeUnit.SECONDS);
         } catch (Exception e) {
-            log.error("[权限缓存] 缓存权限失败 userId={}", userId, e);
+            log.warn("[权限缓存] 缓存权限失败 userId={}, error={}", userId, e.getMessage());
         }
     }
 
