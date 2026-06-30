@@ -1,5 +1,6 @@
 package com.framework.admin.auth;
 
+import com.framework.admin.audit.AdminAuditService;
 import com.framework.admin.system.AdminSystemModels.AdminUser;
 import com.framework.admin.system.AdminSystemModels.Menu;
 import com.framework.admin.system.AdminSystemRepository;
@@ -12,12 +13,14 @@ import com.framework.core.exception.AuthException;
 import com.framework.core.result.Result;
 import com.framework.core.result.ResultCode;
 import com.framework.crypto.util.PasswordUtils;
+import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Stream;
 
@@ -359,6 +362,25 @@ class AdminAuthServiceTest {
     }
 
     @Test
+    void changePasswordAuditsCurrentUserAsOperator() {
+        repository.user = enabledUser().setUsername("alice");
+        RecordingAuditService auditService = new RecordingAuditService();
+        AdminAuthService auditableService = new AdminAuthService(
+                repository, sessionManager, provider((LoginSecurityService) null), auditService);
+        UserContextHolder.set(new LoginUser().setUserId(1L).setUsername("alice"));
+        AdminAuthController.ChangePasswordRequest request = changePasswordRequest("Admin@123", "NewAdmin@123");
+
+        Result<String> result = auditableService.changePassword(request, null);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(auditService.action).isEqualTo("修改密码");
+        assertThat(auditService.params)
+                .containsEntry("userId", 1L)
+                .containsEntry("username", "alice")
+                .containsEntry("operator", "alice");
+    }
+
+    @Test
     void changePasswordReturnsServiceErrorWhenRepositoryFails() {
         repository.findByIdFailure = new RuntimeException("database down");
         UserContextHolder.set(new LoginUser().setUserId(1L));
@@ -687,6 +709,22 @@ class AdminAuthServiceTest {
             if (lockedMessage != null) {
                 throw new AuthException(ResultCode.ACCOUNT_LOCKED, lockedMessage);
             }
+        }
+    }
+
+    private static class RecordingAuditService extends AdminAuditService {
+        private String action;
+        private Map<String, Object> params;
+
+        private RecordingAuditService() {
+            super(null, null);
+        }
+
+        @Override
+        @SuppressWarnings("unchecked")
+        public void success(HttpServletRequest request, String module, String action, String operationType, Object params) {
+            this.action = action;
+            this.params = (Map<String, Object>) params;
         }
     }
 

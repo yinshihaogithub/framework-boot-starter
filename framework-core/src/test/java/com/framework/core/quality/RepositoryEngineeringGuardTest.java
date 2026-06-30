@@ -508,6 +508,48 @@ class RepositoryEngineeringGuardTest {
     }
 
     @Test
+    void adminWriteAuditParamsIncludeOperator() throws Exception {
+        String authService = read(root.resolve(
+                "admin-service/src/main/java/com/framework/admin/auth/AdminAuthService.java"));
+        String sessionService = read(root.resolve(
+                "admin-service/src/main/java/com/framework/admin/session/AdminSessionService.java"));
+        String localMessageService = read(root.resolve(
+                "admin-service/src/main/java/com/framework/admin/localmessage/LocalMessageAdminService.java"));
+        String excelService = read(root.resolve(
+                "admin-service/src/main/java/com/framework/admin/excel/ExcelAdminService.java"));
+        String fileService = read(root.resolve(
+                "admin-service/src/main/java/com/framework/admin/file/FileAdminService.java"));
+        String systemService = read(root.resolve(
+                "admin-service/src/main/java/com/framework/admin/system/AdminSystemService.java"));
+        String mqService = read(root.resolve(
+                "admin-service/src/main/java/com/framework/admin/mq/MqAdminService.java"));
+        String notifyService = read(root.resolve(
+                "admin-service/src/main/java/com/framework/admin/notify/NotifyAdminService.java"));
+
+        assertThat(authService)
+                .contains("\"operator\", currentOperatorName(user)");
+        assertThat(sessionService)
+                .contains("\"operator\", currentOperatorName()");
+        assertThat(localMessageService)
+                .contains("String operator = operator()")
+                .contains("\"operator\", operator");
+        assertThat(excelService)
+                .contains("\"operator\", operatorName");
+        assertThat(fileService)
+                .contains("\"operator\", operatorName")
+                .contains("\"operator\", currentOperatorName()");
+        assertThat(systemService)
+                .contains("paramsWithOperator(params)")
+                .contains("values[length] = \"operator\"");
+        assertThat(mqService)
+                .contains("auditParams(params)")
+                .contains("params.putIfAbsent(\"operator\", operator(null))");
+        assertThat(notifyService)
+                .contains("auditParams(params)")
+                .contains("auditParams.putIfAbsent(\"operator\", operator())");
+    }
+
+    @Test
     void mqProvidersAreLimitedToRabbitKafkaAndRocket() throws Exception {
         String source = read(root.resolve("framework-mq/src/main/java/com/framework/mq/config/MqProperties.java"));
         Matcher matcher = MQ_PROVIDER_ENUM_PATTERN.matcher(source);

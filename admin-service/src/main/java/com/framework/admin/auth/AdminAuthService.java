@@ -237,10 +237,20 @@ public class AdminAuthService {
         }
         try {
             auditService.success(servletRequest, "账号安全", "修改密码", "UPDATE",
-                    auditService.params("userId", user.getId(), "username", user.getUsername()));
+                    auditService.params("userId", user.getId(), "username", user.getUsername(),
+                            "operator", currentOperatorName(user)));
         } catch (RuntimeException e) {
             log.warn("[后台认证] 修改密码审计日志写入失败 userId={}, error={}", user.getId(), e.getMessage());
         }
+    }
+
+    private String currentOperatorName(AdminUser user) {
+        String username = AdminTextSupport.trimToNull(UserContextHolder.getUsername());
+        if (username != null) {
+            return username;
+        }
+        String userUsername = user == null ? null : AdminTextSupport.trimToNull(user.getUsername());
+        return userUsername == null ? "admin" : userUsername;
     }
 
     private <T> Result<T> serviceError(String action, String message, RuntimeException exception) {
