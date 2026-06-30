@@ -76,6 +76,19 @@ class LogAdminServiceTest {
     }
 
     @Test
+    void listsExceptionLogsWithNormalizedFilter() {
+        LogAdminService service = new LogAdminService(provider(mapper(List.of(
+                operationLog(1L, "system", "OPERATION", true, "trace-a"),
+                operationLog(2L, "web", "EXCEPTION", false, "trace-b")))), systemRepository(List.of()));
+
+        PageResult<OperationLogEntity> page = service.list(
+                null, "\u00A0exception\u3000", null, false, null, 1, 20);
+
+        assertThat(page.getTotal()).isEqualTo(1);
+        assertThat(page.getRecords()).extracting(OperationLogEntity::getId).containsExactly(2L);
+    }
+
+    @Test
     void returnsEmptyPageForUnsupportedLogTypeFilter() {
         LogAdminService service = new LogAdminService(provider(failingMapper()), systemRepository(List.of()));
 

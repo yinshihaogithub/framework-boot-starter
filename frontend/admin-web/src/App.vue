@@ -918,7 +918,6 @@
                   <el-select v-model="logQuery.logType" clearable placeholder="类型" class="filter">
                     <el-option label="OPERATION" value="OPERATION" />
                     <el-option label="API" value="API" />
-                    <el-option label="LOGIN" value="LOGIN" />
                     <el-option label="EXCEPTION" value="EXCEPTION" />
                   </el-select>
                   <el-input v-model="logQuery.module" clearable placeholder="模块" class="filter" />

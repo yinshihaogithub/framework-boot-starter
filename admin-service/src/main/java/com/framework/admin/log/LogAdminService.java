@@ -22,7 +22,7 @@ import java.util.Set;
 @Service
 public class LogAdminService {
 
-    private static final Set<String> SUPPORTED_LOG_TYPES = Set.of("OPERATION", "API");
+    private static final Set<String> SUPPORTED_LOG_TYPES = Set.of("OPERATION", "API", "EXCEPTION");
 
     private final ObjectProvider<OperationLogMapper> mapperProvider;
     private final AdminSystemRepository systemRepository;
