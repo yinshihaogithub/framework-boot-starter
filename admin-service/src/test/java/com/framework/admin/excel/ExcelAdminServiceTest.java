@@ -1,11 +1,14 @@
 package com.framework.admin.excel;
 
 import com.framework.admin.audit.AdminAuditService;
+import com.framework.auth.context.LoginUser;
+import com.framework.auth.context.UserContextHolder;
 import com.framework.core.result.PageResult;
 import com.framework.core.result.ResultCode;
 import com.framework.excel.config.ExcelProperties;
 import com.framework.excel.service.ExcelExportService;
 import jakarta.servlet.http.HttpServletRequest;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 
@@ -18,6 +21,11 @@ import java.util.stream.Stream;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class ExcelAdminServiceTest {
+
+    @AfterEach
+    void tearDown() {
+        UserContextHolder.clear();
+    }
 
     @Test
     void exportTaskReturnsEmptyWhenExportServiceIsMissing() {
@@ -64,6 +72,32 @@ class ExcelAdminServiceTest {
                 .extracting(ExcelAdminModels.Task::getTaskName, ExcelAdminModels.Task::getBizType,
                         ExcelAdminModels.Task::getTaskType, ExcelAdminModels.Task::getStatus)
                 .containsExactly(org.assertj.core.groups.Tuple.tuple("用户导出", "user", "EXPORT", "SUCCESS"));
+    }
+
+    @Test
+    void exportTaskRecordsCurrentUserAsOperatorAndAuditsIt() {
+        UserContextHolder.set(new LoginUser().setUserId(7L).setUsername("alice"));
+        InMemoryExcelAdminRepository repository = new InMemoryExcelAdminRepository();
+        RecordingAuditService auditService = new RecordingAuditService();
+        ExcelAdminService service = service(repository, new CapturingExcelExportService(), auditService);
+
+        ExcelAdminService.ActionResult<ExcelAdminModels.TaskResult> result = service.createExportTask(null, null);
+
+        assertThat(result.success()).isTrue();
+        assertThat(repository.tasks.get(0).getOperatorName()).isEqualTo("alice");
+        assertThat(auditService.successAction).isEqualTo("创建导出任务");
+        assertThat(auditService.successParams).containsEntry("operator", "alice");
+    }
+
+    @Test
+    void exportTaskDefaultsOperatorWhenUserContextIsMissing() {
+        InMemoryExcelAdminRepository repository = new InMemoryExcelAdminRepository();
+        ExcelAdminService service = service(repository, new CapturingExcelExportService());
+
+        ExcelAdminService.ActionResult<ExcelAdminModels.TaskResult> result = service.createExportTask(null, null);
+
+        assertThat(result.success()).isTrue();
+        assertThat(repository.tasks.get(0).getOperatorName()).isEqualTo("admin");
     }
 
     @Test
@@ -138,6 +172,21 @@ class ExcelAdminServiceTest {
                 .containsExactly(
                         org.assertj.core.groups.Tuple.tuple(2, "手机号格式错误"),
                         org.assertj.core.groups.Tuple.tuple(3, "手机号格式错误"));
+    }
+
+    @Test
+    void importFailureTaskRecordsCurrentUserAsOperatorAndAuditsIt() {
+        UserContextHolder.set(new LoginUser().setUserId(7L).setUsername("alice"));
+        InMemoryExcelAdminRepository repository = new InMemoryExcelAdminRepository();
+        RecordingAuditService auditService = new RecordingAuditService();
+        ExcelAdminService service = service(repository, null, auditService);
+
+        ExcelAdminService.ActionResult<ExcelAdminModels.TaskResult> result = service.createImportFailureTask(null, null);
+
+        assertThat(result.success()).isTrue();
+        assertThat(repository.tasks.get(0).getOperatorName()).isEqualTo("alice");
+        assertThat(auditService.successAction).isEqualTo("登记导入失败任务");
+        assertThat(auditService.successParams).containsEntry("operator", "alice");
     }
 
     @Test
@@ -390,11 +439,20 @@ class ExcelAdminServiceTest {
     }
 
     private static class RecordingAuditService extends AdminAuditService {
+        private String successAction;
+        private Map<String, Object> successParams;
         private String failureAction;
         private String failureMessage;
 
         private RecordingAuditService() {
             super(null, null);
+        }
+
+        @Override
+        @SuppressWarnings("unchecked")
+        public void success(HttpServletRequest request, String module, String action, String operationType, Object params) {
+            this.successAction = action;
+            this.successParams = (Map<String, Object>) params;
         }
 
         @Override

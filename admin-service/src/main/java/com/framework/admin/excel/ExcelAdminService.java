@@ -78,6 +78,7 @@ public class ExcelAdminService {
         String filename = "user-export-" + System.currentTimeMillis() + ".xlsx";
         String taskName = text(request == null ? null : request.getTaskName(), "用户清单导出任务");
         String bizType = text(request == null ? null : request.getBizType(), "system-user");
+        String operatorName = currentOperatorName();
         byte[] bytes;
         try {
             bytes = exportService.export("用户清单", ExportUserRow.class, rows);
@@ -92,12 +93,12 @@ public class ExcelAdminService {
                     .setTotalRows(rows.size())
                     .setSuccessRows(0)
                     .setFailureRows(rows.size())
-                    .setOperatorName(UserContextHolder.getUsername())
+                    .setOperatorName(operatorName)
                     .setErrorMessage(errorMessage);
             try {
                 Long taskId = repository.createTask(failedTask);
                 auditFailure(servletRequest, "创建导出任务", "CREATE", e,
-                        "taskId", taskId, "filename", filename, "rows", rows.size());
+                        "taskId", taskId, "filename", filename, "rows", rows.size(), "operator", operatorName);
                 return ActionResult.success(new ExcelAdminModels.TaskResult()
                         .setTaskId(taskId)
                         .setFilename(filename)
@@ -121,11 +122,11 @@ public class ExcelAdminService {
                 .setTotalRows(rows.size())
                 .setSuccessRows(rows.size())
                 .setFailureRows(0)
-                .setOperatorName(UserContextHolder.getUsername());
+                .setOperatorName(operatorName);
         try {
             Long taskId = repository.createTask(task);
             auditSuccess(servletRequest, "创建导出任务", "CREATE",
-                    "taskId", taskId, "filename", filename, "rows", rows.size());
+                    "taskId", taskId, "filename", filename, "rows", rows.size(), "operator", operatorName);
             return ActionResult.success(new ExcelAdminModels.TaskResult()
                     .setTaskId(taskId)
                     .setFilename(filename)
@@ -143,6 +144,7 @@ public class ExcelAdminService {
     public ActionResult<ExcelAdminModels.TaskResult> createImportFailureTask(ExcelAdminModels.FailureRequest request,
                                                                             HttpServletRequest servletRequest) {
         String errorMessage = text(request == null ? null : request.getErrorMessage(), "模板表头不匹配");
+        String operatorName = currentOperatorName();
         ExcelAdminModels.Task task = new ExcelAdminModels.Task()
                 .setTaskName(text(request == null ? null : request.getTaskName(), "用户导入失败任务"))
                 .setTaskType("IMPORT")
@@ -152,7 +154,7 @@ public class ExcelAdminService {
                 .setTotalRows(3)
                 .setSuccessRows(1)
                 .setFailureRows(2)
-                .setOperatorName(UserContextHolder.getUsername())
+                .setOperatorName(operatorName)
                 .setErrorMessage(errorMessage);
         try {
             Long taskId = repository.createTaskWithErrors(task, List.of(
@@ -166,7 +168,7 @@ public class ExcelAdminService {
                             .setRawData("{\"username\":\"ops\",\"mobile\":\"123\"}")
             ));
             auditSuccess(servletRequest, "登记导入失败任务", "CREATE",
-                    "taskId", taskId, "errorMessage", errorMessage);
+                    "taskId", taskId, "errorMessage", errorMessage, "operator", operatorName);
             return ActionResult.success(new ExcelAdminModels.TaskResult()
                     .setTaskId(taskId)
                     .setFilename(task.getFilename())
@@ -195,6 +197,10 @@ public class ExcelAdminService {
     private String text(String value, String fallback) {
         String text = AdminTextSupport.trimToNull(value);
         return text == null ? fallback : text;
+    }
+
+    private String currentOperatorName() {
+        return text(UserContextHolder.getUsername(), "admin");
     }
 
     private String normalize(String value) {
