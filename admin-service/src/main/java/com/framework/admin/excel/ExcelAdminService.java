@@ -154,9 +154,16 @@ public class ExcelAdminService {
                 .setOperatorName(UserContextHolder.getUsername())
                 .setErrorMessage(errorMessage);
         try {
-            Long taskId = repository.createTask(task);
-            repository.createError(taskId, 2, errorMessage, "{\"username\":\"\",\"nickname\":\"空用户名\"}");
-            repository.createError(taskId, 3, "手机号格式错误", "{\"username\":\"ops\",\"mobile\":\"123\"}");
+            Long taskId = repository.createTaskWithErrors(task, List.of(
+                    new ExcelAdminModels.ErrorRecord()
+                            .setRowIndex(2)
+                            .setErrorMessage(errorMessage)
+                            .setRawData("{\"username\":\"\",\"nickname\":\"空用户名\"}"),
+                    new ExcelAdminModels.ErrorRecord()
+                            .setRowIndex(3)
+                            .setErrorMessage("手机号格式错误")
+                            .setRawData("{\"username\":\"ops\",\"mobile\":\"123\"}")
+            ));
             auditSuccess(servletRequest, "登记导入失败任务", "CREATE",
                     "taskId", taskId, "errorMessage", errorMessage);
             return ActionResult.success(new ExcelAdminModels.TaskResult()
