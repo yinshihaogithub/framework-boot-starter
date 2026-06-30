@@ -157,6 +157,7 @@ public class NotifyAdminService {
             NotifyResult result = "ENABLED".equalsIgnoreCase(template.getStatus())
                     ? send(template, request, renderedContent)
                     : NotifyResult.failure(channel(template.getChannel()), "模板已禁用");
+            String operator = operator();
             NotifyAdminModels.Record record = new NotifyAdminModels.Record()
                     .setTemplateCode(template.getTemplateCode())
                     .setChannel(template.getChannel())
@@ -167,11 +168,11 @@ public class NotifyAdminService {
                     .setSuccess(result.isSuccess())
                     .setResultMessage(result.getMessage())
                     .setTraceId(TraceContext.ensureTraceId())
-                    .setOperatorName(UserContextHolder.getUsername());
+                    .setOperatorName(operator);
             Long recordId = repository.createRecord(record);
             record.setId(recordId);
             auditSuccess(servletRequest, "发送测试通知", "CREATE",
-                    "templateId", id, "recordId", recordId, "success", record.getSuccess());
+                    "templateId", id, "recordId", recordId, "operator", operator, "success", record.getSuccess());
             return ActionResult.success(record);
         } catch (IllegalArgumentException e) {
             return ActionResult.fail(ResultCode.PARAM_ERROR, e.getMessage());
@@ -293,6 +294,11 @@ public class NotifyAdminService {
 
     private String trimToNull(String value) {
         return AdminTextSupport.trimToNull(value);
+    }
+
+    private String operator() {
+        String username = trimToNull(UserContextHolder.getUsername());
+        return username == null ? "admin" : username;
     }
 
     private List<String> normalizeReceivers(List<String> receivers) {

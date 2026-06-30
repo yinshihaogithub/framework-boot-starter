@@ -1,6 +1,8 @@
 package com.framework.admin.notify;
 
 import com.framework.admin.audit.AdminAuditService;
+import com.framework.auth.context.LoginUser;
+import com.framework.auth.context.UserContextHolder;
 import com.framework.core.result.ResultCode;
 import com.framework.core.result.PageResult;
 import com.framework.notify.model.NotifyChannelType;
@@ -8,18 +10,25 @@ import com.framework.notify.model.NotifyMessage;
 import com.framework.notify.model.NotifyResult;
 import com.framework.notify.service.NotifyService;
 import jakarta.servlet.http.HttpServletRequest;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class NotifyAdminServiceTest {
+
+    @AfterEach
+    void tearDown() {
+        UserContextHolder.clear();
+    }
 
     @Test
     void validatesRequiredTemplateFields() {
@@ -181,6 +190,39 @@ class NotifyAdminServiceTest {
         assertThat(notifyService.message.getContent()).isEqualTo("hello Codex");
         assertThat(notifyService.message.getReceivers()).containsExactly("ops@example.com");
         assertThat(repository.records).hasSize(1);
+    }
+
+    @Test
+    void sendTestRecordsCurrentUserAsOperatorAndAuditsIt() {
+        UserContextHolder.set(new LoginUser().setUserId(7L).setUsername("alice"));
+        InMemoryNotifyAdminRepository repository = new InMemoryNotifyAdminRepository();
+        Long templateId = repository.createTemplate(templateRequest());
+        CapturingNotifyService notifyService = new CapturingNotifyService(true, "sent");
+        RecordingAuditService auditService = new RecordingAuditService();
+        NotifyAdminService service = service(repository, notifyService, auditService);
+
+        NotifyAdminService.ActionResult<NotifyAdminModels.Record> result = service.sendTest(templateId, null, null);
+
+        assertThat(result.success()).isTrue();
+        assertThat(result.data().getOperatorName()).isEqualTo("alice");
+        assertThat(repository.records.get(0).getOperatorName()).isEqualTo("alice");
+        assertThat(auditService.action).isEqualTo("发送测试通知");
+        assertThat(auditService.params)
+                .containsEntry("operator", "alice")
+                .containsEntry("success", true);
+    }
+
+    @Test
+    void sendTestDefaultsOperatorWhenUserContextIsMissing() {
+        InMemoryNotifyAdminRepository repository = new InMemoryNotifyAdminRepository();
+        Long templateId = repository.createTemplate(templateRequest());
+        NotifyAdminService service = service(repository, new CapturingNotifyService(true, "sent"));
+
+        NotifyAdminService.ActionResult<NotifyAdminModels.Record> result = service.sendTest(templateId, null, null);
+
+        assertThat(result.success()).isTrue();
+        assertThat(result.data().getOperatorName()).isEqualTo("admin");
+        assertThat(repository.records.get(0).getOperatorName()).isEqualTo("admin");
     }
 
     @Test
@@ -561,6 +603,22 @@ class NotifyAdminServiceTest {
         @Override
         public void success(HttpServletRequest request, String module, String action, String operationType, Object params) {
             throw new IllegalStateException("audit unavailable");
+        }
+    }
+
+    private static class RecordingAuditService extends AdminAuditService {
+        private String action;
+        private Map<String, Object> params;
+
+        private RecordingAuditService() {
+            super(null, null);
+        }
+
+        @Override
+        @SuppressWarnings("unchecked")
+        public void success(HttpServletRequest request, String module, String action, String operationType, Object params) {
+            this.action = action;
+            this.params = (Map<String, Object>) params;
         }
     }
 
