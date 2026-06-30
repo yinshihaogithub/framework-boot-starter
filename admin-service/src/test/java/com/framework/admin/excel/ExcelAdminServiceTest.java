@@ -201,6 +201,42 @@ class ExcelAdminServiceTest {
     }
 
     @Test
+    void tasksKeepProcessingStatusAsValidFilter() {
+        InMemoryExcelAdminRepository repository = new InMemoryExcelAdminRepository();
+        repository.createTask(new ExcelAdminModels.Task()
+                .setTaskName("导入中")
+                .setTaskType("IMPORT")
+                .setStatus("PROCESSING"));
+        repository.createTask(new ExcelAdminModels.Task()
+                .setTaskName("导出完成")
+                .setTaskType("EXPORT")
+                .setStatus("SUCCESS"));
+        ExcelAdminService service = service(repository, null);
+
+        PageResult<ExcelAdminModels.Task> page = service.tasks(" import ", " processing ", 1, 20);
+
+        assertThat(page.getTotal()).isEqualTo(1);
+        assertThat(page.getRecords())
+                .extracting(ExcelAdminModels.Task::getTaskType, ExcelAdminModels.Task::getStatus)
+                .containsExactly(org.assertj.core.groups.Tuple.tuple("IMPORT", "PROCESSING"));
+    }
+
+    @Test
+    void tasksReturnEmptyPageForInvalidTypeOrStatusFilter() {
+        InMemoryExcelAdminRepository repository = new InMemoryExcelAdminRepository();
+        repository.createTask(new ExcelAdminModels.Task().setTaskName("导出").setTaskType("EXPORT").setStatus("SUCCESS"));
+        ExcelAdminService service = service(repository, null);
+
+        PageResult<ExcelAdminModels.Task> invalidType = service.tasks("CSV", null, 1, 20);
+        PageResult<ExcelAdminModels.Task> invalidStatus = service.tasks(null, "ARCHIVED", 1, 20);
+
+        assertThat(invalidType.getTotal()).isZero();
+        assertThat(invalidType.getRecords()).isEmpty();
+        assertThat(invalidStatus.getTotal()).isZero();
+        assertThat(invalidStatus.getRecords()).isEmpty();
+    }
+
+    @Test
     void queryEndpointsFallBackWhenRepositoryFails() {
         ExcelAdminService service = service(new FailingExcelAdminRepository(), null);
 

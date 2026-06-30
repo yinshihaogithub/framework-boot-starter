@@ -18,10 +18,14 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 @Slf4j
 @Service
 public class ExcelAdminService {
+
+    private static final Set<String> SUPPORTED_TASK_TYPES = Set.of("IMPORT", "EXPORT");
+    private static final Set<String> SUPPORTED_STATUSES = Set.of("SUCCESS", "FAILED", "PROCESSING");
 
     private final ExcelAdminRepository repository;
     private final ObjectProvider<ExcelExportService> exportServiceProvider;
@@ -46,8 +50,11 @@ public class ExcelAdminService {
     public PageResult<ExcelAdminModels.Task> tasks(String taskType, String status, int pageNum, int pageSize) {
         int safePageNum = AdminPageSupport.safePageNum(pageNum);
         int safePageSize = AdminPageSupport.safePageSize(pageSize);
-        String normalizedTaskType = normalize(taskType);
-        String normalizedStatus = normalize(status);
+        String normalizedTaskType = normalizeTaskTypeFilter(taskType);
+        String normalizedStatus = normalizeStatusFilter(status);
+        if (isInvalidFilter(taskType, normalizedTaskType) || isInvalidFilter(status, normalizedStatus)) {
+            return PageResult.empty(safePageNum, safePageSize);
+        }
         try {
             List<ExcelAdminModels.Task> records = repository.listTasks(normalizedTaskType, normalizedStatus,
                     safePageNum, safePageSize);
@@ -183,6 +190,24 @@ public class ExcelAdminService {
 
     private String normalize(String value) {
         return value == null || value.isBlank() ? null : value.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private String normalizeTaskTypeFilter(String taskType) {
+        String normalizedTaskType = normalize(taskType);
+        return normalizedTaskType == null || SUPPORTED_TASK_TYPES.contains(normalizedTaskType)
+                ? normalizedTaskType
+                : null;
+    }
+
+    private String normalizeStatusFilter(String status) {
+        String normalizedStatus = normalize(status);
+        return normalizedStatus == null || SUPPORTED_STATUSES.contains(normalizedStatus)
+                ? normalizedStatus
+                : null;
+    }
+
+    private boolean isInvalidFilter(String originalValue, String normalizedValue) {
+        return originalValue != null && !originalValue.isBlank() && normalizedValue == null;
     }
 
     private String errorMessage(RuntimeException exception) {
