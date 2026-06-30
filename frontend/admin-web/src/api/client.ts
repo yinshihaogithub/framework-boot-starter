@@ -387,6 +387,7 @@ const http = axios.create({
   baseURL: '',
   timeout: 10000
 })
+const BOUNDARY_SPACE_PATTERN = /^[\s\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000]+|[\s\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000]+$/g
 
 export function getToken() {
   return localStorage.getItem('admin_token') ?? ''
@@ -403,6 +404,18 @@ export function clearToken() {
 export function isAuthExpiredError(error: unknown) {
   return error instanceof ApiError
     && (error.status === 401 || error.code === 401 || error.code === 2001 || error.code === 2002)
+}
+
+export function trimBoundarySpace(value: string) {
+  return value.replace(BOUNDARY_SPACE_PATTERN, '')
+}
+
+export function trimToUndefined(value: unknown): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined
+  }
+  const text = trimBoundarySpace(value)
+  return text ? text : undefined
 }
 
 function notifyAuthExpired(error: ApiError) {
@@ -483,7 +496,7 @@ async function parseErrorPayload(data: unknown): Promise<Partial<ApiResult<unkno
 }
 
 function parseApiResultText(text: string): Partial<ApiResult<unknown>> | undefined {
-  if (!text.trim()) {
+  if (!trimBoundarySpace(text)) {
     return undefined
   }
   try {
@@ -558,8 +571,7 @@ function normalizeQueryValue(value: unknown): unknown {
     return undefined
   }
   if (typeof value === 'string') {
-    const text = value.trim()
-    return text ? text : undefined
+    return trimToUndefined(value)
   }
   if (Array.isArray(value)) {
     const items = value

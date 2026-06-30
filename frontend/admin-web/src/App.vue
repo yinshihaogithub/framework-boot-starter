@@ -1344,6 +1344,8 @@ import {
   getToken,
   isAuthExpiredError,
   setToken,
+  trimBoundarySpace,
+  trimToUndefined,
   type ApiError,
   type AdminUser,
   type ConfigItem,
@@ -1926,7 +1928,7 @@ async function loadSessions() {
 }
 
 async function loadTrace() {
-  const traceId = logQuery.traceId.trim()
+  const traceId = trimToUndefined(logQuery.traceId)
   if (!traceId) {
     traceDetail.value = undefined
     return
@@ -2432,7 +2434,7 @@ function notifyPayload() {
 function splitText(value: string) {
   return value
     .split(',')
-    .map((item) => item.trim())
+    .map(trimBoundarySpace)
     .filter(Boolean)
 }
 
@@ -2473,11 +2475,13 @@ async function uploadSelectedFile(event: Event) {
   }
   const form = new FormData()
   form.append('file', file)
-  if (fileQuery.businessType) {
-    form.append('businessType', fileQuery.businessType)
+  const businessType = trimToUndefined(fileQuery.businessType)
+  const businessKey = trimToUndefined(fileQuery.businessKey)
+  if (businessType) {
+    form.append('businessType', businessType)
   }
-  if (fileQuery.businessKey) {
-    form.append('businessKey', fileQuery.businessKey)
+  if (businessKey) {
+    form.append('businessKey', businessKey)
   }
   const record = await api.uploadFile(form)
   input.value = ''
@@ -2503,7 +2507,7 @@ async function deleteFile(row: FileRecord) {
 }
 
 async function searchTrace() {
-  const traceId = traceKeyword.value.trim()
+  const traceId = trimToUndefined(traceKeyword.value)
   if (!traceId) return
   activeView.value = 'trace'
   logQuery.traceId = traceId
@@ -2760,7 +2764,7 @@ async function promptRemark(title: string) {
     confirmButtonText: '确认',
     cancelButtonText: '取消'
   })
-  return String(result.value || '').trim()
+  return trimBoundarySpace(String(result.value || ''))
 }
 
 function mqStatusType(status?: string) {
