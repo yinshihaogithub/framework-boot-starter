@@ -18,6 +18,7 @@ import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 @Slf4j
@@ -58,13 +59,17 @@ public class LocalMessageAdminService {
         return stats;
     }
 
-    public PageResult<LocalMessageVO> list(String topic, LocalMessageStatus status, String traceId,
+    public PageResult<LocalMessageVO> list(String topic, String status, String traceId,
                                            String businessKey, int pageNum, int pageSize) {
         int safePageNum = AdminPageSupport.safePageNum(pageNum);
         int safePageSize = AdminPageSupport.safePageSize(pageSize);
         String safeTopic = trimToNull(topic);
+        LocalMessageStatus safeStatus = normalizeStatusFilter(status);
         String safeTraceId = normalizeTraceIdFilter(traceId);
         String safeBusinessKey = trimToNull(businessKey);
+        if (isInvalidStatusFilter(status, safeStatus)) {
+            return PageResult.empty(safePageNum, safePageSize);
+        }
         if (isInvalidTraceIdFilter(traceId, safeTraceId)) {
             return PageResult.empty(safePageNum, safePageSize);
         }
@@ -75,7 +80,7 @@ public class LocalMessageAdminService {
         try {
             List<LocalMessage> filtered = service.findAll().stream()
                     .filter(message -> safeTopic == null || safeTopic.equals(message.getTopic()))
-                    .filter(message -> status == null || status == message.getStatus())
+                    .filter(message -> safeStatus == null || safeStatus == message.getStatus())
                     .filter(message -> safeTraceId == null || contains(message.getTraceId(), safeTraceId))
                     .filter(message -> safeBusinessKey == null || contains(message.getBusinessKey(), safeBusinessKey))
                     .sorted(Comparator.comparing(LocalMessage::getCreateTime, newestFirst()))
@@ -244,6 +249,22 @@ public class LocalMessageAdminService {
     private String normalizeTraceIdFilter(String traceId) {
         String trimmedTraceId = trimToNull(traceId);
         return trimmedTraceId == null ? null : TraceContext.normalizeTraceId(trimmedTraceId);
+    }
+
+    private LocalMessageStatus normalizeStatusFilter(String status) {
+        String trimmedStatus = trimToNull(status);
+        if (trimmedStatus == null) {
+            return null;
+        }
+        try {
+            return LocalMessageStatus.valueOf(trimmedStatus.toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException ignored) {
+            return null;
+        }
+    }
+
+    private boolean isInvalidStatusFilter(String originalStatus, LocalMessageStatus normalizedStatus) {
+        return !isBlank(originalStatus) && normalizedStatus == null;
     }
 
     private boolean isInvalidTraceIdFilter(String originalTraceId, String normalizedTraceId) {

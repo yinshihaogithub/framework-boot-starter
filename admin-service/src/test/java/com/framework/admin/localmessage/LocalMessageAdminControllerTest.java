@@ -247,6 +247,42 @@ class LocalMessageAdminControllerTest {
     }
 
     @Test
+    void listNormalizesStatusFilter() {
+        InMemoryLocalMessageRepository repository = new InMemoryLocalMessageRepository();
+        repository.save(localMessage(1L)
+                .setStatus(LocalMessageStatus.PENDING)
+                .setCreateTime(LocalDateTime.now().minusMinutes(1)));
+        repository.save(localMessage(2L)
+                .setStatus(LocalMessageStatus.SUCCESS)
+                .setCreateTime(LocalDateTime.now()));
+        LocalMessageAdminController controller = controller(repository);
+
+        Result<PageResult<LocalMessageVO>> result = controller.list(
+                null, " pending ", null, null, 1, 20);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getData().getTotal()).isEqualTo(1);
+        assertThat(result.getData().getRecords()).extracting(LocalMessageVO::getId).containsExactly(1L);
+        assertThat(result.getData().getRecords().get(0).getStatus()).isEqualTo("PENDING");
+    }
+
+    @Test
+    void listReturnsEmptyPageForInvalidStatusFilter() {
+        InMemoryLocalMessageRepository repository = new InMemoryLocalMessageRepository();
+        repository.save(localMessage(1L)
+                .setStatus(LocalMessageStatus.PENDING)
+                .setCreateTime(LocalDateTime.now()));
+        LocalMessageAdminController controller = controller(repository);
+
+        Result<PageResult<LocalMessageVO>> result = controller.list(
+                null, "ARCHIVED", null, null, 1, 20);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getData().getTotal()).isZero();
+        assertThat(result.getData().getRecords()).isEmpty();
+    }
+
+    @Test
     void listReturnsEmptyPageForInvalidTraceIdFilter() {
         InMemoryLocalMessageRepository repository = new InMemoryLocalMessageRepository();
         repository.save(localMessage(1L)

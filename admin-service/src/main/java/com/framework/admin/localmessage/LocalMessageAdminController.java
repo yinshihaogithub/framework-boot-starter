@@ -2,7 +2,6 @@ package com.framework.admin.localmessage;
 
 import com.framework.core.result.PageResult;
 import com.framework.core.result.Result;
-import com.framework.localmessage.model.LocalMessageStatus;
 import com.framework.security.annotation.RequirePermission;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -43,7 +42,7 @@ public class LocalMessageAdminController {
     @Operation(summary = "本地消息列表")
     @GetMapping
     public Result<PageResult<LocalMessageVO>> list(@RequestParam(required = false) String topic,
-                                                   @RequestParam(required = false) LocalMessageStatus status,
+                                                   @RequestParam(required = false) String status,
                                                    @RequestParam(required = false) String traceId,
                                                    @RequestParam(required = false) String businessKey,
                                                    @RequestParam(defaultValue = "1") int pageNum,
