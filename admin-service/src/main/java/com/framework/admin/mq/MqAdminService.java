@@ -156,9 +156,11 @@ public class MqAdminService {
         }
         try {
             String normalizedOperator = operator(operator);
-            boolean ok = scheduler.manualRetry(id, normalizedOperator, remark);
+            String normalizedRemark = text(remark);
+            boolean ok = scheduler.manualRetry(id, normalizedOperator, normalizedRemark);
             auditSuccess(servletRequest, "手动重发MQ消息", "UPDATE",
-                    auditService.params("id", id, "operator", normalizedOperator, "remark", remark, "success", ok));
+                    auditService.params("id", id, "operator", normalizedOperator, "remark", normalizedRemark,
+                            "success", ok));
             return ok ? ActionResult.success("重发成功") : ActionResult.fail(ResultCode.BUSINESS_ERROR, "重发失败");
         } catch (Exception e) {
             log.debug("手动重发MQ消息失败: {}", e.getMessage());
@@ -177,13 +179,14 @@ public class MqAdminService {
         }
         try {
             String normalizedOperator = operator(request.getOperator());
+            String normalizedRemark = text(request.getRemark());
             MqAdminDTO.ManualRetryResult result = scheduler.batchManualRetry(
                     request.getIds(),
                     normalizedOperator,
-                    request.getRemark());
+                    normalizedRemark);
             auditSuccess(servletRequest, "批量重发MQ消息", "UPDATE",
                     auditService.params("ids", request.getIds(), "operator", normalizedOperator,
-                            "remark", request.getRemark(), "success", result.getSuccess(),
+                            "remark", normalizedRemark, "success", result.getSuccess(),
                             "failure", result.getFailed()));
             return ActionResult.success(result);
         } catch (Exception e) {

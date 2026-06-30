@@ -171,6 +171,31 @@ class MqAdminControllerTest {
     }
 
     @Test
+    void retryOneNormalizesRemarkBeforePersistingAndAuditing() {
+        MqProperties properties = new MqProperties();
+        MqMessageSender sender = sender(MqProperties.Provider.RABBIT);
+        InMemoryMqFailedMessageRepository repository = new InMemoryMqFailedMessageRepository(List.of(
+                failedMessage(1L, "trace-a", MqFailedMessage.STATUS_EXHAUSTED)));
+        DeadLetterHandler handler = new DeadLetterHandler(repository, properties);
+        MqRetryScheduler scheduler = new MqRetryScheduler(
+                handler, new MqMessageSenderRegistry(properties, List.of(sender)), properties.getMaxRetry());
+        RecordingAuditService auditService = new RecordingAuditService();
+        MqAdminController controller = controller(handler, properties, sender, scheduler, auditService);
+
+        Result<String> result = controller.retryOne(1L, " ops ", " manual retry ", null);
+
+        assertThat(result.isSuccess()).isTrue();
+        MqFailedMessage saved = repository.findById(1L).orElseThrow();
+        assertThat(saved.getOperator()).isEqualTo("ops");
+        assertThat(saved.getCompensateRemark()).isEqualTo("manual retry");
+        assertThat(auditService.action).isEqualTo("手动重发MQ消息");
+        assertThat(auditService.params)
+                .containsEntry("operator", "ops")
+                .containsEntry("remark", "manual retry")
+                .containsEntry("success", true);
+    }
+
+    @Test
     void batchRetryRequiresMessageIds() {
         MqAdminController controller = controller(null, new MqProperties(), null);
 
@@ -195,7 +220,7 @@ class MqAdminControllerTest {
         MqAdminDTO.ManualRetryRequest request = new MqAdminDTO.ManualRetryRequest()
                 .setIds(List.of(1L))
                 .setOperator(" ops ")
-                .setRemark("batch retry");
+                .setRemark(" batch retry ");
 
         Result<MqAdminDTO.ManualRetryResult> result = controller.batchRetry(request, null);
 
@@ -208,6 +233,7 @@ class MqAdminControllerTest {
         assertThat(auditService.params)
                 .containsEntry("ids", List.of(1L))
                 .containsEntry("operator", "ops")
+                .containsEntry("remark", "batch retry")
                 .containsEntry("success", 1)
                 .containsEntry("failure", 0);
     }
