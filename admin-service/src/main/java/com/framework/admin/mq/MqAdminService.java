@@ -215,7 +215,9 @@ public class MqAdminService {
             updated.setNextRetryTime(null);
             updated.setOperator(operator(operator));
             updated.setCompensateRemark(remark(remark, "人工补偿完成"));
-            handler.updateRecord(updated);
+            if (!handler.updateRecord(updated)) {
+                return ActionResult.fail(ResultCode.NOT_FOUND, "消息不存在");
+            }
             auditSuccess(servletRequest, "人工补偿完成MQ消息", "UPDATE",
                     auditService.params("id", id, "messageId", updated.getMessageId(), "traceId", updated.getTraceId(),
                             "operator", updated.getOperator(), "remark", updated.getCompensateRemark(),
@@ -247,7 +249,9 @@ public class MqAdminService {
             updated.setNextRetryTime(null);
             updated.setOperator(operator(operator));
             updated.setCompensateRemark(remark(remark, "人工终止"));
-            handler.updateRecord(updated);
+            if (!handler.updateRecord(updated)) {
+                return ActionResult.fail(ResultCode.NOT_FOUND, "消息不存在");
+            }
             auditSuccess(servletRequest, "人工终止MQ消息", "UPDATE",
                     auditService.params("id", id, "messageId", updated.getMessageId(), "traceId", updated.getTraceId(),
                             "operator", updated.getOperator(), "remark", updated.getCompensateRemark(),

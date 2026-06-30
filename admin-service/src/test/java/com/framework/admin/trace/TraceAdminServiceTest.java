@@ -496,6 +496,12 @@ class TraceAdminServiceTest {
         }
 
         @Override
+        public boolean update(MqFailedMessage message) {
+            messages.put(message.getId(), message);
+            return true;
+        }
+
+        @Override
         public Optional<MqFailedMessage> findById(Long id) {
             return Optional.ofNullable(messages.get(id));
         }

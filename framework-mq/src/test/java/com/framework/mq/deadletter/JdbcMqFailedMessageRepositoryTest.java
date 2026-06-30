@@ -97,6 +97,28 @@ class JdbcMqFailedMessageRepositoryTest {
     }
 
     @Test
+    void updateReportsAffectedRowsAndBindsAllColumns() {
+        CapturingJdbcTemplate jdbcTemplate = new CapturingJdbcTemplate();
+        JdbcMqFailedMessageRepository repository =
+                new JdbcMqFailedMessageRepository(jdbcTemplate, "framework_mq_failed_message");
+        MqFailedMessage message = message(new Date(1_800_000L), new Date(1_000_000L), new Date(1_200_000L));
+        message.setId(9L);
+        message.setStatus(MqFailedMessage.STATUS_MANUAL);
+
+        assertThat(repository.update(message)).isTrue();
+        assertThat(jdbcTemplate.updateSql)
+                .contains("UPDATE framework_mq_failed_message SET")
+                .contains("WHERE id = ?");
+        assertThat(jdbcTemplate.updateArgs.get(0)).isEqualTo("msg-1");
+        assertThat(jdbcTemplate.updateArgs.get(13)).isEqualTo(MqFailedMessage.STATUS_MANUAL);
+        assertThat(jdbcTemplate.updateArgs.get(21)).isEqualTo(9L);
+
+        jdbcTemplate.updateResult = 0;
+
+        assertThat(repository.update(message)).isFalse();
+    }
+
+    @Test
     void deleteProcessedOnlyRemovesTerminalStatuses() {
         CapturingJdbcTemplate jdbcTemplate = new CapturingJdbcTemplate();
         JdbcMqFailedMessageRepository repository =
@@ -149,6 +171,7 @@ class JdbcMqFailedMessageRepositoryTest {
         private List<Object> queryArgs = List.of();
         private String updateSql;
         private List<Object> updateArgs = List.of();
+        private int updateResult = 3;
 
         @Override
         public int update(PreparedStatementCreator psc, KeyHolder generatedKeyHolder) {
@@ -164,8 +187,8 @@ class JdbcMqFailedMessageRepositoryTest {
         @Override
         public int update(String sql, Object... args) {
             updateSql = sql;
-            updateArgs = List.of(args);
-            return args.length;
+            updateArgs = args == null ? List.of() : new ArrayList<>(java.util.Arrays.asList(args));
+            return updateResult;
         }
 
         @Override

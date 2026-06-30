@@ -86,6 +86,10 @@ public class MqRetryScheduler {
             MqFailedMessage retrying = msg.copy();
             retrying.setStatus(MqFailedMessage.STATUS_RETRYING);
             retrying.setUpdateTime(new Date());
+            if (!deadLetterHandler.updateRecord(retrying)) {
+                log.warn("[重试跳过] id={}, messageId={}, 记录不存在", msg.getId(), msg.getMessageId());
+                return;
+            }
 
             // 重发到原交换机，保留原始消息链路元数据。
             senderRegistry.activeSender().send(retrying.getExchange(), retrying.getRoutingKey(), restoreWrapper(retrying));
@@ -159,15 +163,27 @@ public class MqRetryScheduler {
         String normalizedRemark = normalize(remark);
 
         try {
-            senderRegistry.activeSender().send(msg.getExchange(), msg.getRoutingKey(), restoreWrapper(msg));
-            MqFailedMessage updated = msg.copy();
+            MqFailedMessage retrying = msg.copy();
+            retrying.setStatus(MqFailedMessage.STATUS_RETRYING);
+            retrying.setOperator(normalizedOperator);
+            retrying.setCompensateRemark(normalizedRemark);
+            retrying.setUpdateTime(new Date());
+            if (!deadLetterHandler.updateRecord(retrying)) {
+                log.warn("[手动重发跳过] id={}, messageId={}, 记录不存在", id, msg.getMessageId());
+                return false;
+            }
+
+            senderRegistry.activeSender().send(retrying.getExchange(), retrying.getRoutingKey(), restoreWrapper(retrying));
+            MqFailedMessage updated = retrying.copy();
             updated.setStatus(MqFailedMessage.STATUS_MANUAL);
             updated.setOperator(normalizedOperator);
             updated.setCompensateRemark(normalizedRemark);
             updated.setRetryCount(retryCount(updated) + 1);
             updated.setNextRetryTime(null);
             updated.setUpdateTime(new Date());
-            deadLetterHandler.updateRecord(updated);
+            if (!deadLetterHandler.updateRecord(updated)) {
+                return false;
+            }
             log.info("[手动重发] id={}, messageId={}, traceId={}, operator={}",
                     id, updated.getMessageId(), updated.getTraceId(), normalizedOperator);
             return true;

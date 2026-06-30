@@ -431,6 +431,27 @@ class MqAdminControllerTest {
     }
 
     @Test
+    void manualSuccessReturnsNotFoundWhenMessageDisappearsBeforeUpdate() {
+        InMemoryMqFailedMessageRepository repository = new InMemoryMqFailedMessageRepository(List.of(
+                withNextRetryTime(failedMessage(10L, "trace-j", MqFailedMessage.STATUS_EXHAUSTED))));
+        DeadLetterHandler handler = new DeadLetterHandler(repository, new MqProperties());
+        repository.updateAffected = false;
+        MqAdminController.ManualCompensationRequest request = new MqAdminController.ManualCompensationRequest();
+        request.setOperator("ops");
+        MqAdminController controller = controller(handler, new MqProperties(), null);
+
+        Result<String> result = controller.manualSuccess(10L, request, null);
+
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getCode()).isEqualTo(ResultCode.NOT_FOUND.getCode());
+        assertThat(result.getMessage()).isEqualTo("消息不存在");
+        assertThat(handler.getById(10L)).isNull();
+        MqFailedMessage stored = repository.findById(10L).orElseThrow();
+        assertThat(stored.getStatus()).isEqualTo(MqFailedMessage.STATUS_EXHAUSTED);
+        assertThat(stored.getOperator()).isNull();
+    }
+
+    @Test
     void manualFailureTerminatesMessageAndAuditsStatusTransition() {
         InMemoryMqFailedMessageRepository repository = new InMemoryMqFailedMessageRepository(List.of(
                 withNextRetryTime(failedMessage(2L, "trace-b", MqFailedMessage.STATUS_PENDING))));
@@ -472,6 +493,25 @@ class MqAdminControllerTest {
         assertThat(stored.getNextRetryTime()).isNotNull();
         assertThat(stored.getOperator()).isNull();
         assertThat(stored.getCompensateRemark()).isNull();
+    }
+
+    @Test
+    void manualFailureReturnsNotFoundWhenMessageDisappearsBeforeUpdate() {
+        InMemoryMqFailedMessageRepository repository = new InMemoryMqFailedMessageRepository(List.of(
+                withNextRetryTime(failedMessage(11L, "trace-k", MqFailedMessage.STATUS_PENDING))));
+        DeadLetterHandler handler = new DeadLetterHandler(repository, new MqProperties());
+        repository.updateAffected = false;
+        MqAdminController controller = controller(handler, new MqProperties(), null);
+
+        Result<String> result = controller.manualFailure(11L, null, null);
+
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getCode()).isEqualTo(ResultCode.NOT_FOUND.getCode());
+        assertThat(result.getMessage()).isEqualTo("消息不存在");
+        assertThat(handler.getById(11L)).isNull();
+        MqFailedMessage stored = repository.findById(11L).orElseThrow();
+        assertThat(stored.getStatus()).isEqualTo(MqFailedMessage.STATUS_PENDING);
+        assertThat(stored.getOperator()).isNull();
     }
 
     @Test
@@ -725,6 +765,7 @@ class MqAdminControllerTest {
     private static class InMemoryMqFailedMessageRepository implements MqFailedMessageRepository {
         private final Map<Long, MqFailedMessage> messages = new LinkedHashMap<>();
         private boolean failOnSave;
+        private boolean updateAffected = true;
 
         private InMemoryMqFailedMessageRepository(List<MqFailedMessage> initialMessages) {
             initialMessages.forEach(message -> messages.put(message.getId(), message));
@@ -737,6 +778,18 @@ class MqAdminControllerTest {
             }
             messages.put(message.getId(), message);
             return message;
+        }
+
+        @Override
+        public boolean update(MqFailedMessage message) {
+            if (failOnSave) {
+                throw new IllegalStateException("save failed");
+            }
+            if (!updateAffected) {
+                return false;
+            }
+            messages.put(message.getId(), message);
+            return true;
         }
 
         @Override

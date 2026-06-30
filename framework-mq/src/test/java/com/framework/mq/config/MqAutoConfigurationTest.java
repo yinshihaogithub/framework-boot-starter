@@ -223,6 +223,11 @@ class MqAutoConfigurationTest {
         }
 
         @Override
+        public boolean update(com.framework.mq.deadletter.MqFailedMessage message) {
+            return true;
+        }
+
+        @Override
         public Optional<com.framework.mq.deadletter.MqFailedMessage> findById(Long id) {
             return Optional.empty();
         }

@@ -74,54 +74,13 @@ public class JdbcMqFailedMessageRepository implements MqFailedMessageRepository 
             return message;
         }
 
-        jdbcTemplate.update("""
-                        UPDATE %s SET
-                            message_id = ?,
-                            trace_id = ?,
-                            parent_message_id = ?,
-                            business_key = ?,
-                            message_type = ?,
-                            exchange_name = ?,
-                            routing_key = ?,
-                            queue_name = ?,
-                            payload = ?,
-                            error_message = ?,
-                            error_stack = ?,
-                            retry_count = ?,
-                            max_retry = ?,
-                            status = ?,
-                            next_retry_time = ?,
-                            source = ?,
-                            tenant_id = ?,
-                            operator = ?,
-                            compensate_remark = ?,
-                            create_time = ?,
-                            update_time = ?
-                        WHERE id = ?
-                        """.formatted(tableName),
-                message.getMessageId(),
-                message.getTraceId(),
-                message.getParentMessageId(),
-                message.getBusinessKey(),
-                message.getMessageType(),
-                message.getExchange(),
-                message.getRoutingKey(),
-                message.getQueueName(),
-                message.getPayload(),
-                message.getErrorMessage(),
-                message.getErrorStack(),
-                message.getRetryCount(),
-                message.getMaxRetry(),
-                message.getStatus(),
-                toTimestamp(message.getNextRetryTime()),
-                message.getSource(),
-                message.getTenantId(),
-                message.getOperator(),
-                message.getCompensateRemark(),
-                toTimestamp(message.getCreateTime()),
-                toTimestamp(message.getUpdateTime()),
-                message.getId());
+        updateExisting(message);
         return message;
+    }
+
+    @Override
+    public boolean update(MqFailedMessage message) {
+        return updateExisting(message) > 0;
     }
 
     @Override
@@ -185,6 +144,56 @@ public class JdbcMqFailedMessageRepository implements MqFailedMessageRepository 
 
     private static int defaultInt(Integer value) {
         return value == null ? 0 : value;
+    }
+
+    private int updateExisting(MqFailedMessage message) {
+        return jdbcTemplate.update("""
+                        UPDATE %s SET
+                            message_id = ?,
+                            trace_id = ?,
+                            parent_message_id = ?,
+                            business_key = ?,
+                            message_type = ?,
+                            exchange_name = ?,
+                            routing_key = ?,
+                            queue_name = ?,
+                            payload = ?,
+                            error_message = ?,
+                            error_stack = ?,
+                            retry_count = ?,
+                            max_retry = ?,
+                            status = ?,
+                            next_retry_time = ?,
+                            source = ?,
+                            tenant_id = ?,
+                            operator = ?,
+                            compensate_remark = ?,
+                            create_time = ?,
+                            update_time = ?
+                        WHERE id = ?
+                        """.formatted(tableName),
+                message.getMessageId(),
+                message.getTraceId(),
+                message.getParentMessageId(),
+                message.getBusinessKey(),
+                message.getMessageType(),
+                message.getExchange(),
+                message.getRoutingKey(),
+                message.getQueueName(),
+                message.getPayload(),
+                message.getErrorMessage(),
+                message.getErrorStack(),
+                message.getRetryCount(),
+                message.getMaxRetry(),
+                message.getStatus(),
+                toTimestamp(message.getNextRetryTime()),
+                message.getSource(),
+                message.getTenantId(),
+                message.getOperator(),
+                message.getCompensateRemark(),
+                toTimestamp(message.getCreateTime()),
+                toTimestamp(message.getUpdateTime()),
+                message.getId());
     }
 
     private static Timestamp toTimestamp(java.util.Date value) {

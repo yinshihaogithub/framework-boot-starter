@@ -10,6 +10,8 @@ public interface MqFailedMessageRepository {
 
     MqFailedMessage save(MqFailedMessage message);
 
+    boolean update(MqFailedMessage message);
+
     Optional<MqFailedMessage> findById(Long id);
 
     List<MqFailedMessage> findAll();

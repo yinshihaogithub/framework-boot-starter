@@ -213,6 +213,12 @@ class DeadLetterHandlerTest {
         }
 
         @Override
+        public boolean update(MqFailedMessage message) {
+            return saved.removeIf(savedMessage -> message.getId().equals(savedMessage.getId()))
+                    && saved.add(message);
+        }
+
+        @Override
         public Optional<MqFailedMessage> findById(Long id) {
             return saved.stream().filter(message -> id.equals(message.getId())).findFirst();
         }

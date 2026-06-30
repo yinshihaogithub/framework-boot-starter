@@ -153,19 +153,25 @@ public class DeadLetterHandler {
         if (record != null) {
             record.setStatus(MqFailedMessage.STATUS_SUCCESS);
             record.setUpdateTime(new Date());
-            updateRecord(record);
-            log.info("[重试成功] id={}, messageId={}", id, record.getMessageId());
+            if (updateRecord(record)) {
+                log.info("[重试成功] id={}, messageId={}", id, record.getMessageId());
+            }
         }
     }
 
     /**
      * 更新记录状态并同步到 MySQL
      */
-    public void updateRecord(MqFailedMessage record) {
+    public boolean updateRecord(MqFailedMessage record) {
         MqFailedMessage updated = record.copy();
         updated.setUpdateTime(new Date());
-        repository.save(updated);
+        boolean updatedInRepository = repository.update(updated);
+        if (!updatedInRepository) {
+            failedMessageStore.remove(updated.getId());
+            return false;
+        }
         failedMessageStore.put(updated.getId(), updated);
+        return true;
     }
 
     /**
