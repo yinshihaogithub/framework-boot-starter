@@ -47,8 +47,8 @@ class ExcelAdminServiceTest {
         InMemoryExcelAdminRepository repository = new InMemoryExcelAdminRepository();
         CapturingExcelExportService exportService = new CapturingExcelExportService();
         ExcelAdminModels.ExportRequest request = new ExcelAdminModels.ExportRequest();
-        request.setTaskName(" 用户导出 ");
-        request.setBizType(" user ");
+        request.setTaskName("\u00A0用户导出\u3000");
+        request.setBizType("\u3000user\u00A0");
         ExcelAdminService service = service(repository, exportService);
 
         ExcelAdminService.ActionResult<ExcelAdminModels.TaskResult> result = service.createExportTask(request, null);
@@ -144,9 +144,9 @@ class ExcelAdminServiceTest {
     void importFailureTaskNormalizesRequestAndUsesSameErrorMessageForAllErrorRows() {
         InMemoryExcelAdminRepository repository = new InMemoryExcelAdminRepository();
         ExcelAdminModels.FailureRequest request = new ExcelAdminModels.FailureRequest();
-        request.setTaskName(" 用户导入失败 ");
-        request.setBizType(" system-user ");
-        request.setErrorMessage(" 模板字段缺失 ");
+        request.setTaskName("\u00A0用户导入失败\u3000");
+        request.setBizType("\u3000system-user\u00A0");
+        request.setErrorMessage("\u00A0模板字段缺失\u3000");
         ExcelAdminService service = service(repository, null);
 
         ExcelAdminService.ActionResult<ExcelAdminModels.TaskResult> result =
@@ -214,7 +214,7 @@ class ExcelAdminServiceTest {
         repository.createTask(new ExcelAdminModels.Task().setTaskName("导出").setTaskType("EXPORT").setStatus("SUCCESS"));
         ExcelAdminService service = service(repository, null);
 
-        PageResult<ExcelAdminModels.Task> page = service.tasks(" export ", " success ", 1, 20);
+        PageResult<ExcelAdminModels.Task> page = service.tasks("\u00A0export\u3000", "\u3000success\u00A0", 1, 20);
 
         assertThat(page.getTotal()).isEqualTo(1);
         assertThat(page.getRecords())
@@ -235,7 +235,7 @@ class ExcelAdminServiceTest {
                 .setStatus("SUCCESS"));
         ExcelAdminService service = service(repository, null);
 
-        PageResult<ExcelAdminModels.Task> page = service.tasks(" import ", " processing ", 1, 20);
+        PageResult<ExcelAdminModels.Task> page = service.tasks("\u3000import\u00A0", "\u00A0processing\u3000", 1, 20);
 
         assertThat(page.getTotal()).isEqualTo(1);
         assertThat(page.getRecords())

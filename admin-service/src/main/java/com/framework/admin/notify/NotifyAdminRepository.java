@@ -1,5 +1,7 @@
 package com.framework.admin.notify;
 
+import com.framework.admin.support.AdminTextSupport;
+
 import org.springframework.stereotype.Repository;
 
 import java.util.Arrays;
@@ -139,10 +141,7 @@ public class NotifyAdminRepository {
     }
 
     private static String text(String value) {
-        if (value == null || value.isBlank()) {
-            return null;
-        }
-        return value.trim();
+        return AdminTextSupport.trimToNull(value);
     }
 
     private static String normalize(String value) {
@@ -160,19 +159,19 @@ public class NotifyAdminRepository {
             return null;
         }
         List<String> normalized = values.stream()
-                .filter(value -> value != null && !value.isBlank())
-                .map(String::trim)
+                .filter(AdminTextSupport::hasText)
+                .map(AdminTextSupport::trimBoundarySpace)
                 .toList();
         return normalized.isEmpty() ? null : String.join(",", normalized);
     }
 
     private static List<String> split(String value) {
-        if (value == null || value.isBlank()) {
+        if (!AdminTextSupport.hasText(value)) {
             return List.of();
         }
         return Arrays.stream(value.split(","))
-                .map(String::trim)
-                .filter(item -> !item.isBlank())
+                .map(AdminTextSupport::trimBoundarySpace)
+                .filter(AdminTextSupport::hasText)
                 .toList();
     }
 

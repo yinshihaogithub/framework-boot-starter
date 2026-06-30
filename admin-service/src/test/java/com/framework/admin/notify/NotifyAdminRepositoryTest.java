@@ -14,7 +14,7 @@ class NotifyAdminRepositoryTest {
 
     @Test
     void listTemplatesTrimsFiltersAndCalculatesOffset() {
-        repository.listTemplates(" alarm ", " email ", " enabled ", 2, 10);
+        repository.listTemplates("\u00A0alarm\u3000", "\u3000email\u00A0", "\u00A0enabled\u3000", 2, 10);
 
         assertThat(mapper.keywordLike).isEqualTo("%alarm%");
         assertThat(mapper.channel).isEqualTo("EMAIL");
@@ -26,13 +26,13 @@ class NotifyAdminRepositoryTest {
     @Test
     void createTemplateNormalizesFieldsAndReturnsGeneratedId() {
         NotifyAdminModels.TemplateRequest request = new NotifyAdminModels.TemplateRequest();
-        request.setTemplateCode(" welcome ");
-        request.setTemplateName(" 欢迎 ");
-        request.setChannel(" log ");
-        request.setTitle(" hello ");
-        request.setContent(" content ");
-        request.setReceivers(Arrays.asList(" admin@example.com ", "", null, "ops@example.com"));
-        request.setStatus(" disabled ");
+        request.setTemplateCode("\u00A0welcome\u3000");
+        request.setTemplateName("\u3000欢迎\u00A0");
+        request.setChannel("\u00A0log\u3000");
+        request.setTitle("\u3000hello\u00A0");
+        request.setContent("\u00A0content\u3000");
+        request.setReceivers(Arrays.asList("\u00A0admin@example.com\u3000", "\u3000", null, "ops@example.com"));
+        request.setStatus("\u3000disabled\u00A0");
 
         Long id = repository.createTemplate(request);
 
@@ -52,8 +52,8 @@ class NotifyAdminRepositoryTest {
         request.setChannel("log");
         request.setTitle("hello");
         request.setContent("content");
-        request.setReceivers(Arrays.asList(" ", null));
-        request.setStatus(" ");
+        request.setReceivers(Arrays.asList("\u00A0\u3000", null));
+        request.setStatus("\u00A0\u3000");
 
         Long id = repository.createTemplate(request);
 
@@ -67,7 +67,7 @@ class NotifyAdminRepositoryTest {
         mapper.templateRow = new NotifyAdminMapper.TemplateRow()
                 .setId(1L)
                 .setTemplateCode("welcome")
-                .setReceivers(" admin@example.com, ,ops@example.com ");
+                .setReceivers("\u00A0admin@example.com\u3000,\u00A0\u3000,ops@example.com\u00A0");
 
         NotifyAdminModels.Template template = repository.findTemplate(1L).orElseThrow();
 
@@ -79,7 +79,7 @@ class NotifyAdminRepositoryTest {
         NotifyAdminModels.Record record = new NotifyAdminModels.Record()
                 .setTemplateCode("welcome")
                 .setChannel("EMAIL")
-                .setReceivers(List.of("a@example.com", " b@example.com "))
+                .setReceivers(List.of("a@example.com", "\u3000b@example.com\u00A0"))
                 .setSuccess(true);
 
         Long id = repository.createRecord(record);
@@ -97,7 +97,7 @@ class NotifyAdminRepositoryTest {
                 .setChannel("EMAIL")
                 .setTitle("hello")
                 .setContent("content")
-                .setReceivers(" admin@example.com, ,ops@example.com ")
+                .setReceivers("\u00A0admin@example.com\u3000,\u00A0\u3000,ops@example.com\u00A0")
                 .setWebhookUrl("https://example.com/hook")
                 .setSuccess(false)
                 .setResultMessage("failed")
@@ -105,7 +105,7 @@ class NotifyAdminRepositoryTest {
                 .setOperatorName("admin")
                 .setCreateTime("2026-01-01 10:00:00"));
 
-        List<NotifyAdminModels.Record> records = repository.listRecords(" email ", false, 3, 15);
+        List<NotifyAdminModels.Record> records = repository.listRecords("\u3000email\u00A0", false, 3, 15);
 
         assertThat(mapper.channel).isEqualTo("EMAIL");
         assertThat(mapper.success).isFalse();
@@ -125,16 +125,16 @@ class NotifyAdminRepositoryTest {
 
     @Test
     void countQueriesNormalizeArguments() {
-        assertThat(repository.countTemplates(" welcome ", " log ", " enabled ")).isEqualTo(11L);
+        assertThat(repository.countTemplates("\u00A0welcome\u3000", "\u3000log\u00A0", "\u00A0enabled\u3000")).isEqualTo(11L);
         assertThat(mapper.keywordLike).isEqualTo("%welcome%");
         assertThat(mapper.channel).isEqualTo("LOG");
         assertThat(mapper.status).isEqualTo("ENABLED");
 
-        assertThat(repository.countRecords(" email ", false)).isEqualTo(12L);
+        assertThat(repository.countRecords("\u3000email\u00A0", false)).isEqualTo(12L);
         assertThat(mapper.channel).isEqualTo("EMAIL");
         assertThat(mapper.success).isFalse();
 
-        assertThat(repository.countTemplatesByStatus(" disabled ")).isEqualTo(13L);
+        assertThat(repository.countTemplatesByStatus("\u00A0disabled\u3000")).isEqualTo(13L);
         assertThat(mapper.status).isEqualTo("DISABLED");
         assertThat(repository.countRecordsBySuccess(true)).isEqualTo(14L);
         assertThat(mapper.success).isTrue();

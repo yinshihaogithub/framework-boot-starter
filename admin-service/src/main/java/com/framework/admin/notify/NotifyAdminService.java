@@ -2,6 +2,7 @@ package com.framework.admin.notify;
 
 import com.framework.admin.audit.AdminAuditService;
 import com.framework.admin.support.AdminPageSupport;
+import com.framework.admin.support.AdminTextSupport;
 import com.framework.auth.context.UserContextHolder;
 import com.framework.core.result.PageResult;
 import com.framework.core.result.ResultCode;
@@ -241,18 +242,20 @@ public class NotifyAdminService {
     }
 
     private String resolveWebhookUrl(NotifyAdminModels.Template template, NotifyAdminModels.SendRequest request) {
-        if (request != null && hasText(request.getWebhookUrl())) {
-            return request.getWebhookUrl().trim();
+        String requestWebhookUrl = request == null ? null : trimToNull(request.getWebhookUrl());
+        if (requestWebhookUrl != null) {
+            return requestWebhookUrl;
         }
         return trimToNull(template.getWebhookUrl());
     }
 
     private NotifyChannelType channel(String channel) {
-        if (!hasText(channel)) {
+        String normalizedChannel = trimToNull(channel);
+        if (normalizedChannel == null) {
             return NotifyChannelType.LOG;
         }
         try {
-            return NotifyChannelType.valueOf(channel.trim().toUpperCase(Locale.ROOT));
+            return NotifyChannelType.valueOf(normalizedChannel.toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException e) {
             throw new IllegalArgumentException("通知通道不支持");
         }
@@ -278,18 +281,18 @@ public class NotifyAdminService {
         if (!hasText(request.getContent())) {
             throw new IllegalArgumentException("通知内容不能为空");
         }
-        if (hasText(request.getStatus())
-                && !SUPPORTED_STATUSES.contains(request.getStatus().trim().toUpperCase(Locale.ROOT))) {
+        String status = trimToNull(request.getStatus());
+        if (status != null && !SUPPORTED_STATUSES.contains(status.toUpperCase(Locale.ROOT))) {
             throw new IllegalArgumentException("状态只能是 ENABLED 或 DISABLED");
         }
     }
 
     private boolean hasText(String value) {
-        return value != null && !value.isBlank();
+        return AdminTextSupport.hasText(value);
     }
 
     private String trimToNull(String value) {
-        return hasText(value) ? value.trim() : null;
+        return AdminTextSupport.trimToNull(value);
     }
 
     private List<String> normalizeReceivers(List<String> receivers) {
@@ -298,7 +301,7 @@ public class NotifyAdminService {
         }
         return receivers.stream()
                 .filter(this::hasText)
-                .map(String::trim)
+                .map(AdminTextSupport::trimBoundarySpace)
                 .toList();
     }
 

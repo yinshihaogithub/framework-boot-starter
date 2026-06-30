@@ -25,7 +25,7 @@ class NotifyAdminServiceTest {
     void validatesRequiredTemplateFields() {
         NotifyAdminService service = service(new InMemoryNotifyAdminRepository(), null);
         NotifyAdminModels.TemplateRequest request = templateRequest();
-        request.setTemplateCode(" ");
+        request.setTemplateCode("\u00A0\u3000");
 
         NotifyAdminService.ActionResult<Long> result = service.createTemplate(request, null);
 
@@ -86,7 +86,8 @@ class NotifyAdminServiceTest {
         repository.createTemplate(otherTemplate);
         NotifyAdminService service = service(repository, null);
 
-        PageResult<NotifyAdminModels.Template> page = service.templates(" welcome ", " log ", " enabled ", 1, 20);
+        PageResult<NotifyAdminModels.Template> page =
+                service.templates("\u00A0welcome\u3000", "\u3000log\u00A0", "\u00A0enabled\u3000", 1, 20);
 
         assertThat(page.getTotal()).isEqualTo(1);
         assertThat(page.getRecords()).extracting(NotifyAdminModels.Template::getTemplateCode)
@@ -115,7 +116,7 @@ class NotifyAdminServiceTest {
         repository.createRecord(record("EMAIL", true));
         NotifyAdminService service = service(repository, null);
 
-        PageResult<NotifyAdminModels.Record> page = service.records(" log ", true, 1, 20);
+        PageResult<NotifyAdminModels.Record> page = service.records("\u3000log\u00A0", true, 1, 20);
 
         assertThat(page.getTotal()).isEqualTo(1);
         assertThat(page.getRecords()).extracting(NotifyAdminModels.Record::getChannel)
@@ -189,8 +190,8 @@ class NotifyAdminServiceTest {
         CapturingNotifyService notifyService = new CapturingNotifyService(true, "sent");
         NotifyAdminService service = service(repository, notifyService);
         NotifyAdminModels.SendRequest request = new NotifyAdminModels.SendRequest();
-        request.setReceivers(java.util.Arrays.asList(" ops@example.com ", " ", null, "dev@example.com"));
-        request.setWebhookUrl(" https://callback.example.com/hook ");
+        request.setReceivers(java.util.Arrays.asList("\u00A0ops@example.com\u3000", "\u3000", null, "dev@example.com"));
+        request.setWebhookUrl("\u3000https://callback.example.com/hook\u00A0");
 
         NotifyAdminService.ActionResult<NotifyAdminModels.Record> record = service.sendTest(templateId, request, null);
 
@@ -209,7 +210,7 @@ class NotifyAdminServiceTest {
         CapturingNotifyService notifyService = new CapturingNotifyService(true, "sent");
         NotifyAdminService service = service(repository, notifyService);
         NotifyAdminModels.SendRequest request = new NotifyAdminModels.SendRequest();
-        request.setReceivers(List.of(" "));
+        request.setReceivers(List.of("\u00A0\u3000"));
 
         NotifyAdminService.ActionResult<NotifyAdminModels.Record> record = service.sendTest(templateId, request, null);
 

@@ -3,6 +3,7 @@ package com.framework.admin.excel;
 import com.alibaba.excel.annotation.ExcelProperty;
 import com.framework.admin.audit.AdminAuditService;
 import com.framework.admin.support.AdminPageSupport;
+import com.framework.admin.support.AdminTextSupport;
 import com.framework.auth.context.UserContextHolder;
 import com.framework.core.result.PageResult;
 import com.framework.core.result.ResultCode;
@@ -192,11 +193,13 @@ public class ExcelAdminService {
     }
 
     private String text(String value, String fallback) {
-        return value == null || value.isBlank() ? fallback : value.trim();
+        String text = AdminTextSupport.trimToNull(value);
+        return text == null ? fallback : text;
     }
 
     private String normalize(String value) {
-        return value == null || value.isBlank() ? null : value.trim().toUpperCase(Locale.ROOT);
+        String text = AdminTextSupport.trimToNull(value);
+        return text == null ? null : text.toUpperCase(Locale.ROOT);
     }
 
     private String normalizeTaskTypeFilter(String taskType) {
@@ -214,12 +217,13 @@ public class ExcelAdminService {
     }
 
     private boolean isInvalidFilter(String originalValue, String normalizedValue) {
-        return originalValue != null && !originalValue.isBlank() && normalizedValue == null;
+        return AdminTextSupport.hasText(originalValue) && normalizedValue == null;
     }
 
     private String errorMessage(RuntimeException exception) {
         String message = exception.getMessage();
-        return message == null || message.isBlank() ? exception.getClass().getSimpleName() : message;
+        String text = AdminTextSupport.trimToNull(message);
+        return text == null ? exception.getClass().getSimpleName() : text;
     }
 
     private void auditSuccess(HttpServletRequest request, String action, String operationType, Object... params) {

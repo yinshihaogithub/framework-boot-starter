@@ -17,7 +17,7 @@ class ExcelAdminRepositoryTest {
 
     @Test
     void listTasksTrimsFiltersAndCalculatesOffset() {
-        repository.listTasks(" export ", " success ", 3, 20);
+        repository.listTasks("\u00A0export\u3000", "\u3000success\u00A0", 3, 20);
 
         assertThat(mapper.taskType).isEqualTo("EXPORT");
         assertThat(mapper.status).isEqualTo("SUCCESS");
@@ -27,7 +27,7 @@ class ExcelAdminRepositoryTest {
 
     @Test
     void blankFiltersBecomeNull() {
-        repository.countTasks(" ", "");
+        repository.countTasks("\u00A0\u3000", "");
 
         assertThat(mapper.taskType).isNull();
         assertThat(mapper.status).isNull();

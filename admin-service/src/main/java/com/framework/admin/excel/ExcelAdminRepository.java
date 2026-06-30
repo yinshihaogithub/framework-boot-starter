@@ -1,5 +1,7 @@
 package com.framework.admin.excel;
 
+import com.framework.admin.support.AdminTextSupport;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -78,10 +80,8 @@ public class ExcelAdminRepository {
     }
 
     private static String text(String value) {
-        if (value == null || value.isBlank()) {
-            return null;
-        }
-        return value.trim().toUpperCase(Locale.ROOT);
+        String text = AdminTextSupport.trimToNull(value);
+        return text == null ? null : text.toUpperCase(Locale.ROOT);
     }
 
     private <T> T inTransaction(Supplier<T> action) {
