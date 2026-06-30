@@ -174,6 +174,7 @@ public class LocalMessageAdminService {
                 return ActionResult.fail(ResultCode.NOT_FOUND, "消息不存在");
             }
             message.setStatus(LocalMessageStatus.SUCCESS);
+            message.setRetryCount(0);
             message.setErrorMessage(null);
             message.setNextRetryTime(null);
             repository.save(message);
@@ -227,8 +228,14 @@ public class LocalMessageAdminService {
             return ActionResult.fail(ResultCode.SERVICE_ERROR, "本地消息仓储未启用");
         }
         try {
+            LocalMessage message = repository.findById(id).orElse(null);
+            if (message == null) {
+                return ActionResult.fail(ResultCode.NOT_FOUND, "消息不存在");
+            }
             repository.delete(id);
-            auditSuccess(servletRequest, "删除本地消息", "DELETE", "id", id);
+            auditSuccess(servletRequest, "删除本地消息", "DELETE",
+                    "id", id, "messageId", message.getMessageId(),
+                    "traceId", message.getTraceId(), "status", message.getStatus());
             return ActionResult.success("已删除");
         } catch (Exception ignored) {
             return ActionResult.fail(ResultCode.SERVICE_ERROR, "本地消息操作失败");

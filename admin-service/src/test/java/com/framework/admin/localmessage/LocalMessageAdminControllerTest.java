@@ -73,6 +73,7 @@ class LocalMessageAdminControllerTest {
         InMemoryLocalMessageRepository repository = new InMemoryLocalMessageRepository();
         repository.save(localMessage(2L)
                 .setStatus(LocalMessageStatus.PENDING)
+                .setRetryCount(2)
                 .setErrorMessage("old error")
                 .setNextRetryTime(LocalDateTime.now().plusMinutes(5)));
         LocalMessageAdminController controller = controller(repository);
@@ -82,6 +83,7 @@ class LocalMessageAdminControllerTest {
         assertThat(result.isSuccess()).isTrue();
         LocalMessage saved = repository.findById(2L).orElseThrow();
         assertThat(saved.getStatus()).isEqualTo(LocalMessageStatus.SUCCESS);
+        assertThat(saved.getRetryCount()).isZero();
         assertThat(saved.getErrorMessage()).isNull();
         assertThat(saved.getNextRetryTime()).isNull();
     }
@@ -152,6 +154,30 @@ class LocalMessageAdminControllerTest {
         LocalMessageAdminController controller = controller(new InMemoryLocalMessageRepository());
 
         Result<String> result = controller.markSuccess(404L, null);
+
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getCode()).isEqualTo(ResultCode.NOT_FOUND.getCode());
+        assertThat(result.getMessage()).isEqualTo("消息不存在");
+    }
+
+    @Test
+    void deleteRemovesExistingMessage() {
+        InMemoryLocalMessageRepository repository = new InMemoryLocalMessageRepository();
+        repository.save(localMessage(6L));
+        LocalMessageAdminController controller = controller(repository);
+
+        Result<String> result = controller.delete(6L, null);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getData()).isEqualTo("已删除");
+        assertThat(repository.findById(6L)).isEmpty();
+    }
+
+    @Test
+    void deleteFailsWhenMessageDoesNotExist() {
+        LocalMessageAdminController controller = controller(new InMemoryLocalMessageRepository());
+
+        Result<String> result = controller.delete(404L, null);
 
         assertThat(result.isSuccess()).isFalse();
         assertThat(result.getCode()).isEqualTo(ResultCode.NOT_FOUND.getCode());
