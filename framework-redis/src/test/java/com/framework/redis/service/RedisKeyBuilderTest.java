@@ -31,6 +31,16 @@ class RedisKeyBuilderTest {
     }
 
     @Test
+    void trimsUnicodeBoundarySpacesBeforeBuildingKeys() {
+        RedisProperties properties = new RedisProperties();
+        properties.setKeyPrefix("\u00A0tenant-a\u3000");
+        RedisKeyBuilder keyBuilder = new RedisKeyBuilder(properties);
+
+        assertThat(keyBuilder.build("\u00A0order\u3000", "\u00A01001\u3000", "\u00A0status\u3000"))
+                .isEqualTo("tenant-a:order:1001:status");
+    }
+
+    @Test
     void rejectsBlankPrefixNamespaceAndParts() {
         RedisProperties properties = new RedisProperties();
         properties.setKeyPrefix(" ");
@@ -50,6 +60,13 @@ class RedisKeyBuilderTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("part");
         assertThatThrownBy(() -> keyBuilder.build("order", (Object) null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("part");
+
+        assertThatThrownBy(() -> keyBuilder.build("\u00A0\u3000", 1001))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("namespace");
+        assertThatThrownBy(() -> keyBuilder.build("order", "\u00A0\u3000"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("part");
     }

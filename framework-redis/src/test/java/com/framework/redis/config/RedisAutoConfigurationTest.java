@@ -54,6 +54,16 @@ class RedisAutoConfigurationTest {
     }
 
     @Test
+    void propertiesNormalizeUnicodeBoundarySpacesInKeyPrefixAtStartup() {
+        RedisProperties properties = new RedisProperties();
+        properties.setKeyPrefix("\u00A0tenant-a\u3000");
+
+        properties.afterPropertiesSet();
+
+        assertThat(properties.getKeyPrefix()).isEqualTo("tenant-a");
+    }
+
+    @Test
     void propertiesRejectControlCharactersInKeyPrefix() {
         RedisProperties properties = new RedisProperties();
         properties.setKeyPrefix("tenant\nadmin");
@@ -67,6 +77,13 @@ class RedisAutoConfigurationTest {
     void autoConfigurationRejectsInvalidRedisPropertiesAtStartup() {
         contextRunner
                 .withPropertyValues("framework.redis.key-prefix= ")
+                .run(context -> assertThat(context)
+                        .hasFailed()
+                        .getFailure()
+                        .hasMessageContaining("framework.redis.key-prefix"));
+
+        contextRunner
+                .withPropertyValues("framework.redis.key-prefix=\u00A0\u3000")
                 .run(context -> assertThat(context)
                         .hasFailed()
                         .getFailure()

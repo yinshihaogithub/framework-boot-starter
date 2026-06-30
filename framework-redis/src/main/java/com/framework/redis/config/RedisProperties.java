@@ -1,5 +1,6 @@
 package com.framework.redis.config;
 
+import com.framework.redis.support.RedisTextSupport;
 import lombok.Data;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -20,11 +21,8 @@ public class RedisProperties implements InitializingBean {
 
     @Override
     public void afterPropertiesSet() {
-        if (keyPrefix == null || keyPrefix.isBlank()) {
-            throw new IllegalArgumentException("framework.redis.key-prefix must not be blank");
-        }
-        keyPrefix = keyPrefix.trim();
-        if (keyPrefix.indexOf(':') >= 0 || containsControlCharacter(keyPrefix)) {
+        keyPrefix = RedisTextSupport.requireText(keyPrefix, "framework.redis.key-prefix");
+        if (keyPrefix.indexOf(':') >= 0 || RedisTextSupport.containsControlCharacter(keyPrefix)) {
             throw new IllegalArgumentException("framework.redis.key-prefix must not contain ':' or control characters");
         }
         if (defaultTtl == null || defaultTtl.isZero() || defaultTtl.isNegative()) {
@@ -33,9 +31,5 @@ public class RedisProperties implements InitializingBean {
         if (lockTtl == null || lockTtl.isZero() || lockTtl.isNegative()) {
             throw new IllegalArgumentException("framework.redis.lock-ttl must be greater than 0");
         }
-    }
-
-    private static boolean containsControlCharacter(String value) {
-        return value.chars().anyMatch(Character::isISOControl);
     }
 }

@@ -1,6 +1,7 @@
 package com.framework.redis.service;
 
 import com.framework.redis.config.RedisProperties;
+import com.framework.redis.support.RedisTextSupport;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 
@@ -58,11 +59,7 @@ public class RedisService {
     }
 
     private static String requireText(String value, String fieldName) {
-        String normalized = value == null ? null : value.trim();
-        if (normalized == null || normalized.isEmpty()) {
-            throw new IllegalArgumentException(fieldName + " must not be blank");
-        }
-        return normalized;
+        return RedisTextSupport.requireText(value, fieldName);
     }
 
     private static Duration requirePositiveDuration(Duration duration, String fieldName) {

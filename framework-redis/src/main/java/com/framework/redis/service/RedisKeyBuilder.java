@@ -1,6 +1,7 @@
 package com.framework.redis.service;
 
 import com.framework.redis.config.RedisProperties;
+import com.framework.redis.support.RedisTextSupport;
 
 import java.util.Arrays;
 import java.util.Objects;
@@ -40,11 +41,8 @@ public class RedisKeyBuilder {
     }
 
     private static String requireText(String value, String fieldName) {
-        String normalized = value == null ? null : value.trim();
-        if (normalized == null || normalized.isEmpty()) {
-            throw new IllegalArgumentException(fieldName + " must not be blank");
-        }
-        if (normalized.chars().anyMatch(Character::isISOControl)) {
+        String normalized = RedisTextSupport.requireText(value, fieldName);
+        if (RedisTextSupport.containsControlCharacter(normalized)) {
             throw new IllegalArgumentException(fieldName + " must not contain control characters");
         }
         return normalized;

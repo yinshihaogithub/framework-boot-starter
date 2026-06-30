@@ -43,6 +43,20 @@ class RedisServiceTest {
     }
 
     @Test
+    void trimsUnicodeBoundarySpacesBeforeRedisAccess() {
+        RecordingRedis redis = new RecordingRedis();
+        redis.unlockResult = 1L;
+        RedisService service = new RedisService(redis, properties());
+
+        assertThat(service.tryLock("\u00A0lock:order:1\u3000")).isNotBlank();
+        assertThat(service.unlock("\u00A0lock:order:1\u3000", "\u00A0token-1\u3000")).isTrue();
+
+        assertThat(redis.setIfAbsentKeys).containsExactly("lock:order:1");
+        assertThat(redis.scriptKeys).containsExactly(List.of("lock:order:1"));
+        assertThat(redis.scriptArgs).containsExactly("token-1");
+    }
+
+    @Test
     void unlockUsesAtomicScriptAndDoesNotDeleteDirectly() {
         RecordingRedis redis = new RecordingRedis();
         redis.unlockResult = 1L;
@@ -74,6 +88,22 @@ class RedisServiceTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("token must not be blank");
 
+        assertThat(redis.scriptKeys).isEmpty();
+    }
+
+    @Test
+    void rejectsUnicodeBlankKeyAndTokenBeforeRedisAccess() {
+        RecordingRedis redis = new RecordingRedis();
+        RedisService service = new RedisService(redis, properties());
+
+        assertThatThrownBy(() -> service.tryLock("\u00A0\u3000"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("key must not be blank");
+        assertThatThrownBy(() -> service.unlock("lock:order:1", "\u00A0\u3000"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("token must not be blank");
+
+        assertThat(redis.setIfAbsentKeys).isEmpty();
         assertThat(redis.scriptKeys).isEmpty();
     }
 
