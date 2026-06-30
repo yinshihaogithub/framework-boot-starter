@@ -64,7 +64,7 @@ public class MqAdminController {
     @PostMapping("/failed-messages/{id}/retry")
     @RequirePermission(value = {"mq:view", "mq:retry"}, logicalAnd = true)
     public Result<String> retryOne(@PathVariable Long id,
-                                   @RequestParam(defaultValue = "admin") String operator,
+                                   @RequestParam(required = false) String operator,
                                    @RequestParam(required = false) String remark,
                                    HttpServletRequest servletRequest) {
         return toResult(mqAdminService.retryOne(id, operator, remark, servletRequest));

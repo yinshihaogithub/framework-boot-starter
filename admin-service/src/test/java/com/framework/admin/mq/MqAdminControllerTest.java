@@ -1,10 +1,13 @@
 package com.framework.admin.mq;
 
 import com.framework.admin.audit.AdminAuditService;
+import com.framework.auth.context.LoginUser;
+import com.framework.auth.context.UserContextHolder;
 import com.framework.core.result.PageResult;
 import com.framework.core.result.Result;
 import com.framework.core.result.ResultCode;
 import com.framework.mq.config.MqProperties;
+import com.framework.mq.core.MessageWrapper;
 import com.framework.mq.deadletter.DeadLetterHandler;
 import com.framework.mq.deadletter.MqAdminDTO;
 import com.framework.mq.deadletter.MqFailedMessage;
@@ -12,12 +15,13 @@ import com.framework.mq.deadletter.MqFailedMessageRepository;
 import com.framework.mq.deadletter.MqRetryScheduler;
 import com.framework.mq.producer.MqMessageSender;
 import com.framework.mq.producer.MqMessageSenderRegistry;
-import com.framework.mq.core.MessageWrapper;
 import com.framework.security.annotation.RequirePermission;
+import jakarta.servlet.http.HttpServletRequest;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.support.StaticApplicationContext;
-import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.web.bind.annotation.RequestParam;
 
 import java.lang.reflect.Method;
 import java.util.Date;
@@ -31,6 +35,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class MqAdminControllerTest {
 
+    @AfterEach
+    void tearDown() {
+        UserContextHolder.clear();
+    }
+
     @Test
     void writeEndpointsRequireBothViewAndRetryPermissions() throws NoSuchMethodException {
         assertMqWritePermission("retryOne", Long.class, String.class, String.class, HttpServletRequest.class);
@@ -41,6 +50,17 @@ class MqAdminControllerTest {
                 HttpServletRequest.class);
         assertMqWritePermission("deleteFailedMessage", Long.class, HttpServletRequest.class);
         assertMqWritePermission("cleanProcessed", HttpServletRequest.class);
+    }
+
+    @Test
+    void retryOneOperatorRequestParamIsOptional() throws NoSuchMethodException {
+        Method method = MqAdminController.class.getDeclaredMethod(
+                "retryOne", Long.class, String.class, String.class, HttpServletRequest.class);
+
+        RequestParam operatorParam = method.getParameters()[1].getAnnotation(RequestParam.class);
+
+        assertThat(operatorParam).isNotNull();
+        assertThat(operatorParam.required()).isFalse();
     }
 
     @Test
@@ -228,6 +248,29 @@ class MqAdminControllerTest {
                 .containsEntry("operator", "ops")
                 .containsEntry("remark", "manual retry")
                 .containsEntry("success", true);
+    }
+
+    @Test
+    void retryOneUsesCurrentUserWhenOperatorIsMissing() {
+        UserContextHolder.set(new LoginUser().setUserId(7L).setUsername("alice"));
+        MqProperties properties = new MqProperties();
+        MqMessageSender sender = sender(MqProperties.Provider.RABBIT);
+        InMemoryMqFailedMessageRepository repository = new InMemoryMqFailedMessageRepository(List.of(
+                failedMessage(1L, "trace-a", MqFailedMessage.STATUS_EXHAUSTED)));
+        DeadLetterHandler handler = new DeadLetterHandler(repository, properties);
+        MqRetryScheduler scheduler = new MqRetryScheduler(
+                handler, new MqMessageSenderRegistry(properties, List.of(sender)), properties.getMaxRetry());
+        RecordingAuditService auditService = new RecordingAuditService();
+        MqAdminController controller = controller(handler, properties, sender, scheduler, auditService);
+
+        Result<String> result = controller.retryOne(1L, null, "manual retry", null);
+
+        assertThat(result.isSuccess()).isTrue();
+        MqFailedMessage saved = repository.findById(1L).orElseThrow();
+        assertThat(saved.getOperator()).isEqualTo("alice");
+        assertThat(auditService.params)
+                .containsEntry("operator", "alice")
+                .containsEntry("remark", "manual retry");
     }
 
     @Test
