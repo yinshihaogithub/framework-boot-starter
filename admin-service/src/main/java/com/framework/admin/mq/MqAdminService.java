@@ -173,6 +173,10 @@ public class MqAdminService {
         if (request == null || request.getIds() == null || request.getIds().isEmpty()) {
             return ActionResult.fail(ResultCode.PARAM_ERROR, "请选择要重发的消息");
         }
+        if (hasInvalidId(request.getIds())) {
+            return ActionResult.fail(ResultCode.PARAM_ERROR, "消息ID必须大于0");
+        }
+        List<Long> ids = distinctIds(request.getIds());
         MqRetryScheduler scheduler = available(retrySchedulerProvider);
         if (scheduler == null) {
             return ActionResult.fail(ResultCode.SERVICE_ERROR, retryUnavailableMessage());
@@ -181,11 +185,11 @@ public class MqAdminService {
             String normalizedOperator = operator(request.getOperator());
             String normalizedRemark = text(request.getRemark());
             MqAdminDTO.ManualRetryResult result = scheduler.batchManualRetry(
-                    request.getIds(),
+                    ids,
                     normalizedOperator,
                     normalizedRemark);
             auditSuccess(servletRequest, "批量重发MQ消息", "UPDATE",
-                    auditService.params("ids", request.getIds(), "operator", normalizedOperator,
+                    auditService.params("ids", ids, "operator", normalizedOperator,
                             "remark", normalizedRemark, "success", result.getSuccess(),
                             "failure", result.getFailed()));
             return ActionResult.success(result);
@@ -464,6 +468,20 @@ public class MqAdminService {
             return ActionResult.fail(ResultCode.PARAM_ERROR, "消息ID必须大于0");
         }
         return null;
+    }
+
+    private boolean hasInvalidId(List<Long> ids) {
+        return ids.stream().anyMatch(id -> id == null || id <= 0);
+    }
+
+    private List<Long> distinctIds(List<Long> ids) {
+        List<Long> result = new ArrayList<>();
+        for (Long id : ids) {
+            if (!result.contains(id)) {
+                result.add(id);
+            }
+        }
+        return result;
     }
 
     private void auditSuccess(HttpServletRequest servletRequest, String action, String operationType, Object params) {

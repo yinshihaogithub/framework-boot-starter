@@ -241,7 +241,20 @@ class MqAdminControllerTest {
     }
 
     @Test
-    void batchRetryNormalizesOperatorAndAuditsResult() {
+    void batchRetryRejectsInvalidMessageIdsBeforeProviderLookup() {
+        MqAdminController controller = controller(null, new MqProperties(), null);
+        MqAdminDTO.ManualRetryRequest request = new MqAdminDTO.ManualRetryRequest()
+                .setIds(List.of(1L, 0L));
+
+        Result<MqAdminDTO.ManualRetryResult> result = controller.batchRetry(request, null);
+
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getCode()).isEqualTo(ResultCode.PARAM_ERROR.getCode());
+        assertThat(result.getMessage()).isEqualTo("消息ID必须大于0");
+    }
+
+    @Test
+    void batchRetryDeduplicatesIdsNormalizesOperatorAndAuditsResult() {
         MqProperties properties = new MqProperties();
         MqMessageSender sender = sender(MqProperties.Provider.RABBIT);
         InMemoryMqFailedMessageRepository repository = new InMemoryMqFailedMessageRepository(List.of(
@@ -252,13 +265,14 @@ class MqAdminControllerTest {
         RecordingAuditService auditService = new RecordingAuditService();
         MqAdminController controller = controller(handler, properties, sender, scheduler, auditService);
         MqAdminDTO.ManualRetryRequest request = new MqAdminDTO.ManualRetryRequest()
-                .setIds(List.of(1L))
+                .setIds(List.of(1L, 1L))
                 .setOperator(" ops ")
                 .setRemark(" batch retry ");
 
         Result<MqAdminDTO.ManualRetryResult> result = controller.batchRetry(request, null);
 
         assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getData().getTotal()).isEqualTo(1);
         assertThat(result.getData().getSuccess()).isEqualTo(1);
         MqFailedMessage saved = repository.findById(1L).orElseThrow();
         assertThat(saved.getStatus()).isEqualTo(MqFailedMessage.STATUS_MANUAL);
