@@ -99,6 +99,29 @@ class AdminAuditServiceTest {
     }
 
     @Test
+    void paramsMaskSensitiveValuesInsideJsonStrings() {
+        service.success(null, "MQ管理", "人工补偿", "UPDATE",
+                service.params("payload", "{\"password\":\"Admin@123\",\"profile\":{\"apiKey\":\"api-key-value\"}}",
+                        "plain", "not-json-token-value"));
+
+        assertThat(mapper.inserted.getParams())
+                .contains("\"password\":\"******\"")
+                .contains("\"apiKey\":\"******\"")
+                .contains("\"plain\":\"not-json-token-value\"")
+                .doesNotContain("Admin@123")
+                .doesNotContain("api-key-value");
+    }
+
+    @Test
+    void paramsKeepInvalidJsonStringsAsText() {
+        service.success(null, "MQ管理", "人工补偿", "UPDATE",
+                service.params("payload", "{\"password\":\"Admin@123\""));
+
+        assertThat(mapper.inserted.getParams())
+                .contains("\\\"password\\\":\\\"Admin@123\\\"");
+    }
+
+    @Test
     void longParamsAreTruncatedBeforeWritingOperationLog() {
         service.success(null, "系统管理", "更新参数", "UPDATE",
                 service.params("content", "x".repeat(5000)));

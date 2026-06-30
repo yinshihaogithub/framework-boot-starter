@@ -108,6 +108,10 @@ public class AdminAuditService {
     }
 
     private Object maskValue(Object value) {
+        if (value instanceof CharSequence source) {
+            Object parsed = parseJsonText(source.toString());
+            return parsed == null ? value : maskValue(parsed);
+        }
         if (value instanceof Map<?, ?> source) {
             Map<String, Object> masked = new LinkedHashMap<>();
             source.forEach((key, item) -> {
@@ -131,6 +135,21 @@ public class AdminAuditService {
             return masked;
         }
         return value;
+    }
+
+    private Object parseJsonText(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        String text = value.trim();
+        if (!text.startsWith("{") && !text.startsWith("[")) {
+            return null;
+        }
+        try {
+            return objectMapper.readValue(text, Object.class);
+        } catch (Exception ignored) {
+            return null;
+        }
     }
 
     private boolean isSensitiveKey(String key) {
