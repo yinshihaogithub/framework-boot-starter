@@ -60,6 +60,46 @@ class MqAdminControllerTest {
     }
 
     @Test
+    void listFailedMessagesNormalizesFiltersAndKeepsNullCreateTimeLast() {
+        MqFailedMessage nullTimeMessage = failedMessage(1L, "trace-a", MqFailedMessage.STATUS_PENDING);
+        nullTimeMessage.setCreateTime(null);
+        MqFailedMessage newestMessage = failedMessage(2L, "trace-a", MqFailedMessage.STATUS_PENDING);
+        newestMessage.setCreateTime(new Date(2_000));
+        MqFailedMessage otherTraceMessage = failedMessage(3L, "trace-b", MqFailedMessage.STATUS_PENDING);
+        otherTraceMessage.setCreateTime(new Date(3_000));
+        DeadLetterHandler handler = new DeadLetterHandler(
+                new InMemoryMqFailedMessageRepository(List.of(nullTimeMessage, newestMessage, otherTraceMessage)),
+                new MqProperties());
+        MqAdminController controller = controller(handler, new MqProperties(), null);
+
+        Result<PageResult<MqAdminDTO.MqFailedMessageVO>> result = controller.listFailedMessages(
+                " order.queue ", " pending ", " trace-a ", "order-", " ordercreated ", 1, 20);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getData().getTotal()).isEqualTo(2);
+        assertThat(result.getData().getRecords())
+                .extracting(MqAdminDTO.MqFailedMessageVO::getId)
+                .containsExactly(2L, 1L);
+        assertThat(result.getData().getRecords().get(1).getCreateTime()).isNull();
+    }
+
+    @Test
+    void listFailedMessagesReturnsEmptyPageForInvalidTraceIdFilter() {
+        DeadLetterHandler handler = new DeadLetterHandler(
+                new InMemoryMqFailedMessageRepository(List.of(
+                        failedMessage(1L, "trace-a", MqFailedMessage.STATUS_PENDING))),
+                new MqProperties());
+        MqAdminController controller = controller(handler, new MqProperties(), null);
+
+        Result<PageResult<MqAdminDTO.MqFailedMessageVO>> result = controller.listFailedMessages(
+                null, null, "bad\ntrace", null, null, 1, 20);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getData().getTotal()).isZero();
+        assertThat(result.getData().getRecords()).isEmpty();
+    }
+
+    @Test
     void returnsRuntimeInfoWithProviderAvailability() {
         MqProperties properties = new MqProperties();
         properties.setProvider(MqProperties.Provider.RABBIT);

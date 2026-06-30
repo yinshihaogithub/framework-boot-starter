@@ -5,6 +5,7 @@ import com.framework.admin.support.AdminPageSupport;
 import com.framework.auth.context.UserContextHolder;
 import com.framework.core.result.PageResult;
 import com.framework.core.result.ResultCode;
+import com.framework.core.trace.TraceContext;
 import com.framework.mq.config.MqProperties;
 import com.framework.mq.deadletter.DeadLetterHandler;
 import com.framework.mq.deadletter.MqAdminDTO;
@@ -94,9 +95,12 @@ public class MqAdminService {
         }
         String normalizedQueueName = text(queueName);
         String normalizedStatus = upper(status);
-        String normalizedTraceId = text(traceId);
+        String normalizedTraceId = normalizeTraceIdFilter(traceId);
         String normalizedBusinessKey = text(businessKey);
         String normalizedMessageType = text(messageType);
+        if (isInvalidTraceIdFilter(traceId, normalizedTraceId)) {
+            return PageResult.empty(safePageNum, safePageSize);
+        }
 
         try {
             List<MqFailedMessage> filtered = handler.getFailedMessageStore().values().stream()
@@ -106,8 +110,7 @@ public class MqAdminService {
                     .filter(m -> isBlank(normalizedBusinessKey) || contains(m.getBusinessKey(), normalizedBusinessKey))
                     .filter(m -> isBlank(normalizedMessageType)
                             || normalizedMessageType.equalsIgnoreCase(m.getMessageType()))
-                    .sorted(Comparator.comparing(MqFailedMessage::getCreateTime,
-                            Comparator.nullsLast(Comparator.naturalOrder())).reversed())
+                    .sorted(Comparator.comparing(MqFailedMessage::getCreateTime, newestFirst()))
                     .collect(Collectors.toList());
 
             int total = filtered.size();
@@ -400,6 +403,19 @@ public class MqAdminService {
 
     private String text(String value) {
         return isBlank(value) ? null : value.trim();
+    }
+
+    private String normalizeTraceIdFilter(String traceId) {
+        String text = text(traceId);
+        return text == null ? null : TraceContext.normalizeTraceId(text);
+    }
+
+    private boolean isInvalidTraceIdFilter(String originalTraceId, String normalizedTraceId) {
+        return !isBlank(originalTraceId) && normalizedTraceId == null;
+    }
+
+    private <T extends Comparable<? super T>> Comparator<T> newestFirst() {
+        return Comparator.nullsLast(Comparator.reverseOrder());
     }
 
     private String upper(String value) {
