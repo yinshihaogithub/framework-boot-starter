@@ -52,18 +52,18 @@ public class MqProducer implements MqMessageSender {
     @Override
     public <T> void send(String exchange, String routingKey, MessageWrapper<T> wrapper) {
         MqSendSupport.requireNotNull(exchange, "exchange");
-        MqSendSupport.requireText(routingKey, "routingKey");
+        String safeRoutingKey = MqSendSupport.requireText(routingKey, "routingKey");
         MqSendSupport.fillTrace(wrapper);
         try {
             String json = objectMapper.writeValueAsString(wrapper);
-            rabbitTemplate.convertAndSend(exchange, routingKey, json, message -> {
+            rabbitTemplate.convertAndSend(exchange, safeRoutingKey, json, message -> {
                 prepareMessage(message.getMessageProperties(), wrapper);
                 return message;
             });
             log.debug("[MQ发送] exchange={}, routingKey={}, messageId={}, traceId={}, businessKey={}",
-                    exchange, routingKey, wrapper.getMessageId(), wrapper.getTraceId(), wrapper.getBusinessKey());
+                    exchange, safeRoutingKey, wrapper.getMessageId(), wrapper.getTraceId(), wrapper.getBusinessKey());
         } catch (Exception e) {
-            log.error("[MQ发送失败] exchange={}, routingKey={}", exchange, routingKey, e);
+            log.error("[MQ发送失败] exchange={}, routingKey={}", exchange, safeRoutingKey, e);
             throw new RuntimeException("消息发送失败", e);
         }
     }
@@ -83,20 +83,20 @@ public class MqProducer implements MqMessageSender {
     @Override
     public <T> void sendWithDelay(String exchange, String routingKey, MessageWrapper<T> wrapper, long delayMs) {
         MqSendSupport.requireNotNull(exchange, "exchange");
-        MqSendSupport.requireText(routingKey, "routingKey");
+        String safeRoutingKey = MqSendSupport.requireText(routingKey, "routingKey");
         MqSendSupport.requireNonNegative(delayMs, "delayMs");
         MqSendSupport.fillTrace(wrapper);
         try {
             String json = objectMapper.writeValueAsString(wrapper);
-            rabbitTemplate.convertAndSend(exchange, routingKey, json, message -> {
+            rabbitTemplate.convertAndSend(exchange, safeRoutingKey, json, message -> {
                 prepareMessage(message.getMessageProperties(), wrapper);
                 message.getMessageProperties().setHeader("x-delay", delayMs);
                 return message;
             });
             log.debug("[MQ延迟发送] exchange={}, routingKey={}, delayMs={}, messageId={}, traceId={}",
-                    exchange, routingKey, delayMs, wrapper.getMessageId(), wrapper.getTraceId());
+                    exchange, safeRoutingKey, delayMs, wrapper.getMessageId(), wrapper.getTraceId());
         } catch (Exception e) {
-            log.error("[MQ延迟发送失败] exchange={}, routingKey={}", exchange, routingKey, e);
+            log.error("[MQ延迟发送失败] exchange={}, routingKey={}", exchange, safeRoutingKey, e);
             throw new RuntimeException("延迟消息发送失败", e);
         }
     }
@@ -108,7 +108,7 @@ public class MqProducer implements MqMessageSender {
      */
     public <T> void sendWithTtl(String exchange, String routingKey, T payload, long ttlMs) {
         MqSendSupport.requireNotNull(exchange, "exchange");
-        MqSendSupport.requireText(routingKey, "routingKey");
+        String safeRoutingKey = MqSendSupport.requireText(routingKey, "routingKey");
         MqSendSupport.requireNonNegative(ttlMs, "ttlMs");
         MessageWrapper<T> wrapper = MessageWrapper.of(payload);
         MqSendSupport.fillTrace(wrapper);
@@ -119,9 +119,9 @@ public class MqProducer implements MqMessageSender {
                 message.getMessageProperties().setExpiration(String.valueOf(ttlMs));
                 return message;
             };
-            rabbitTemplate.convertAndSend(exchange, routingKey, json, processor);
+            rabbitTemplate.convertAndSend(exchange, safeRoutingKey, json, processor);
             log.debug("[MQ TTL发送] exchange={}, routingKey={}, ttlMs={}, messageId={}, traceId={}",
-                    exchange, routingKey, ttlMs, wrapper.getMessageId(), wrapper.getTraceId());
+                    exchange, safeRoutingKey, ttlMs, wrapper.getMessageId(), wrapper.getTraceId());
         } catch (Exception e) {
             log.error("[MQ TTL发送失败] exchange={}", exchange, e);
             throw new RuntimeException("TTL消息发送失败", e);

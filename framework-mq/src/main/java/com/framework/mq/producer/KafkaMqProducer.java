@@ -31,11 +31,12 @@ public class KafkaMqProducer implements MqMessageSender {
 
     @Override
     public <T> void send(String topic, String key, MessageWrapper<T> wrapper) {
-        MqSendSupport.requireText(topic, "topic");
+        String safeTopic = MqSendSupport.requireText(topic, "topic");
+        String safeKey = MqSendSupport.trimToNull(key);
         MqSendSupport.fillTrace(wrapper);
         try {
             String json = objectMapper.writeValueAsString(wrapper);
-            ProducerRecord<String, String> record = new ProducerRecord<>(topic, key, json);
+            ProducerRecord<String, String> record = new ProducerRecord<>(safeTopic, safeKey, json);
             record.headers().add(FrameworkConstants.TRACE_ID_HEADER,
                     wrapper.getTraceId().getBytes(StandardCharsets.UTF_8));
             if (wrapper.getParentMessageId() != null) {
@@ -44,9 +45,9 @@ public class KafkaMqProducer implements MqMessageSender {
             }
             kafkaOperations.send(record);
             log.debug("[Kafka发送] topic={}, key={}, messageId={}, traceId={}",
-                    topic, key, wrapper.getMessageId(), wrapper.getTraceId());
+                    safeTopic, safeKey, wrapper.getMessageId(), wrapper.getTraceId());
         } catch (Exception e) {
-            log.error("[Kafka发送失败] topic={}, key={}", topic, key, e);
+            log.error("[Kafka发送失败] topic={}, key={}", safeTopic, safeKey, e);
             throw new RuntimeException("Kafka消息发送失败", e);
         }
     }

@@ -2,12 +2,15 @@ package com.framework.mq.producer;
 
 import com.framework.core.trace.TraceContext;
 import com.framework.mq.core.MessageWrapper;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.amqp.core.MessagePostProcessor;
 import org.springframework.kafka.core.KafkaOperations;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 
 import java.lang.reflect.Proxy;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -38,6 +41,16 @@ class MqProducerValidationTest {
         assertThatThrownBy(() -> producer.sendWithTtl("", "order.created", "payload", -1))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("ttlMs");
+    }
+
+    @Test
+    void rabbitProducerNormalizesRoutingKeyBeforeSending() {
+        RecordingRabbitTemplate rabbitTemplate = new RecordingRabbitTemplate();
+        MqProducer producer = new MqProducer(rabbitTemplate);
+
+        producer.send("", "\u00A0order.created\u3000", MessageWrapper.of("payload"));
+
+        assertThat(rabbitTemplate.routingKey).isEqualTo("order.created");
     }
 
     @Test
@@ -168,6 +181,17 @@ class MqProducerValidationTest {
     }
 
     @Test
+    void kafkaProducerNormalizesTopicAndKeyBeforeSending() {
+        AtomicReference<ProducerRecord<String, String>> record = new AtomicReference<>();
+        KafkaMqProducer producer = new KafkaMqProducer(kafkaOperations(record));
+
+        producer.send("\u00A0order-topic\u3000", "\u00A0ORD-1\u3000", MessageWrapper.of("payload"));
+
+        assertThat(record.get().topic()).isEqualTo("order-topic");
+        assertThat(record.get().key()).isEqualTo("ORD-1");
+    }
+
+    @Test
     void rocketProducerRejectsNullTemplate() {
         assertThatThrownBy(() -> new RocketMqProducer(null))
                 .isInstanceOf(NullPointerException.class)
@@ -183,16 +207,63 @@ class MqProducerValidationTest {
                 .hasMessageContaining("topic");
     }
 
+    @Test
+    void rocketProducerNormalizesTopicAndTagBeforeSending() {
+        FakeRocketMQTemplate template = new FakeRocketMQTemplate();
+        RocketMqProducer producer = new RocketMqProducer(template);
+
+        producer.send("\u00A0order-topic\u3000", "\u00A0created\u3000", MessageWrapper.of("payload"));
+
+        assertThat(template.destination).isEqualTo("order-topic:created");
+    }
+
+    @Test
+    void rocketProducerDropsUnicodeBlankTagBeforeSending() {
+        FakeRocketMQTemplate template = new FakeRocketMQTemplate();
+        RocketMqProducer producer = new RocketMqProducer(template);
+
+        producer.send("\u00A0order-topic\u3000", "\u00A0\u3000", MessageWrapper.of("payload"));
+
+        assertThat(template.destination).isEqualTo("order-topic");
+    }
+
     @SuppressWarnings("unchecked")
     private static KafkaOperations<String, String> kafkaOperations() {
+        return kafkaOperations(null);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static KafkaOperations<String, String> kafkaOperations(AtomicReference<ProducerRecord<String, String>> record) {
         return (KafkaOperations<String, String>) Proxy.newProxyInstance(
                 KafkaOperations.class.getClassLoader(),
                 new Class<?>[]{KafkaOperations.class},
-                (proxy, method, args) -> null);
+                (proxy, method, args) -> {
+                    if ("send".equals(method.getName()) && args != null && args.length == 1
+                            && args[0] instanceof ProducerRecord<?, ?> producerRecord && record != null) {
+                        @SuppressWarnings("unchecked")
+                        ProducerRecord<String, String> typedRecord = (ProducerRecord<String, String>) producerRecord;
+                        record.set(typedRecord);
+                    }
+                    return null;
+                });
+    }
+
+    private static class RecordingRabbitTemplate extends RabbitTemplate {
+
+        private String routingKey;
+
+        @Override
+        public void convertAndSend(String exchange, String routingKey, Object object,
+                                   MessagePostProcessor messagePostProcessor) {
+            this.routingKey = routingKey;
+        }
     }
 
     public static class FakeRocketMQTemplate {
+        private String destination;
+
         public Object syncSend(String destination, Object payload) {
+            this.destination = destination;
             return null;
         }
     }

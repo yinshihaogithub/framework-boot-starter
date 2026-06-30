@@ -27,10 +27,11 @@ final class MqSendSupport {
         return wrapper;
     }
 
-    static void requireText(String value, String name) {
+    static String requireText(String value, String name) {
         if (!hasText(value)) {
             throw new IllegalArgumentException(name + " must not be blank");
         }
+        return trimBoundarySpace(value);
     }
 
     static void requireNotNull(Object value, String name) {
@@ -72,7 +73,7 @@ final class MqSendSupport {
         wrapper.setSource(trimToNull(wrapper.getSource()));
     }
 
-    private static String trimToNull(String value) {
+    static String trimToNull(String value) {
         return hasText(value) ? trimBoundarySpace(value) : null;
     }
 

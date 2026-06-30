@@ -30,16 +30,17 @@ public class RocketMqProducer implements MqMessageSender {
 
     @Override
     public <T> void send(String topic, String tag, MessageWrapper<T> wrapper) {
-        MqSendSupport.requireText(topic, "topic");
+        String safeTopic = MqSendSupport.requireText(topic, "topic");
+        String safeTag = MqSendSupport.trimToNull(tag);
         MqSendSupport.fillTrace(wrapper);
         try {
-            String destination = (tag == null || tag.isBlank()) ? topic : topic + ":" + tag;
+            String destination = safeTag == null ? safeTopic : safeTopic + ":" + safeTag;
             String json = objectMapper.writeValueAsString(wrapper);
             syncSend.invoke(rocketMQTemplate, destination, json);
             log.debug("[RocketMQ发送] destination={}, messageId={}, traceId={}",
                     destination, wrapper.getMessageId(), wrapper.getTraceId());
         } catch (Exception e) {
-            log.error("[RocketMQ发送失败] topic={}, tag={}", topic, tag, e);
+            log.error("[RocketMQ发送失败] topic={}, tag={}", safeTopic, safeTag, e);
             throw new RuntimeException("RocketMQ消息发送失败", e);
         }
     }
