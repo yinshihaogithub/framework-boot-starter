@@ -144,6 +144,7 @@ class DefaultLocalMessageServiceTest {
 
         LocalMessage message = service.publish(new LocalMessage()
                 .setMessageId("\u00A0local-msg-1\u3000")
+                .setTraceId("\u00A0local-trace-1\u3000")
                 .setTopic("\u00A0order.created\u3000")
                 .setBusinessKey("\u00A0ORD-1\u3000")
                 .setTenantId("\u00A0tenant-a\u3000")
@@ -152,6 +153,7 @@ class DefaultLocalMessageServiceTest {
                 .setPayload("{}"));
 
         assertThat(message.getMessageId()).isEqualTo("local-msg-1");
+        assertThat(message.getTraceId()).isEqualTo("local-trace-1");
         assertThat(message.getTopic()).isEqualTo("order.created");
         assertThat(message.getBusinessKey()).isEqualTo("ORD-1");
         assertThat(message.getTenantId()).isEqualTo("tenant-a");
@@ -577,7 +579,7 @@ class DefaultLocalMessageServiceTest {
         DefaultLocalMessageService service = new DefaultLocalMessageService(repository, properties(), List.of(handler(
                 "order.created",
                 message -> {
-                    throw new IllegalStateException();
+                    throw new IllegalStateException("\u00A0\u3000");
                 }
         )));
         LocalMessage message = service.publish("order.created", "ORD-1", "{}");
@@ -592,7 +594,7 @@ class DefaultLocalMessageServiceTest {
     @Test
     void retryDueMessagesStoresSingleLineBoundedFailureMessage() {
         InMemoryLocalMessageRepository repository = new InMemoryLocalMessageRepository();
-        String longMessage = "first line\n" + "x".repeat(1500);
+        String longMessage = "\u00A0first\u00A0line\nsecond\u3000line\n" + "x".repeat(1500);
         DefaultLocalMessageService service = new DefaultLocalMessageService(repository, properties(), List.of(handler(
                 "order.created",
                 message -> {
@@ -606,8 +608,11 @@ class DefaultLocalMessageServiceTest {
         LocalMessage failure = repository.findById(message.getId()).orElseThrow();
         assertThat(failure.getStatus()).isEqualTo(LocalMessageStatus.PENDING);
         assertThat(failure.getErrorMessage()).hasSize(1024);
-        assertThat(failure.getErrorMessage()).startsWith("first line ");
-        assertThat(failure.getErrorMessage()).doesNotContain("\n");
+        assertThat(failure.getErrorMessage()).startsWith("first line second line ");
+        assertThat(failure.getErrorMessage())
+                .doesNotContain("\n")
+                .doesNotContain("\u00A0")
+                .doesNotContain("\u3000");
     }
 
     @Test

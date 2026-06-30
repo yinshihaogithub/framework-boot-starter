@@ -202,11 +202,11 @@ public class DefaultLocalMessageService implements LocalMessageService {
     }
 
     private String resolveTraceId(String traceId) {
-        String normalizedTraceId = TraceContext.normalizeTraceId(traceId);
+        String normalizedTraceId = TraceContext.normalizeTraceId(normalize(traceId));
         if (hasText(normalizedTraceId)) {
             return normalizedTraceId;
         }
-        normalizedTraceId = TraceContext.normalizeTraceId(TraceContext.getTraceId());
+        normalizedTraceId = TraceContext.normalizeTraceId(normalize(TraceContext.getTraceId()));
         return hasText(normalizedTraceId) ? normalizedTraceId : TraceContext.generateTraceId();
     }
 
@@ -259,12 +259,19 @@ public class DefaultLocalMessageService implements LocalMessageService {
         if (exception == null) {
             return "unknown error";
         }
-        String message = hasText(exception.getMessage()) ? exception.getMessage() : exception.getClass().getName();
-        String normalized = message.replaceAll("\\s+", " ").trim();
+        String normalized = normalizeMessage(exception.getMessage());
+        if (normalized == null) {
+            normalized = exception.getClass().getName();
+        }
         if (normalized.length() <= MAX_ERROR_MESSAGE_LENGTH) {
             return normalized;
         }
         return normalized.substring(0, MAX_ERROR_MESSAGE_LENGTH);
+    }
+
+    private String normalizeMessage(String message) {
+        String text = normalizeOptional(message);
+        return text == null ? null : text.replaceAll("[\\s\\p{Zs}]+", " ");
     }
 
     private String generateMessageId() {
