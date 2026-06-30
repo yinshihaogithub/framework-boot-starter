@@ -281,6 +281,9 @@ export interface TraceEvent {
 export interface TraceDetail {
   traceId: string
   summary: Record<string, number>
+  displayed: Record<string, number>
+  truncated: Record<string, boolean>
+  limit: number
   warnings: string[]
   timeline: TraceEvent[]
   logs: OperationLog[]

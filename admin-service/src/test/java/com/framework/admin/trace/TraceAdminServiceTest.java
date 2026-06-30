@@ -82,6 +82,17 @@ class TraceAdminServiceTest {
                 .containsEntry("mqMessages", 1L)
                 .containsEntry("localMessages", 1L)
                 .containsEntry("failed", 3L);
+        assertThat(detail.getDisplayed())
+                .containsEntry("logs", 1L)
+                .containsEntry("mqMessages", 1L)
+                .containsEntry("localMessages", 1L)
+                .containsEntry("timeline", 3L);
+        assertThat(detail.getTruncated())
+                .containsEntry("logs", false)
+                .containsEntry("mqMessages", false)
+                .containsEntry("localMessages", false)
+                .containsEntry("timeline", false);
+        assertThat(detail.getLimit()).isEqualTo(200);
         assertThat(detail.getLogs()).hasSize(1);
         assertThat(detail.getMqMessages()).extracting(MqFailedMessage::getId).containsExactly(1L);
         assertThat(detail.getLocalMessages()).extracting("id").containsExactly(1L);
@@ -116,6 +127,53 @@ class TraceAdminServiceTest {
     }
 
     @Test
+    void reportsTruncatedTraceDataWithTotalAndDisplayedCounts() {
+        List<OperationLogEntity> logs = java.util.stream.IntStream.rangeClosed(1, 201)
+                .mapToObj(index -> operationLog("trace-heavy", index % 2 == 0, "日志-" + index, "/logs/" + index,
+                        new Date(index)))
+                .toList();
+        List<MqFailedMessage> mqMessages = java.util.stream.IntStream.rangeClosed(1, 201)
+                .mapToObj(index -> mqMessage((long) index, "trace-heavy",
+                        index % 2 == 0 ? MqFailedMessage.STATUS_EXHAUSTED : MqFailedMessage.STATUS_PENDING,
+                        new Date(index)))
+                .toList();
+        List<LocalMessage> localMessages = java.util.stream.IntStream.rangeClosed(1, 201)
+                .mapToObj(index -> localMessage((long) index, "trace-heavy",
+                        index % 2 == 0 ? LocalMessageStatus.FAILED : LocalMessageStatus.SUCCESS,
+                        LocalDateTime.of(2026, 1, 1, 0, 0).plusSeconds(index)))
+                .toList();
+        TraceAdminService service = service(logs, mqMessages, localMessages);
+
+        TraceDetail detail = service.detail("trace-heavy");
+
+        assertThat(detail.getSummary())
+                .containsEntry("logs", 201L)
+                .containsEntry("mqMessages", 201L)
+                .containsEntry("localMessages", 201L)
+                .containsEntry("failed", 301L);
+        assertThat(detail.getDisplayed())
+                .containsEntry("logs", 200L)
+                .containsEntry("mqMessages", 200L)
+                .containsEntry("localMessages", 200L)
+                .containsEntry("timeline", 600L);
+        assertThat(detail.getTruncated())
+                .containsEntry("logs", true)
+                .containsEntry("mqMessages", true)
+                .containsEntry("localMessages", true)
+                .containsEntry("timeline", true);
+        assertThat(detail.getLimit()).isEqualTo(200);
+        assertThat(detail.getLogs()).hasSize(200);
+        assertThat(detail.getMqMessages()).hasSize(200);
+        assertThat(detail.getLocalMessages()).hasSize(200);
+        assertThat(detail.getTimeline()).hasSize(600);
+        assertThat(detail.getWarnings())
+                .containsExactly(
+                        "操作日志匹配 201 条，仅展示最新 200 条",
+                        "MQ失败消息匹配 201 条，仅展示最新 200 条",
+                        "本地消息匹配 201 条，仅展示最新 200 条");
+    }
+
+    @Test
     void returnsEmptyDetailWhenOptionalRuntimesAreMissing() {
         TraceAdminService service = new TraceAdminService(provider(null), provider(null), provider(null));
 
@@ -126,6 +184,16 @@ class TraceAdminServiceTest {
                 .containsEntry("mqMessages", 0L)
                 .containsEntry("localMessages", 0L)
                 .containsEntry("failed", 0L);
+        assertThat(detail.getDisplayed())
+                .containsEntry("logs", 0L)
+                .containsEntry("mqMessages", 0L)
+                .containsEntry("localMessages", 0L)
+                .containsEntry("timeline", 0L);
+        assertThat(detail.getTruncated())
+                .containsEntry("logs", false)
+                .containsEntry("mqMessages", false)
+                .containsEntry("localMessages", false)
+                .containsEntry("timeline", false);
         assertThat(detail.getTimeline()).isEmpty();
         assertThat(detail.getLogs()).isEmpty();
         assertThat(detail.getMqMessages()).isEmpty();
@@ -233,12 +301,18 @@ class TraceAdminServiceTest {
                                                        Boolean success, String traceId, int offset, int pageSize) {
                 return logs.stream()
                         .filter(log -> traceId.equals(log.getTraceId()))
+                        .filter(log -> success == null || success.equals(log.getSuccess()))
+                        .skip(offset)
+                        .limit(pageSize)
                         .toList();
             }
 
             @Override
             public long count(String module, String logType, Long operatorId, Boolean success, String traceId) {
-                return logs.stream().filter(log -> traceId.equals(log.getTraceId())).count();
+                return logs.stream()
+                        .filter(log -> traceId.equals(log.getTraceId()))
+                        .filter(log -> success == null || success.equals(log.getSuccess()))
+                        .count();
             }
 
             @Override

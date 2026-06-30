@@ -792,18 +792,18 @@
 
         <section v-if="activeView === 'trace'" class="view">
           <div class="metrics compact">
-            <div class="metric"><span>日志</span><strong>{{ traceDetail?.summary?.logs ?? 0 }}</strong></div>
-            <div class="metric"><span>MQ 消息</span><strong>{{ traceDetail?.summary?.mqMessages ?? 0 }}</strong></div>
-            <div class="metric"><span>本地消息</span><strong>{{ traceDetail?.summary?.localMessages ?? 0 }}</strong></div>
+            <div class="metric"><span>日志</span><strong>{{ traceCountLabel('logs') }}</strong></div>
+            <div class="metric"><span>MQ 消息</span><strong>{{ traceCountLabel('mqMessages') }}</strong></div>
+            <div class="metric"><span>本地消息</span><strong>{{ traceCountLabel('localMessages') }}</strong></div>
             <div class="metric"><span>失败节点</span><strong>{{ traceDetail?.summary?.failed ?? 0 }}</strong></div>
           </div>
           <el-alert
-            v-if="traceDetail?.warnings?.length"
+            v-if="traceWarnings.length"
             class="trace-warnings"
             type="warning"
             show-icon
             :closable="false"
-            :title="traceDetail.warnings.join('；')"
+            :title="traceWarnings.join('；')"
           />
 
           <el-card shadow="never">
@@ -842,7 +842,7 @@
           <el-card shadow="never">
             <template #header><div class="section-head"><span>链路明细</span><el-tag size="small">{{ traceDetail?.traceId || '-' }}</el-tag></div></template>
             <el-tabs>
-              <el-tab-pane label="日志">
+              <el-tab-pane :label="traceTabLabel('日志', 'logs')">
                 <el-table :data="traceDetail?.logs ?? []" height="360" stripe>
                   <el-table-column prop="id" label="ID" width="86" />
                   <el-table-column prop="logType" label="类型" width="122" />
@@ -855,7 +855,7 @@
                   </el-table-column>
                 </el-table>
               </el-tab-pane>
-              <el-tab-pane label="MQ">
+              <el-tab-pane :label="traceTabLabel('MQ', 'mqMessages')">
                 <el-table :data="traceDetail?.mqMessages ?? []" height="360" stripe>
                   <el-table-column prop="id" label="ID" width="86" />
                   <el-table-column prop="status" label="状态" width="120" />
@@ -874,7 +874,7 @@
                   </el-table-column>
                 </el-table>
               </el-tab-pane>
-              <el-tab-pane label="本地消息">
+              <el-tab-pane :label="traceTabLabel('本地消息', 'localMessages')">
                 <el-table :data="traceDetail?.localMessages ?? []" height="360" stripe>
                   <el-table-column prop="id" label="ID" width="86" />
                   <el-table-column prop="status" label="状态" width="126" />
@@ -1679,6 +1679,7 @@ const alertItems = computed<AlertItem[]>(() => {
 })
 const alertCount = computed(() => alertItems.value.reduce((total, item) => total + item.count, 0))
 const alertBadge = computed(() => alertCount.value > 99 ? '99+' : alertCount.value)
+const traceWarnings = computed(() => traceDetail.value?.warnings ?? [])
 
 function can(permission: string) {
   return currentUser.value?.permissions?.includes(permission) ?? false
@@ -1932,10 +1933,10 @@ async function loadTrace() {
   traceDetail.value = await api.traceDetail(traceId)
   Object.assign(logs, {
     records: traceDetail.value.logs,
-    total: traceDetail.value.logs.length,
+    total: traceDetail.value.summary?.logs ?? traceDetail.value.logs.length,
     pageNum: 1,
-    pageSize: traceDetail.value.logs.length || 20,
-    pages: traceDetail.value.logs.length ? 1 : 0
+    pageSize: traceDetail.value.displayed?.logs || traceDetail.value.logs.length || 20,
+    pages: (traceDetail.value.summary?.logs ?? traceDetail.value.logs.length) > 0 ? 1 : 0
   })
 }
 
@@ -2788,6 +2789,19 @@ function traceSourceType(source?: string) {
   if (source === 'MQ') return 'warning'
   if (source === 'LOCAL_MESSAGE') return 'success'
   return 'info'
+}
+
+function traceCountLabel(key: 'logs' | 'mqMessages' | 'localMessages') {
+  const total = Number(traceDetail.value?.summary?.[key] ?? 0)
+  const displayed = Number(traceDetail.value?.displayed?.[key] ?? total)
+  if (total <= 0) {
+    return '0'
+  }
+  return displayed === total ? String(total) : `${displayed}/${total}`
+}
+
+function traceTabLabel(label: string, key: 'logs' | 'mqMessages' | 'localMessages') {
+  return `${label} ${traceCountLabel(key)}`
 }
 
 function formatRuntime(value: unknown) {
