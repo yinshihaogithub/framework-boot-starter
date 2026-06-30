@@ -48,6 +48,13 @@ class MqProducerValidationTest {
         assertThatThrownBy(() -> new MqProducer(new RabbitTemplate()).send("", "order.created", wrapper))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("messageId");
+
+        MessageWrapper<String> unicodeBlankWrapper = MessageWrapper.of("payload");
+        unicodeBlankWrapper.setMessageId("\u00A0\u3000");
+
+        assertThatThrownBy(() -> new MqProducer(new RabbitTemplate()).send("", "order.created", unicodeBlankWrapper))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("messageId");
     }
 
     @Test
@@ -77,11 +84,44 @@ class MqProducerValidationTest {
     }
 
     @Test
+    void senderSupportNormalizesUnicodeBoundarySpacesBeforeSending() {
+        MessageWrapper<String> wrapper = MessageWrapper.of(
+                "\u00A0ORD-1\u3000",
+                "\u00A0OrderCreated\u3000",
+                "payload");
+        wrapper.setMessageId("\u00A0msg-1\u3000");
+        wrapper.setParentMessageId("\u00A0parent-1\u3000");
+        wrapper.setSource("\u00A0order-service\u3000");
+
+        MqSendSupport.fillTrace(wrapper);
+
+        assertThat(wrapper.getMessageId()).isEqualTo("msg-1");
+        assertThat(wrapper.getType()).isEqualTo("OrderCreated");
+        assertThat(wrapper.getBusinessKey()).isEqualTo("ORD-1");
+        assertThat(wrapper.getParentMessageId()).isEqualTo("parent-1");
+        assertThat(wrapper.getSource()).isEqualTo("order-service");
+    }
+
+    @Test
     void senderSupportClearsBlankOptionalMetadataBeforeSending() {
         MessageWrapper<String> wrapper = MessageWrapper.of("payload");
         wrapper.setBusinessKey(" ");
         wrapper.setParentMessageId(" ");
         wrapper.setSource(" ");
+
+        MqSendSupport.fillTrace(wrapper);
+
+        assertThat(wrapper.getBusinessKey()).isNull();
+        assertThat(wrapper.getParentMessageId()).isNull();
+        assertThat(wrapper.getSource()).isNull();
+    }
+
+    @Test
+    void senderSupportClearsUnicodeBlankOptionalMetadataBeforeSending() {
+        MessageWrapper<String> wrapper = MessageWrapper.of("payload");
+        wrapper.setBusinessKey("\u00A0\u3000");
+        wrapper.setParentMessageId("\u00A0\u3000");
+        wrapper.setSource("\u00A0\u3000");
 
         MqSendSupport.fillTrace(wrapper);
 
