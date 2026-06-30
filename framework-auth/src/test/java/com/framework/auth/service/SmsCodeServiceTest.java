@@ -20,11 +20,11 @@ class SmsCodeServiceTest {
     void sendCodePersistsCodeBeforeSendingSms() {
         RecordingRedisTemplate redis = new RecordingRedisTemplate();
         RecordingSmsSender sender = new RecordingSmsSender();
-        SmsCodeService service = new SmsCodeService(redis, 300, 60, sender);
+        SmsCodeService service = new SmsCodeService(redis, 300, 60, sender, () -> 42);
 
         String code = service.sendCode("13800000000");
 
-        assertThat(code).hasSize(6);
+        assertThat(code).isEqualTo("000042");
         assertThat(redis.values).containsEntry("framework:sms:code:13800000000", code);
         assertThat(redis.values).containsEntry("framework:sms:limit:13800000000", "1");
         assertThat(sender.sentPhone).isEqualTo("13800000000");

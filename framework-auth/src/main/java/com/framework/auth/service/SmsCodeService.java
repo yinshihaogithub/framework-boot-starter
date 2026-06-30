@@ -5,7 +5,10 @@ import com.framework.core.result.ResultCode;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
+import java.security.SecureRandom;
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
+import java.util.function.IntSupplier;
 
 /**
  * 短信验证码服务
@@ -18,13 +21,15 @@ public class SmsCodeService {
 
     private static final String CODE_PREFIX = "framework:sms:code:";
     private static final String RATE_LIMIT_PREFIX = "framework:sms:limit:";
-    private static final String CODE_TTL_PREFIX = "framework:sms:ttl:";
     private static final String SMS_UNAVAILABLE_MESSAGE = "短信验证码服务暂不可用，请稍后重试";
+    private static final int CODE_BOUND = 1_000_000;
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     private final StringRedisTemplate redis;
     private final long codeExpireSeconds;    // 验证码有效期（秒）
     private final long resendIntervalSeconds; // 重发间隔（秒）
     private final SmsSender smsSender;
+    private final IntSupplier codeGenerator;
 
     public SmsCodeService(StringRedisTemplate redis, long codeExpireSeconds, long resendIntervalSeconds) {
         this(redis, codeExpireSeconds, resendIntervalSeconds, new LoggingSmsSender());
@@ -32,10 +37,17 @@ public class SmsCodeService {
 
     public SmsCodeService(StringRedisTemplate redis, long codeExpireSeconds,
                           long resendIntervalSeconds, SmsSender smsSender) {
-        this.redis = redis;
+        this(redis, codeExpireSeconds, resendIntervalSeconds, smsSender,
+                () -> SECURE_RANDOM.nextInt(CODE_BOUND));
+    }
+
+    SmsCodeService(StringRedisTemplate redis, long codeExpireSeconds,
+                   long resendIntervalSeconds, SmsSender smsSender, IntSupplier codeGenerator) {
+        this.redis = Objects.requireNonNull(redis, "redis must not be null");
         this.codeExpireSeconds = codeExpireSeconds;
         this.resendIntervalSeconds = resendIntervalSeconds;
-        this.smsSender = smsSender;
+        this.smsSender = Objects.requireNonNull(smsSender, "smsSender must not be null");
+        this.codeGenerator = Objects.requireNonNull(codeGenerator, "codeGenerator must not be null");
     }
 
     /**
@@ -56,7 +68,7 @@ public class SmsCodeService {
             }
 
             // 生成 6 位验证码
-            code = String.format("%06d", (int) (Math.random() * 1000000));
+            code = generateCode();
 
             // 存储验证码
             redis.opsForValue().set(CODE_PREFIX + phone, code, codeExpireSeconds, TimeUnit.SECONDS);
@@ -71,6 +83,10 @@ public class SmsCodeService {
         smsSender.send(phone, code, codeExpireSeconds);
 
         return code;
+    }
+
+    private String generateCode() {
+        return String.format("%06d", Math.floorMod(codeGenerator.getAsInt(), CODE_BOUND));
     }
 
     /**
