@@ -80,6 +80,7 @@ public class FileAdminService {
         if (storageService == null) {
             return Result.fail(ResultCode.SERVICE_ERROR.getCode(), "文件存储服务未启用");
         }
+        String operatorName = currentOperatorName();
         try (InputStream inputStream = file.getInputStream()) {
             StoredFile storedFile = storageService.store(file.getOriginalFilename(), inputStream);
             try {
@@ -93,11 +94,12 @@ public class FileAdminService {
                         .setBusinessType(text(businessType))
                         .setBusinessKey(text(businessKey))
                         .setOperatorId(UserContextHolder.getUserId())
-                        .setOperatorName(UserContextHolder.getUsername())
+                        .setOperatorName(operatorName)
                         .setDeleted(false));
                 auditSuccess(servletRequest, "上传文件", "CREATE",
                         "fileId", record.getId(), "filename", record.getOriginalFilename(),
-                        "businessType", record.getBusinessType(), "businessKey", record.getBusinessKey());
+                        "businessType", record.getBusinessType(), "businessKey", record.getBusinessKey(),
+                        "operator", operatorName);
                 return Result.success(record);
             } catch (RuntimeException e) {
                 cleanupStoredFile(storageService, storedFile);
@@ -197,7 +199,8 @@ public class FileAdminService {
         }
         auditSuccess(servletRequest, "删除文件", "DELETE",
                 "fileId", id, "filename", record.getOriginalFilename(),
-                "fileKey", record.getFileKey(), "physicalDeleted", physicalDeleted);
+                "fileKey", record.getFileKey(), "physicalDeleted", physicalDeleted,
+                "operator", currentOperatorName());
         return Result.success(physicalDeleted ? "已删除" : "已删除，物理文件待清理");
     }
 
@@ -249,5 +252,9 @@ public class FileAdminService {
     private String text(String value, String fallback) {
         String text = text(value);
         return text == null ? fallback : text;
+    }
+
+    private String currentOperatorName() {
+        return text(UserContextHolder.getUsername(), "admin");
     }
 }

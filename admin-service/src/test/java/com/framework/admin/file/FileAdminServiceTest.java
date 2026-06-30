@@ -1,12 +1,15 @@
 package com.framework.admin.file;
 
 import com.framework.admin.audit.AdminAuditService;
+import com.framework.auth.context.LoginUser;
+import com.framework.auth.context.UserContextHolder;
 import com.framework.core.result.PageResult;
 import com.framework.core.result.Result;
 import com.framework.core.result.ResultCode;
 import com.framework.file.model.StoredFile;
 import com.framework.file.service.FileStorageService;
 import jakarta.servlet.http.HttpServletRequest;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.core.io.Resource;
@@ -30,6 +33,11 @@ class FileAdminServiceTest {
     private final FakeStorageService storageService = new FakeStorageService();
     private final FakeAuditService auditService = new FakeAuditService();
     private final FileAdminService service = new FileAdminService(repository, provider(storageService), auditService);
+
+    @AfterEach
+    void tearDown() {
+        UserContextHolder.clear();
+    }
 
     @Test
     void listSanitizesPagingAndReturnsStats() {
@@ -78,6 +86,33 @@ class FileAdminServiceTest {
         assertThat(storageService.storedFilename).isEqualTo("hello.txt");
         assertThat(repository.created.getFileKey()).isEqualTo("file-key");
         assertThat(auditService.actions).containsExactly("上传文件");
+    }
+
+    @Test
+    void uploadRecordsCurrentUserAsOperatorAndAuditsIt() {
+        UserContextHolder.set(new LoginUser().setUserId(7L).setUsername("alice"));
+        MockMultipartFile file = new MockMultipartFile("file", "hello.txt", "text/plain", "abc".getBytes());
+
+        Result<FileAdminModels.FileRecord> result = service.upload(file, "system", "user-1", null);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getData().getOperatorId()).isEqualTo(7L);
+        assertThat(result.getData().getOperatorName()).isEqualTo("alice");
+        assertThat(repository.created.getOperatorName()).isEqualTo("alice");
+        assertThat(auditService.params).containsEntry("operator", "alice");
+    }
+
+    @Test
+    void uploadDefaultsOperatorWhenUserContextIsMissing() {
+        MockMultipartFile file = new MockMultipartFile("file", "hello.txt", "text/plain", "abc".getBytes());
+
+        Result<FileAdminModels.FileRecord> result = service.upload(file, null, null, null);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getData().getOperatorId()).isNull();
+        assertThat(result.getData().getOperatorName()).isEqualTo("admin");
+        assertThat(repository.created.getOperatorName()).isEqualTo("admin");
+        assertThat(auditService.params).containsEntry("operator", "admin");
     }
 
     @Test
@@ -161,6 +196,20 @@ class FileAdminServiceTest {
         assertThat(repository.deletedId).isEqualTo(9L);
         assertThat(auditService.actions).containsExactly("删除文件");
         assertThat(auditService.params).containsEntry("physicalDeleted", true);
+    }
+
+    @Test
+    void deleteAuditsCurrentOperator() {
+        UserContextHolder.set(new LoginUser().setUserId(7L).setUsername("alice"));
+        repository.record = new FileAdminModels.FileRecord()
+                .setId(9L)
+                .setFileKey("file-key")
+                .setOriginalFilename("hello.txt");
+
+        Result<String> result = service.delete(9L, null);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(auditService.params).containsEntry("operator", "alice");
     }
 
     @Test
