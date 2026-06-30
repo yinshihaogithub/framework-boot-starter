@@ -262,6 +262,9 @@ public interface AdminSystemMapper {
     @Delete("DELETE FROM sys_role WHERE id = #{roleId}")
     int deleteRole(@Param("roleId") Long roleId);
 
+    @Select("SELECT COUNT(*) FROM sys_role WHERE id = #{roleId}")
+    long countRoleById(@Param("roleId") Long roleId);
+
     @Select("""
             SELECT menu_id
             FROM sys_role_menu

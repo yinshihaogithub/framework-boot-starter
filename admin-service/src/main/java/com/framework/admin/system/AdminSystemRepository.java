@@ -269,15 +269,19 @@ public class AdminSystemRepository {
         return mapper.listMenuIdsByRoleId(roleId);
     }
 
-    public void replaceRoleMenus(Long roleId, List<Long> menuIds) {
-        inTransaction(() -> {
+    public boolean replaceRoleMenus(Long roleId, List<Long> menuIds) {
+        return inTransaction(() -> {
+            if (mapper.countRoleById(roleId) <= 0) {
+                return false;
+            }
             mapper.deleteRoleMenus(roleId);
             if (menuIds == null || menuIds.isEmpty()) {
-                return;
+                return true;
             }
             for (Long menuId : menuIds) {
                 requireAffected("system role menu insert", mapper.insertRoleMenu(roleId, menuId));
             }
+            return true;
         });
     }
 

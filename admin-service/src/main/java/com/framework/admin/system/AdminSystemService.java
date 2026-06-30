@@ -465,7 +465,9 @@ public class AdminSystemService {
         }
         try {
             List<Long> affectedUserIds = repository.listUserIdsByRoleId(id);
-            repository.replaceRoleMenus(id, request == null ? List.of() : request.getMenuIds());
+            if (!repository.replaceRoleMenus(id, request == null ? List.of() : request.getMenuIds())) {
+                return resourceNotFound("角色");
+            }
             refreshPermissionCache(affectedUserIds);
             forceLogoutUsers(affectedUserIds);
             auditSuccess(servletRequest, "角色菜单授权", "UPDATE",

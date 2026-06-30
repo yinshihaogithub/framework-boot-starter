@@ -447,6 +447,24 @@ class AdminSystemServiceTest {
     }
 
     @Test
+    void updateRoleMenusReturnsNotFoundWhenRoleDoesNotExist() {
+        FakePermissionCacheService permissionCacheService = new FakePermissionCacheService();
+        FakeSessionManager sessionManager = new FakeSessionManager();
+        AdminSystemService serviceWithSecurity = new AdminSystemService(
+                repository, auditService, provider(permissionCacheService), provider(sessionManager), null);
+        repository.affectedUserIdsByRole = List.of(5L);
+        repository.replaceRoleMenusAffected = false;
+
+        Result<String> result = serviceWithSecurity.updateRoleMenus(8L, roleMenuRequest(), null);
+
+        assertNotFound(result, "角色不存在");
+        assertThat(repository.replacedRoleMenuRoleId).isEqualTo(8L);
+        assertThat(permissionCacheService.batchRefreshedUserIds).isEmpty();
+        assertThat(sessionManager.forceLogoutUserIds).isEmpty();
+        assertThat(auditService.actions).isEmpty();
+    }
+
+    @Test
     void menuValidationRejectsInvalidTypeAndSelfParent() {
         MenuRequest invalidType = new MenuRequest();
         invalidType.setMenuType("PAGE");
@@ -790,6 +808,7 @@ class AdminSystemServiceTest {
         private Long deletedRoleId;
         private Long replacedRoleMenuRoleId;
         private List<Long> replacedRoleMenuIds = List.of();
+        private boolean replaceRoleMenusAffected = true;
         private MenuRequest createdMenu;
         private Long updatedMenuId;
         private MenuRequest updatedMenu;
@@ -987,10 +1006,11 @@ class AdminSystemServiceTest {
         }
 
         @Override
-        public void replaceRoleMenus(Long roleId, List<Long> menuIds) {
+        public boolean replaceRoleMenus(Long roleId, List<Long> menuIds) {
             failCommandIfNeeded();
             this.replacedRoleMenuRoleId = roleId;
             this.replacedRoleMenuIds = menuIds == null ? List.of() : List.copyOf(menuIds);
+            return replaceRoleMenusAffected;
         }
 
         @Override

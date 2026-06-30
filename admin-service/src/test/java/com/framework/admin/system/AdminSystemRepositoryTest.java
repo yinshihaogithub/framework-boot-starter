@@ -179,8 +179,29 @@ class AdminSystemRepositoryTest {
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("system role menu insert failed");
         assertThat(mapper.operations).containsExactly(
+                "countRoleById:9",
                 "deleteRoleMenus:9",
                 "insertRoleMenu:9=11");
+    }
+
+    @Test
+    void replaceRoleMenusReturnsFalseWhenRoleDoesNotExist() {
+        mapper.roleCountById = 0;
+
+        boolean replaced = repository.replaceRoleMenus(9L, List.of(11L));
+
+        assertThat(replaced).isFalse();
+        assertThat(mapper.operations).containsExactly("countRoleById:9");
+    }
+
+    @Test
+    void replaceRoleMenusReturnsTrueWhenClearingExistingRoleMenus() {
+        boolean replaced = repository.replaceRoleMenus(9L, null);
+
+        assertThat(replaced).isTrue();
+        assertThat(mapper.operations).containsExactly(
+                "countRoleById:9",
+                "deleteRoleMenus:9");
     }
 
     @Test
@@ -362,6 +383,7 @@ class AdminSystemRepositoryTest {
         private int insertConfigResult = 1;
         private int insertUserRoleResult = 1;
         private int insertRoleMenuResult = 1;
+        private long roleCountById = 1L;
         private Integer deleteDeptIdsResult;
         private Integer deleteMenuIdsResult;
         private String dictCodeById = "sys_status";
@@ -458,6 +480,10 @@ class AdminSystemRepositoryTest {
                         case "deleteRoleMenus" -> {
                             operations.add("deleteRoleMenus:" + args[0]);
                             yield 1;
+                        }
+                        case "countRoleById" -> {
+                            operations.add("countRoleById:" + args[0]);
+                            yield roleCountById;
                         }
                         case "clearUserDeptIds" -> {
                             operations.add("clearUserDeptIds:" + args[0]);
