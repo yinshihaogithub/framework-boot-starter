@@ -35,8 +35,8 @@ class WebhookNotifyChannelTest {
     void returnsFailureForBlankTitleOrContentBeforeSending() {
         WebhookNotifyChannel channel = new WebhookNotifyChannel(new NotifyProperties(), new ObjectMapper());
 
-        NotifyResult blankTitle = channel.send(message("https://example.com/hook").setTitle(" "));
-        NotifyResult blankContent = channel.send(message("https://example.com/hook").setContent(" "));
+        NotifyResult blankTitle = channel.send(message("https://example.com/hook").setTitle("\u3000"));
+        NotifyResult blankContent = channel.send(message("https://example.com/hook").setContent("\u00A0"));
 
         assertThat(blankTitle.isSuccess()).isFalse();
         assertThat(blankTitle.getMessage()).contains("title must not be blank");
@@ -100,7 +100,7 @@ class WebhookNotifyChannelTest {
         TraceContext.putTraceId("trace-webhook-001");
         try {
             NotifyProperties properties = new NotifyProperties();
-            properties.getWebhook().setUrl("http://127.0.0.1:" + server.getAddress().getPort() + "/hook");
+            properties.getWebhook().setUrl("\u3000http://127.0.0.1:" + server.getAddress().getPort() + "/hook\u00A0");
             WebhookNotifyChannel channel = new WebhookNotifyChannel(properties, new ObjectMapper());
 
             NotifyResult result = channel.send(message(null));

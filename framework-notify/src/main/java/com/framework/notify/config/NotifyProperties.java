@@ -1,6 +1,7 @@
 package com.framework.notify.config;
 
 import com.framework.notify.model.NotifyChannelType;
+import com.framework.notify.support.NotifyTextSupport;
 import lombok.Data;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -38,12 +39,12 @@ public class NotifyProperties implements InitializingBean {
     }
 
     private void validateWebhookUrl(String url) {
-        if (url == null || url.isBlank()) {
+        if (!NotifyTextSupport.hasText(url)) {
             return;
         }
         URI uri;
         try {
-            uri = URI.create(url.trim());
+            uri = URI.create(NotifyTextSupport.trimBoundarySpace(url));
         } catch (IllegalArgumentException e) {
             throw new IllegalArgumentException("framework.notify.webhook.url must be a valid URI", e);
         }

@@ -160,11 +160,11 @@ class DefaultNotifyServiceTest {
         DefaultNotifyService notifyService = new DefaultNotifyService(properties, List.of(logChannel));
 
         NotifyResult blankTitle = notifyService.send(new NotifyMessage()
-                .setTitle(" ")
+                .setTitle("\u3000")
                 .setContent("SKU-1001 is low"));
         NotifyResult blankContent = notifyService.send(new NotifyMessage()
                 .setTitle("inventory alarm")
-                .setContent(" "));
+                .setContent("\u00A0"));
 
         assertThat(blankTitle.isSuccess()).isFalse();
         assertThat(blankTitle.getMessage()).contains("title must not be blank");
@@ -199,10 +199,10 @@ class DefaultNotifyServiceTest {
         RecordingNotifyChannel logChannel = new RecordingNotifyChannel(NotifyChannelType.LOG);
         DefaultNotifyService notifyService = new DefaultNotifyService(properties, List.of(logChannel));
         NotifyMessage message = new NotifyMessage()
-                .setTitle(" inventory alarm ")
-                .setContent(" SKU-1001 is low ")
-                .setWebhookUrl(" https://example.com/hook ")
-                .setReceivers(Arrays.asList(" ops@example.com ", " ", null, "admin@example.com"));
+                .setTitle("\u00A0inventory alarm\u3000")
+                .setContent("\u3000SKU-1001 is low\u00A0")
+                .setWebhookUrl("\u00A0https://example.com/hook\u3000")
+                .setReceivers(Arrays.asList("\u3000ops@example.com\u00A0", "\u00A0", null, "admin@example.com"));
 
         NotifyResult result = notifyService.send(message);
 

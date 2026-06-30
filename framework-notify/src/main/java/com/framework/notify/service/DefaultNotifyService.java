@@ -5,6 +5,7 @@ import com.framework.notify.config.NotifyProperties;
 import com.framework.notify.model.NotifyChannelType;
 import com.framework.notify.model.NotifyMessage;
 import com.framework.notify.model.NotifyResult;
+import com.framework.notify.support.NotifyTextSupport;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.ArrayList;
@@ -13,7 +14,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import org.springframework.util.StringUtils;
 
 /**
  * Default notification facade implementation.
@@ -68,19 +68,19 @@ public class DefaultNotifyService implements NotifyService {
         if (message == null) {
             return NotifyResult.failure(channelType, "message must not be null");
         }
-        if (!StringUtils.hasText(message.getTitle())) {
+        if (!NotifyTextSupport.hasText(message.getTitle())) {
             return NotifyResult.failure(channelType, "title must not be blank");
         }
-        if (!StringUtils.hasText(message.getContent())) {
+        if (!NotifyTextSupport.hasText(message.getContent())) {
             return NotifyResult.failure(channelType, "content must not be blank");
         }
         return null;
     }
 
     private void normalize(NotifyMessage message) {
-        message.setTitle(trimToNull(message.getTitle()));
-        message.setContent(trimToNull(message.getContent()));
-        message.setWebhookUrl(trimToNull(message.getWebhookUrl()));
+        message.setTitle(NotifyTextSupport.trimToNull(message.getTitle()));
+        message.setContent(NotifyTextSupport.trimToNull(message.getContent()));
+        message.setWebhookUrl(NotifyTextSupport.trimToNull(message.getWebhookUrl()));
         message.setReceivers(normalizeReceivers(message.getReceivers()));
         if (message.getTemplateParams() == null) {
             message.setTemplateParams(new HashMap<>());
@@ -93,19 +93,12 @@ public class DefaultNotifyService implements NotifyService {
         }
         List<String> normalizedReceivers = new ArrayList<>();
         for (String receiver : receivers) {
-            String normalizedReceiver = trimToNull(receiver);
+            String normalizedReceiver = NotifyTextSupport.trimToNull(receiver);
             if (normalizedReceiver != null) {
                 normalizedReceivers.add(normalizedReceiver);
             }
         }
         return normalizedReceivers;
-    }
-
-    private String trimToNull(String value) {
-        if (!StringUtils.hasText(value)) {
-            return null;
-        }
-        return value.trim();
     }
 
     private void registerChannels(List<NotifyChannel> channels) {

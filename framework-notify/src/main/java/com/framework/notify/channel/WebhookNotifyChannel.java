@@ -7,8 +7,8 @@ import com.framework.notify.config.NotifyProperties;
 import com.framework.notify.model.NotifyChannelType;
 import com.framework.notify.model.NotifyMessage;
 import com.framework.notify.model.NotifyResult;
+import com.framework.notify.support.NotifyTextSupport;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.util.StringUtils;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -49,15 +49,15 @@ public class WebhookNotifyChannel implements NotifyChannel {
         if (validationResult != null) {
             return validationResult;
         }
-        String url = StringUtils.hasText(message.getWebhookUrl())
-                ? message.getWebhookUrl()
-                : properties.getWebhook().getUrl();
-        if (!StringUtils.hasText(url)) {
+        String url = NotifyTextSupport.hasText(message.getWebhookUrl())
+                ? NotifyTextSupport.trimBoundarySpace(message.getWebhookUrl())
+                : NotifyTextSupport.trimToNull(properties.getWebhook().getUrl());
+        if (!NotifyTextSupport.hasText(url)) {
             return NotifyResult.failure(type(), "webhook url is empty");
         }
         URI uri;
         try {
-            uri = URI.create(url.trim());
+            uri = URI.create(url);
         } catch (IllegalArgumentException e) {
             return NotifyResult.failure(type(), "webhook url is invalid");
         }
@@ -96,10 +96,10 @@ public class WebhookNotifyChannel implements NotifyChannel {
         if (message == null) {
             return NotifyResult.failure(type(), "message must not be null");
         }
-        if (!StringUtils.hasText(message.getTitle())) {
+        if (!NotifyTextSupport.hasText(message.getTitle())) {
             return NotifyResult.failure(type(), "title must not be blank");
         }
-        if (!StringUtils.hasText(message.getContent())) {
+        if (!NotifyTextSupport.hasText(message.getContent())) {
             return NotifyResult.failure(type(), "content must not be blank");
         }
         return null;
