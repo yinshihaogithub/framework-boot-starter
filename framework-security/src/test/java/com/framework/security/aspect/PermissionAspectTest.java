@@ -58,6 +58,37 @@ class PermissionAspectTest {
     }
 
     @Test
+    void trimsRoleAndPermissionValuesBeforeChecking() {
+        UserContextHolder.set(new LoginUser()
+                .setUserId(1L)
+                .setRoles(new String[]{" ADMIN "})
+                .setPermissions(new String[]{" user:edit "}));
+        TrimmedRequirementService service = proxy(new TrimmedRequirementService());
+
+        assertThat(service.update()).isEqualTo("ok");
+    }
+
+    @Test
+    void emptyRoleConfigurationFailsClosed() {
+        UserContextHolder.set(new LoginUser().setUserId(1L).setRoles(new String[]{"ADMIN"}));
+        EmptyRoleService service = proxy(new EmptyRoleService());
+
+        assertThatThrownBy(service::adminOnly)
+                .isInstanceOf(PermissionException.class)
+                .hasMessageContaining("角色配置不能为空");
+    }
+
+    @Test
+    void emptyPermissionConfigurationFailsClosed() {
+        UserContextHolder.set(new LoginUser().setUserId(1L).setPermissions(new String[]{"user:edit"}));
+        EmptyPermissionService service = proxy(new EmptyPermissionService());
+
+        assertThatThrownBy(service::edit)
+                .isInstanceOf(PermissionException.class)
+                .hasMessageContaining("权限配置不能为空");
+    }
+
+    @Test
     void requireLoginStillFailsWhenNoUserContextExists() {
         LoginRequiredService service = proxy(new LoginRequiredService());
 
@@ -105,6 +136,28 @@ class PermissionAspectTest {
     public static class LoginRequiredService {
         @RequireLogin
         public String profile() {
+            return "ok";
+        }
+    }
+
+    public static class TrimmedRequirementService {
+        @RequireRole("ADMIN")
+        @RequirePermission("user:edit")
+        public String update() {
+            return "ok";
+        }
+    }
+
+    public static class EmptyRoleService {
+        @RequireRole(value = {" ", ""}, logicalAnd = true)
+        public String adminOnly() {
+            return "ok";
+        }
+    }
+
+    public static class EmptyPermissionService {
+        @RequirePermission(value = {" ", ""}, logicalAnd = true)
+        public String edit() {
             return "ok";
         }
     }

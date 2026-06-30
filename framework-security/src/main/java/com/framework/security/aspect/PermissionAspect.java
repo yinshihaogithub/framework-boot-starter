@@ -19,6 +19,7 @@ import org.springframework.stereotype.Component;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -69,9 +70,11 @@ public class PermissionAspect {
     }
 
     private void checkRoles(LoginUser user, RequireRole annotation) {
-        String[] required = annotation.value();
-        Set<String> userRoles = Arrays.stream(user.getRoles() != null ? user.getRoles() : new String[0])
-                .collect(Collectors.toSet());
+        List<String> required = normalizeItems(annotation.value());
+        if (required.isEmpty()) {
+            throw new PermissionException("角色配置不能为空");
+        }
+        Set<String> userRoles = normalizeItems(user.getRoles()).stream().collect(Collectors.toSet());
 
         if (annotation.logicalAnd()) {
             // 需要全部满足
@@ -82,18 +85,19 @@ public class PermissionAspect {
             }
         } else {
             // 满足任一即可
-            boolean hasAny = Arrays.stream(required).anyMatch(userRoles::contains);
+            boolean hasAny = required.stream().anyMatch(userRoles::contains);
             if (!hasAny) {
-                throw new PermissionException("缺少必要角色: " + Arrays.toString(required));
+                throw new PermissionException("缺少必要角色: " + required);
             }
         }
     }
 
     private void checkPermissions(LoginUser user, RequirePermission annotation) {
-        String[] required = annotation.value();
-        Set<String> userPermissions = Arrays.stream(
-                        user.getPermissions() != null ? user.getPermissions() : new String[0])
-                .collect(Collectors.toSet());
+        List<String> required = normalizeItems(annotation.value());
+        if (required.isEmpty()) {
+            throw new PermissionException("权限配置不能为空");
+        }
+        Set<String> userPermissions = normalizeItems(user.getPermissions()).stream().collect(Collectors.toSet());
 
         if (annotation.logicalAnd()) {
             for (String perm : required) {
@@ -102,11 +106,18 @@ public class PermissionAspect {
                 }
             }
         } else {
-            boolean hasAny = Arrays.stream(required).anyMatch(userPermissions::contains);
+            boolean hasAny = required.stream().anyMatch(userPermissions::contains);
             if (!hasAny) {
-                throw new PermissionException("缺少必要权限: " + Arrays.toString(required));
+                throw new PermissionException("缺少必要权限: " + required);
             }
         }
+    }
+
+    private List<String> normalizeItems(String[] values) {
+        return Arrays.stream(values != null ? values : new String[0])
+                .filter(value -> value != null && !value.isBlank())
+                .map(String::trim)
+                .toList();
     }
 
     private <A extends Annotation> A findAnnotation(Method method, Class<?> targetClass, Class<A> annotationType) {
