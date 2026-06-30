@@ -151,6 +151,33 @@ class DeadLetterHandlerTest {
     }
 
     @Test
+    void recordConsumeFailureStoresBoundedStackSummary() {
+        InMemoryRepository repository = new InMemoryRepository();
+        DeadLetterHandler handler = new DeadLetterHandler(repository, new MqProperties());
+        IllegalStateException exception = new IllegalStateException("database unavailable");
+        exception.setStackTrace(stackTrace(100));
+
+        handler.recordConsumeFailure(
+                "msg-3",
+                "order.exchange",
+                "order.created",
+                "order.queue",
+                "{\"id\":3}",
+                exception,
+                1,
+                3
+        );
+
+        MqFailedMessage record = repository.saved().get(0);
+        assertThat(record.getErrorStack())
+                .contains("java.lang.IllegalStateException: database unavailable")
+                .contains("at com.framework.demo.Service0.handle(Service0.java:10)")
+                .contains("... 80 more")
+                .doesNotContain("Service99");
+        assertThat(record.getErrorStack()).hasSizeLessThanOrEqualTo(4000);
+    }
+
+    @Test
     void removeRecordKeepsMemoryWhenRepositoryDeleteFails() {
         InMemoryRepository repository = new InMemoryRepository(List.of(
                 failedMessage(1L, MqFailedMessage.STATUS_EXHAUSTED)));
@@ -263,6 +290,18 @@ class DeadLetterHandlerTest {
         return MqFailedMessage.STATUS_SUCCESS.equals(message.getStatus())
                 || MqFailedMessage.STATUS_EXHAUSTED.equals(message.getStatus())
                 || MqFailedMessage.STATUS_MANUAL.equals(message.getStatus());
+    }
+
+    private static StackTraceElement[] stackTrace(int size) {
+        StackTraceElement[] stackTrace = new StackTraceElement[size];
+        for (int i = 0; i < size; i++) {
+            stackTrace[i] = new StackTraceElement(
+                    "com.framework.demo.Service" + i,
+                    "handle",
+                    "Service" + i + ".java",
+                    10 + i);
+        }
+        return stackTrace;
     }
 
     private static class RecordingChannel {

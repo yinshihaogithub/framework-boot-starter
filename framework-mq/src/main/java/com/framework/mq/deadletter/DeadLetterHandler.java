@@ -27,6 +27,10 @@ import java.util.concurrent.ConcurrentMap;
 @Slf4j
 public class DeadLetterHandler {
 
+    private static final int MAX_ERROR_STACK_LENGTH = 4000;
+    private static final int MAX_STACK_FRAMES = 20;
+    private static final String STACK_TRUNCATED_SUFFIX = "\n... stack trace truncated";
+
     private final MqFailedMessageRepository repository;
     private final MqProperties properties;
     private final ObjectMapper objectMapper;
@@ -287,9 +291,46 @@ public class DeadLetterHandler {
         if (e == null) {
             return null;
         }
-        java.io.StringWriter sw = new java.io.StringWriter();
-        e.printStackTrace(new java.io.PrintWriter(sw));
-        return sw.toString();
+        StringBuilder builder = new StringBuilder();
+        appendStackTrace(builder, e);
+        return truncate(builder.toString(), MAX_ERROR_STACK_LENGTH);
+    }
+
+    private void appendStackTrace(StringBuilder builder, Throwable throwable) {
+        appendLine(builder, throwableHeader(throwable));
+        StackTraceElement[] stackTrace = throwable.getStackTrace();
+        int frameCount = Math.min(stackTrace.length, MAX_STACK_FRAMES);
+        for (int i = 0; i < frameCount; i++) {
+            appendLine(builder, "\tat " + stackTrace[i]);
+        }
+        if (stackTrace.length > frameCount) {
+            appendLine(builder, "\t... " + (stackTrace.length - frameCount) + " more");
+        }
+        Throwable cause = throwable.getCause();
+        if (cause != null && cause != throwable) {
+            appendLine(builder, "Caused by:");
+            appendStackTrace(builder, cause);
+        }
+    }
+
+    private void appendLine(StringBuilder builder, String line) {
+        builder.append(line).append('\n');
+    }
+
+    private String throwableHeader(Throwable throwable) {
+        String message = throwable.getMessage();
+        if (message == null || message.isBlank()) {
+            return throwable.getClass().getName();
+        }
+        return throwable.getClass().getName() + ": " + message;
+    }
+
+    private String truncate(String value, int maxLength) {
+        if (value == null || value.length() <= maxLength) {
+            return value;
+        }
+        int keepLength = Math.max(0, maxLength - STACK_TRUNCATED_SUFFIX.length());
+        return value.substring(0, keepLength) + STACK_TRUNCATED_SUFFIX;
     }
 
     private String failureMessage(Throwable exception) {
