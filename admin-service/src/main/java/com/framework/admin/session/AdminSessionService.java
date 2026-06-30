@@ -66,7 +66,8 @@ public class AdminSessionService {
                     userId, safeDeviceId, e.getMessage());
             return ActionResult.failure(ResultCode.SERVICE_ERROR.getCode(), "强制下线失败");
         }
-        auditSuccess(request, "强制下线", "DELETE", "userId", userId, "deviceId", safeDeviceId);
+        auditSuccess(request, "强制下线", "DELETE",
+                "userId", userId, "deviceId", safeDeviceId, "operator", currentOperatorName());
         return ActionResult.success("已强制下线");
     }
 
@@ -90,6 +91,15 @@ public class AdminSessionService {
 
     private String text(String value) {
         return AdminTextSupport.trimToNull(value);
+    }
+
+    private String text(String value, String fallback) {
+        String text = text(value);
+        return text == null ? fallback : text;
+    }
+
+    private String currentOperatorName() {
+        return text(UserContextHolder.getUsername(), "admin");
     }
 
     public record ActionResult<T>(boolean success, int code, String message, T data) {

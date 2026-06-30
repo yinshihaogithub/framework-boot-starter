@@ -12,6 +12,7 @@ import org.springframework.mock.web.MockHttpServletRequest;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -53,6 +54,27 @@ class AdminSessionServiceTest {
         assertThat(result.data()).isEqualTo("已强制下线");
         assertThat(sessionManager.kicked).containsExactly("2:web");
         assertThat(auditService.successActions).containsExactly("在线会话:强制下线:DELETE");
+    }
+
+    @Test
+    void kickSessionAuditsCurrentOperator() {
+        UserContextHolder.set(new LoginUser().setUserId(1L).setUsername("alice").setDeviceId("admin-web"));
+        sessionManager.sessions = List.of(new SessionManager.OnlineSession(2L, "bob", "1", "web", 100L, 3600L));
+
+        AdminSessionService.ActionResult<String> result = sessionService.kickSession(2L, "web", null);
+
+        assertThat(result.success()).isTrue();
+        assertThat(auditService.params).containsEntry("operator", "alice");
+    }
+
+    @Test
+    void kickSessionDefaultsOperatorWhenUserContextIsMissing() {
+        sessionManager.sessions = List.of(new SessionManager.OnlineSession(2L, "bob", "1", "web", 100L, 3600L));
+
+        AdminSessionService.ActionResult<String> result = sessionService.kickSession(2L, "web", null);
+
+        assertThat(result.success()).isTrue();
+        assertThat(auditService.params).containsEntry("operator", "admin");
     }
 
     @Test
@@ -183,14 +205,17 @@ class AdminSessionServiceTest {
     private static final class RecordingAuditService extends AdminAuditService {
 
         private final List<String> successActions = new ArrayList<>();
+        private Map<String, Object> params;
 
         private RecordingAuditService() {
             super(null, null);
         }
 
         @Override
+        @SuppressWarnings("unchecked")
         public void success(HttpServletRequest request, String module, String action, String operationType, Object params) {
             successActions.add(module + ":" + action + ":" + operationType);
+            this.params = (Map<String, Object>) params;
         }
     }
 
