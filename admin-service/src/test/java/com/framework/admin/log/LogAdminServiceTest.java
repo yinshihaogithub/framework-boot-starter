@@ -68,10 +68,22 @@ class LogAdminServiceTest {
                 operationLog(1L, "system", "OPERATION", true, "trace-a"),
                 operationLog(2L, "mq", "API", false, "trace-b")))), systemRepository(List.of()));
 
-        PageResult<OperationLogEntity> page = service.list(" system ", " OPERATION ", null, true, " trace-a ", 1, 20);
+        PageResult<OperationLogEntity> page = service.list(" system ", " operation ", null, true, " trace-a ", 1, 20);
 
         assertThat(page.getTotal()).isEqualTo(1);
         assertThat(page.getRecords()).extracting(OperationLogEntity::getId).containsExactly(1L);
+    }
+
+    @Test
+    void returnsEmptyPageForUnsupportedLogTypeFilter() {
+        LogAdminService service = new LogAdminService(provider(failingMapper()), systemRepository(List.of()));
+
+        PageResult<OperationLogEntity> page = service.list(null, "AUDIT", null, null, null, 1, 20);
+
+        assertThat(page.getPageNum()).isEqualTo(1);
+        assertThat(page.getPageSize()).isEqualTo(20);
+        assertThat(page.getTotal()).isZero();
+        assertThat(page.getRecords()).isEmpty();
     }
 
     @Test

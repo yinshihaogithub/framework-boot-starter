@@ -13,11 +13,15 @@ import org.springframework.stereotype.Service;
 
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 @Slf4j
 @Service
 public class LogAdminService {
+
+    private static final Set<String> SUPPORTED_LOG_TYPES = Set.of("OPERATION", "API");
 
     private final ObjectProvider<OperationLogMapper> mapperProvider;
     private final AdminSystemRepository systemRepository;
@@ -43,8 +47,11 @@ public class LogAdminService {
         int safePageNum = AdminPageSupport.safePageNum(pageNum);
         int safePageSize = AdminPageSupport.safePageSize(pageSize);
         String safeModule = trimToNull(module);
-        String safeLogType = trimToNull(logType);
+        String safeLogType = normalizeLogTypeFilter(logType);
         String safeTraceId = TraceContext.normalizeTraceId(traceId);
+        if (isInvalidLogTypeFilter(logType, safeLogType)) {
+            return PageResult.empty(safePageNum, safePageSize);
+        }
         if (hasText(traceId) && safeTraceId == null) {
             return PageResult.empty(safePageNum, safePageSize);
         }
@@ -90,6 +97,19 @@ public class LogAdminService {
 
     private boolean hasText(String value) {
         return value != null && !value.isBlank();
+    }
+
+    private String normalizeLogTypeFilter(String logType) {
+        String text = trimToNull(logType);
+        if (text == null) {
+            return null;
+        }
+        String normalized = text.toUpperCase(Locale.ROOT);
+        return SUPPORTED_LOG_TYPES.contains(normalized) ? normalized : null;
+    }
+
+    private boolean isInvalidLogTypeFilter(String originalLogType, String normalizedLogType) {
+        return hasText(originalLogType) && normalizedLogType == null;
     }
 
     private OperationLogMapper availableMapper() {
