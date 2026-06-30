@@ -19,6 +19,8 @@ import java.util.UUID;
  */
 public class DefaultLocalMessageService implements LocalMessageService {
 
+    private static final int MAX_ERROR_MESSAGE_LENGTH = 1024;
+
     private final LocalMessageRepository repository;
     private final LocalMessageProperties properties;
     private final Map<String, LocalMessageHandler> handlers;
@@ -257,7 +259,12 @@ public class DefaultLocalMessageService implements LocalMessageService {
         if (exception == null) {
             return "unknown error";
         }
-        return hasText(exception.getMessage()) ? exception.getMessage() : exception.getClass().getName();
+        String message = hasText(exception.getMessage()) ? exception.getMessage() : exception.getClass().getName();
+        String normalized = message.replaceAll("\\s+", " ").trim();
+        if (normalized.length() <= MAX_ERROR_MESSAGE_LENGTH) {
+            return normalized;
+        }
+        return normalized.substring(0, MAX_ERROR_MESSAGE_LENGTH);
     }
 
     private String generateMessageId() {

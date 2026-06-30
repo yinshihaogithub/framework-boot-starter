@@ -557,6 +557,27 @@ class DefaultLocalMessageServiceTest {
     }
 
     @Test
+    void retryDueMessagesStoresSingleLineBoundedFailureMessage() {
+        InMemoryLocalMessageRepository repository = new InMemoryLocalMessageRepository();
+        String longMessage = "first line\n" + "x".repeat(1500);
+        DefaultLocalMessageService service = new DefaultLocalMessageService(repository, properties(), List.of(handler(
+                "order.created",
+                message -> {
+                    throw new IllegalStateException(longMessage);
+                }
+        )));
+        LocalMessage message = service.publish("order.created", "ORD-1", "{}");
+
+        service.retryDueMessages();
+
+        LocalMessage failure = repository.findById(message.getId()).orElseThrow();
+        assertThat(failure.getStatus()).isEqualTo(LocalMessageStatus.PENDING);
+        assertThat(failure.getErrorMessage()).hasSize(1024);
+        assertThat(failure.getErrorMessage()).startsWith("first line ");
+        assertThat(failure.getErrorMessage()).doesNotContain("\n");
+    }
+
+    @Test
     void retryDueMessagesProtectsRetryPolicyFromHandlerMutationOnFailure() {
         InMemoryLocalMessageRepository repository = new InMemoryLocalMessageRepository();
         DefaultLocalMessageService service = new DefaultLocalMessageService(repository, properties(), List.of(handler(
