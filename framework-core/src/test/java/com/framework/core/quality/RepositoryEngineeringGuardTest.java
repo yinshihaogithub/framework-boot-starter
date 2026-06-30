@@ -1252,6 +1252,22 @@ class RepositoryEngineeringGuardTest {
     }
 
     @Test
+    void productionSourceDoesNotUseMathRandom() throws Exception {
+        try (Stream<Path> files = Files.walk(root)) {
+            List<Path> sourceFiles = files
+                    .filter(this::isProductionSourceFile)
+                    .toList();
+
+            assertThat(sourceFiles).isNotEmpty();
+            for (Path file : sourceFiles) {
+                assertThat(read(file))
+                        .as(file + " must use crypto, SecureRandom or ThreadLocalRandom instead of Math.random")
+                        .doesNotContain("Math.random(");
+            }
+        }
+    }
+
+    @Test
     void productionSourceSpecifiesCharsetWhenEncodingOrDecodingBytes() throws Exception {
         try (Stream<Path> files = Files.walk(root)) {
             List<Path> sourceFiles = files
@@ -1461,6 +1477,15 @@ class RepositoryEngineeringGuardTest {
                 || value.contains("/target/")
                 || value.contains("/node_modules/")
                 || value.contains("/dist/");
+    }
+
+    private boolean isProductionSourceFile(Path path) {
+        String value = path.toString();
+        return Files.isRegularFile(path)
+                && !isIgnoredRepositoryPath(path)
+                && !value.contains("/src/test/")
+                && (value.contains("/src/main/java/") || value.contains("/frontend/admin-web/src/"))
+                && (value.endsWith(".java") || value.endsWith(".ts") || value.endsWith(".vue"));
     }
 
     private Path repositoryRoot() {

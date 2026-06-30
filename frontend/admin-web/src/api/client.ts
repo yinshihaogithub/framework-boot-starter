@@ -410,11 +410,32 @@ function notifyAuthExpired(error: ApiError) {
   window.dispatchEvent(new CustomEvent<ApiError>(AUTH_EXPIRED_EVENT, { detail: error }))
 }
 
+let fallbackTraceSequence = 0
+
+function bytesToHex(bytes: Uint8Array) {
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
+}
+
+function paddedHex(value: number, length: number) {
+  return Math.max(0, value).toString(16).padStart(length, '0').slice(-length)
+}
+
 function createTraceId() {
-  if (globalThis.crypto?.randomUUID) {
-    return globalThis.crypto.randomUUID().replace(/-/g, '')
+  const crypto = globalThis.crypto
+  if (crypto?.randomUUID) {
+    return crypto.randomUUID().replace(/-/g, '')
   }
-  return `web-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+  if (crypto?.getRandomValues) {
+    const bytes = new Uint8Array(16)
+    crypto.getRandomValues(bytes)
+    return bytesToHex(bytes)
+  }
+  fallbackTraceSequence = (fallbackTraceSequence + 1) % Number.MAX_SAFE_INTEGER
+  return [
+    paddedHex(Date.now(), 12),
+    paddedHex(Math.trunc(globalThis.performance?.now() ?? 0), 8),
+    paddedHex(fallbackTraceSequence, 12)
+  ].join('')
 }
 
 http.interceptors.request.use((config) => {
