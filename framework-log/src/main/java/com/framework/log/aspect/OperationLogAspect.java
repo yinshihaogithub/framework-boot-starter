@@ -3,6 +3,8 @@ package com.framework.log.aspect;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.framework.core.trace.TraceContext;
 import com.framework.log.annotation.OperationLog;
+import com.framework.log.entity.OperationLogEntity;
+import com.framework.log.service.OperationLogStorageService;
 import com.framework.log.util.LogDesensitizeUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
@@ -15,6 +17,7 @@ import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.lang.reflect.Method;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -30,6 +33,12 @@ import java.util.concurrent.CompletableFuture;
 public class OperationLogAspect {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+
+    private final OperationLogStorageService storageService;
+
+    public OperationLogAspect(OperationLogStorageService storageService) {
+        this.storageService = storageService;
+    }
 
     @Around("@annotation(com.framework.log.annotation.OperationLog)")
     public Object around(ProceedingJoinPoint joinPoint) throws Throwable {
@@ -71,49 +80,63 @@ public class OperationLogAspect {
     private void recordLog(OperationLog annotation, Method method, Object[] args,
                            Object result, Throwable error, long elapsed,
                            String traceId, RequestInfo requestInfo) {
+        OperationLogEntity entity = buildEntity(annotation, method, args, result, error, elapsed, traceId, requestInfo);
         Map<String, Object> logData = new HashMap<>();
-        logData.put("module", annotation.module());
-        logData.put("action", annotation.action());
-        logData.put("type", annotation.type().name());
-        logData.put("method", method.getDeclaringClass().getSimpleName() + "." + method.getName());
-        logData.put("elapsedMs", elapsed);
-        logData.put("success", error == null);
-        if (traceId != null && !traceId.isBlank()) {
-            logData.put("traceId", traceId);
-        }
-
-        // 请求参数（脱敏后记录）
-        if (annotation.saveParam() && args != null && args.length > 0) {
-            try {
-                String paramsJson = OBJECT_MAPPER.writeValueAsString(args);
-                logData.put("params", LogDesensitizeUtils.desensitize(paramsJson));
-            } catch (Exception e) {
-                logData.put("params", "[序列化失败]");
-            }
-        }
-
-        // 返回结果（脱敏后记录）
-        if (annotation.saveResult() && result != null) {
-            try {
-                String resultJson = OBJECT_MAPPER.writeValueAsString(result);
-                logData.put("result", LogDesensitizeUtils.desensitize(resultJson));
-            } catch (Exception e) {
-                logData.put("result", "[序列化失败]");
-            }
-        }
-
-        // 错误信息
-        if (error != null) {
-            logData.put("error", error.getMessage());
-        }
-
-        if (requestInfo != null) {
-            logData.put("uri", requestInfo.uri());
-            logData.put("method", requestInfo.method());
-            logData.put("ip", requestInfo.ip());
-        }
-
+        logData.put("module", entity.getModule());
+        logData.put("action", entity.getAction());
+        logData.put("logType", entity.getLogType());
+        logData.put("operationType", entity.getOperationType());
+        logData.put("method", entity.getMethod());
+        logData.put("elapsedMs", entity.getElapsedMs());
+        logData.put("success", entity.getSuccess());
+        logData.put("traceId", entity.getTraceId());
+        logData.put("uri", entity.getUri());
+        logData.put("httpMethod", entity.getHttpMethod());
+        logData.put("ip", entity.getClientIp());
+        logData.put("params", entity.getParams());
+        logData.put("result", entity.getResult());
+        logData.put("error", entity.getErrorMessage());
         log.info("[操作日志] {}", toJson(logData));
+        storageService.saveAsync(entity);
+    }
+
+    private OperationLogEntity buildEntity(OperationLog annotation, Method method, Object[] args,
+                                           Object result, Throwable error, long elapsed,
+                                           String traceId, RequestInfo requestInfo) {
+        OperationLogEntity entity = new OperationLogEntity();
+        entity.setLogType(error == null ? "OPERATION" : "EXCEPTION");
+        entity.setModule(annotation.module());
+        entity.setAction(annotation.action());
+        entity.setOperationType(annotation.type().name());
+        entity.setMethod(method.getDeclaringClass().getSimpleName() + "." + method.getName());
+        entity.setSuccess(error == null);
+        entity.setElapsedMs(elapsed);
+        entity.setTraceId(TraceContext.normalizeTraceId(traceId));
+        entity.setCreateTime(new Date());
+
+        if (annotation.saveParam() && args != null && args.length > 0) {
+            entity.setParams(serializeAndDesensitize(args));
+        }
+        if (annotation.saveResult() && result != null) {
+            entity.setResult(serializeAndDesensitize(result));
+        }
+        if (error != null) {
+            entity.setErrorMessage(error.getMessage());
+        }
+        if (requestInfo != null) {
+            entity.setUri(requestInfo.uri());
+            entity.setHttpMethod(requestInfo.method());
+            entity.setClientIp(requestInfo.ip());
+        }
+        return entity;
+    }
+
+    private String serializeAndDesensitize(Object value) {
+        try {
+            return LogDesensitizeUtils.desensitize(OBJECT_MAPPER.writeValueAsString(value));
+        } catch (Exception e) {
+            return "[序列化失败]";
+        }
     }
 
     private RequestInfo getCurrentRequestInfo() {
