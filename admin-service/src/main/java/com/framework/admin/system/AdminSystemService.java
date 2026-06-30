@@ -22,6 +22,7 @@ import com.framework.admin.system.AdminSystemModels.UserCreateRequest;
 import com.framework.admin.system.AdminSystemModels.UserStatusRequest;
 import com.framework.admin.system.AdminSystemModels.UserUpdateRequest;
 import com.framework.admin.support.AdminPageSupport;
+import com.framework.admin.support.AdminTextSupport;
 import com.framework.core.result.PageResult;
 import com.framework.core.result.Result;
 import com.framework.core.result.ResultCode;
@@ -265,7 +266,7 @@ public class AdminSystemService {
         if (!isValidStatus(request.getStatus())) {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), "状态只能是 ENABLED 或 DISABLED");
         }
-        if (isBuiltInAdmin(id) && "DISABLED".equals(request.getStatus())) {
+        if (isBuiltInAdmin(id) && "DISABLED".equals(normalizeStatus(request.getStatus()))) {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), "内置管理员不能禁用");
         }
         Result<String> roleIdValidation = validatePositiveIds(request.getRoleIds(), "角色");
@@ -296,7 +297,8 @@ public class AdminSystemService {
         if (invalidId != null) {
             return invalidId;
         }
-        String status = request == null || isBlank(request.getStatus()) ? "DISABLED" : request.getStatus();
+        String status = normalizeStatus(request == null ? null : request.getStatus());
+        status = status == null ? "DISABLED" : status;
         if (!"ENABLED".equals(status) && !"DISABLED".equals(status)) {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), "状态只能是 ENABLED 或 DISABLED");
         }
@@ -422,7 +424,7 @@ public class AdminSystemService {
         if (validation != null) {
             return validation;
         }
-        if (isBuiltInSuperAdminRole(id) && "DISABLED".equals(request.getStatus())) {
+        if (isBuiltInSuperAdminRole(id) && "DISABLED".equals(normalizeStatus(request.getStatus()))) {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), "内置超级管理员角色不能禁用");
         }
         try {
@@ -785,19 +787,15 @@ public class AdminSystemService {
     }
 
     private boolean isBlank(String value) {
-        return value == null || value.isBlank();
+        return !AdminTextSupport.hasText(value);
     }
 
     private String text(String value) {
-        return isBlank(value) ? null : value.trim();
+        return AdminTextSupport.trimToNull(value);
     }
 
     private String normalizeStatusFilter(String status) {
-        String text = text(status);
-        if (text == null) {
-            return null;
-        }
-        String normalized = text.toUpperCase(Locale.ROOT);
+        String normalized = normalizeStatus(status);
         return "ENABLED".equals(normalized) || "DISABLED".equals(normalized) ? normalized : null;
     }
 
@@ -839,7 +837,13 @@ public class AdminSystemService {
     }
 
     private boolean isValidStatus(String status) {
-        return isBlank(status) || "ENABLED".equals(status) || "DISABLED".equals(status);
+        String normalized = normalizeStatus(status);
+        return normalized == null || "ENABLED".equals(normalized) || "DISABLED".equals(normalized);
+    }
+
+    private String normalizeStatus(String status) {
+        String text = text(status);
+        return text == null ? null : text.toUpperCase(Locale.ROOT);
     }
 
     private boolean isBuiltInAdmin(Long id) {
@@ -1019,13 +1023,19 @@ public class AdminSystemService {
         if (request == null || isBlank(request.getMenuType()) || isBlank(request.getMenuName())) {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), "菜单类型和名称不能为空");
         }
-        if (!"MENU".equals(request.getMenuType()) && !"BUTTON".equals(request.getMenuType())) {
+        String menuType = normalizeMenuType(request.getMenuType());
+        if (!"MENU".equals(menuType) && !"BUTTON".equals(menuType)) {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), "菜单类型只能是 MENU 或 BUTTON");
         }
         if (request.getParentId() != null && request.getParentId() < 0) {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), "上级菜单ID不能小于0");
         }
         return null;
+    }
+
+    private String normalizeMenuType(String menuType) {
+        String text = text(menuType);
+        return text == null ? null : text.toUpperCase(Locale.ROOT);
     }
 
     private Result<String> validateMenuParent(Long currentMenuId, MenuRequest request) {

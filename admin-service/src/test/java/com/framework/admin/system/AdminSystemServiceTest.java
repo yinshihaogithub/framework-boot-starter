@@ -53,7 +53,7 @@ class AdminSystemServiceTest {
                 .setPasswordHash("secret"));
         repository.userCount = 1;
 
-        PageResult<AdminUser> page = service.users(" alice ", " enabled ", -1, 500);
+        PageResult<AdminUser> page = service.users("\u00A0alice\u3000", "\u3000enabled\u00A0", -1, 500);
 
         assertThat(page.getPageNum()).isEqualTo(1);
         assertThat(page.getPageSize()).isEqualTo(200);
@@ -306,7 +306,7 @@ class AdminSystemServiceTest {
     @Test
     void updateUserRejectsDisablingBuiltInAdmin() {
         UserUpdateRequest request = new UserUpdateRequest();
-        request.setStatus("DISABLED");
+        request.setStatus("\u00A0disabled\u3000");
 
         Result<String> result = service.updateUser(1L, request, null);
 
@@ -318,13 +318,25 @@ class AdminSystemServiceTest {
     @Test
     void updateUserStatusRejectsDisablingBuiltInAdmin() {
         UserStatusRequest request = new UserStatusRequest();
-        request.setStatus("DISABLED");
+        request.setStatus("\u3000disabled\u00A0");
 
         Result<String> result = service.updateUserStatus(1L, request, null);
 
         assertThat(result.getCode()).isEqualTo(ResultCode.PARAM_ERROR.getCode());
         assertThat(result.getMessage()).isEqualTo("内置管理员不能禁用");
         assertThat(repository.updatedUserStatusId).isNull();
+    }
+
+    @Test
+    void updateUserStatusNormalizesBoundarySpaceBeforeRepositoryWrite() {
+        UserStatusRequest request = new UserStatusRequest();
+        request.setStatus("\u00A0enabled\u3000");
+
+        Result<String> result = service.updateUserStatus(9L, request, null);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(repository.updatedUserStatusId).isEqualTo(9L);
+        assertThat(repository.updatedUserStatus).isEqualTo("ENABLED");
     }
 
     @Test
@@ -554,11 +566,11 @@ class AdminSystemServiceTest {
     @Test
     void menuValidationRejectsInvalidTypeAndSelfParent() {
         MenuRequest invalidType = new MenuRequest();
-        invalidType.setMenuType("PAGE");
+        invalidType.setMenuType("\u00A0page\u3000");
         invalidType.setMenuName("首页");
 
         MenuRequest selfParent = new MenuRequest();
-        selfParent.setMenuType("MENU");
+        selfParent.setMenuType("\u3000menu\u00A0");
         selfParent.setMenuName("首页");
         selfParent.setParentId(7L);
 
@@ -689,7 +701,8 @@ class AdminSystemServiceTest {
     @Test
     void createTenantValidatesRequiredFields() {
         TenantRequest request = new TenantRequest();
-        request.setTenantCode("tenant-a");
+        request.setTenantCode("\u00A0tenant-a\u3000");
+        request.setTenantName("\u00A0\u3000");
 
         Result<Long> result = service.createTenant(request, null);
 

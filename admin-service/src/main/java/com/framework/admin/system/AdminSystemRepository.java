@@ -1,5 +1,6 @@
 package com.framework.admin.system;
 
+import com.framework.admin.support.AdminTextSupport;
 import com.framework.admin.system.AdminSystemMapper.RoleRow;
 import com.framework.admin.system.AdminSystemModels.AdminUser;
 import com.framework.admin.system.AdminSystemModels.ConfigItem;
@@ -25,6 +26,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Supplier;
@@ -62,13 +64,13 @@ public class AdminSystemRepository {
     }
 
     public List<AdminUser> listUsers(String keyword, String status, int pageNum, int pageSize) {
-        List<AdminUser> users = mapper.listUsers(like(keyword), text(status), offset(pageNum, pageSize), pageSize);
+        List<AdminUser> users = mapper.listUsers(like(keyword), upperText(status), offset(pageNum, pageSize), pageSize);
         users.forEach(this::enrichUser);
         return users;
     }
 
     public long countUsers(String keyword, String status) {
-        return mapper.countUsers(like(keyword), text(status));
+        return mapper.countUsers(like(keyword), upperText(status));
     }
 
     public Long createUser(AdminSystemModels.UserCreateRequest request, String passwordHash) {
@@ -78,10 +80,10 @@ public class AdminSystemRepository {
             AdminUser user = new AdminUser()
                     .setTenantId(DEFAULT_TENANT_ID)
                     .setDeptId(request.getDeptId())
-                    .setUsername(request.getUsername())
-                    .setNickname(request.getNickname())
-                    .setMobile(request.getMobile())
-                    .setEmail(request.getEmail())
+                    .setUsername(text(request.getUsername()))
+                    .setNickname(text(request.getNickname()))
+                    .setMobile(text(request.getMobile()))
+                    .setEmail(text(request.getEmail()))
                     .setPasswordHash(passwordHash)
                     .setStatus("ENABLED");
             Long userId = createdId("system user", mapper.insertUser(user), user.getId());
@@ -97,9 +99,9 @@ public class AdminSystemRepository {
             int updated = mapper.updateUser(new AdminUser()
                     .setId(userId)
                     .setDeptId(request.getDeptId())
-                    .setNickname(request.getNickname())
-                    .setMobile(request.getMobile())
-                    .setEmail(request.getEmail())
+                    .setNickname(text(request.getNickname()))
+                    .setMobile(text(request.getMobile()))
+                    .setEmail(text(request.getEmail()))
                     .setStatus(enabledStatus(request.getStatus())));
             if (updated <= 0) {
                 return false;
@@ -168,8 +170,8 @@ public class AdminSystemRepository {
 
     public Long createTenant(TenantRequest request) {
         Tenant tenant = new Tenant()
-                .setTenantCode(request.getTenantCode())
-                .setTenantName(request.getTenantName())
+                .setTenantCode(text(request.getTenantCode()))
+                .setTenantName(text(request.getTenantName()))
                 .setStatus(enabledStatus(request.getStatus()));
         return createdId("system tenant", mapper.insertTenant(tenant), tenant.getId());
     }
@@ -177,8 +179,8 @@ public class AdminSystemRepository {
     public boolean updateTenant(Long id, TenantRequest request) {
         return mapper.updateTenant(new Tenant()
                 .setId(id)
-                .setTenantCode(request.getTenantCode())
-                .setTenantName(request.getTenantName())
+                .setTenantCode(text(request.getTenantCode()))
+                .setTenantName(text(request.getTenantName()))
                 .setStatus(enabledStatus(request.getStatus()))) > 0;
     }
 
@@ -206,7 +208,7 @@ public class AdminSystemRepository {
         Dept dept = new Dept()
                 .setTenantId(request.getTenantId() == null ? DEFAULT_TENANT_ID : request.getTenantId())
                 .setParentId(defaultLong(request.getParentId()))
-                .setDeptName(request.getDeptName())
+                .setDeptName(text(request.getDeptName()))
                 .setSortOrder(defaultInt(request.getSortOrder()))
                 .setStatus(enabledStatus(request.getStatus()));
         return createdId("system dept", mapper.insertDept(dept), dept.getId());
@@ -217,7 +219,7 @@ public class AdminSystemRepository {
                 .setId(id)
                 .setTenantId(request.getTenantId() == null ? DEFAULT_TENANT_ID : request.getTenantId())
                 .setParentId(defaultLong(request.getParentId()))
-                .setDeptName(request.getDeptName())
+                .setDeptName(text(request.getDeptName()))
                 .setSortOrder(defaultInt(request.getSortOrder()))
                 .setStatus(enabledStatus(request.getStatus()))) > 0;
     }
@@ -241,8 +243,8 @@ public class AdminSystemRepository {
     public Long createRole(RoleRequest request) {
         RoleRow role = new RoleRow()
                 .setTenantId(DEFAULT_TENANT_ID);
-        role.setRoleCode(request.getRoleCode())
-                .setRoleName(request.getRoleName())
+        role.setRoleCode(text(request.getRoleCode()))
+                .setRoleName(text(request.getRoleName()))
                 .setSortOrder(defaultInt(request.getSortOrder()))
                 .setStatus(enabledStatus(request.getStatus()));
         return createdId("system role", mapper.insertRole(role), role.getId());
@@ -251,8 +253,8 @@ public class AdminSystemRepository {
     public boolean updateRole(Long roleId, RoleRequest request) {
         return mapper.updateRole(new Role()
                 .setId(roleId)
-                .setRoleCode(request.getRoleCode())
-                .setRoleName(request.getRoleName())
+                .setRoleCode(text(request.getRoleCode()))
+                .setRoleName(text(request.getRoleName()))
                 .setSortOrder(defaultInt(request.getSortOrder()))
                 .setStatus(enabledStatus(request.getStatus()))) > 0;
     }
@@ -360,8 +362,8 @@ public class AdminSystemRepository {
 
     public Long createDictType(DictTypeRequest request) {
         DictType dictType = new DictType()
-                .setDictCode(request.getDictCode())
-                .setDictName(request.getDictName())
+                .setDictCode(text(request.getDictCode()))
+                .setDictName(text(request.getDictName()))
                 .setStatus(enabledStatus(request.getStatus()));
         return createdId("system dict type", mapper.insertDictType(dictType), dictType.getId());
     }
@@ -369,8 +371,8 @@ public class AdminSystemRepository {
     public boolean updateDictType(Long id, DictTypeRequest request) {
         return mapper.updateDictType(new DictType()
                 .setId(id)
-                .setDictCode(request.getDictCode())
-                .setDictName(request.getDictName())
+                .setDictCode(text(request.getDictCode()))
+                .setDictName(text(request.getDictName()))
                 .setStatus(enabledStatus(request.getStatus()))) > 0;
     }
 
@@ -392,9 +394,9 @@ public class AdminSystemRepository {
 
     public Long createDictItem(DictItemRequest request) {
         DictItem item = new DictItem()
-                .setDictCode(request.getDictCode())
-                .setItemLabel(request.getItemLabel())
-                .setItemValue(request.getItemValue())
+                .setDictCode(text(request.getDictCode()))
+                .setItemLabel(text(request.getItemLabel()))
+                .setItemValue(text(request.getItemValue()))
                 .setSortOrder(defaultInt(request.getSortOrder()))
                 .setStatus(enabledStatus(request.getStatus()));
         return createdId("system dict item", mapper.insertDictItem(item), item.getId());
@@ -403,9 +405,9 @@ public class AdminSystemRepository {
     public boolean updateDictItem(Long id, DictItemRequest request) {
         return mapper.updateDictItem(new DictItem()
                 .setId(id)
-                .setDictCode(request.getDictCode())
-                .setItemLabel(request.getItemLabel())
-                .setItemValue(request.getItemValue())
+                .setDictCode(text(request.getDictCode()))
+                .setItemLabel(text(request.getItemLabel()))
+                .setItemValue(text(request.getItemValue()))
                 .setSortOrder(defaultInt(request.getSortOrder()))
                 .setStatus(enabledStatus(request.getStatus()))) > 0;
     }
@@ -424,22 +426,22 @@ public class AdminSystemRepository {
 
     public Long createConfig(ConfigRequest request) {
         ConfigItem config = new ConfigItem()
-                .setConfigKey(request.getConfigKey())
-                .setConfigName(request.getConfigName())
+                .setConfigKey(text(request.getConfigKey()))
+                .setConfigName(text(request.getConfigName()))
                 .setConfigValue(request.getConfigValue())
                 .setSensitive(defaultBoolean(request.getSensitive()))
-                .setRemark(request.getRemark());
+                .setRemark(text(request.getRemark()));
         return createdId("system config", mapper.insertConfig(config), config.getId());
     }
 
     public boolean updateConfig(Long id, ConfigRequest request) {
         return mapper.updateConfig(new ConfigItem()
                         .setId(id)
-                        .setConfigKey(request.getConfigKey())
-                        .setConfigName(request.getConfigName())
+                        .setConfigKey(text(request.getConfigKey()))
+                        .setConfigName(text(request.getConfigName()))
                         .setConfigValue(request.getConfigValue())
                         .setSensitive(defaultBoolean(request.getSensitive()))
-                        .setRemark(request.getRemark()),
+                        .setRemark(text(request.getRemark())),
                 isMaskedSensitiveValue(request)) > 0;
     }
 
@@ -602,12 +604,12 @@ public class AdminSystemRepository {
         return new Menu()
                 .setId(id)
                 .setParentId(defaultLong(request.getParentId()))
-                .setMenuType(request.getMenuType())
-                .setMenuName(request.getMenuName())
-                .setRoutePath(request.getRoutePath())
-                .setComponent(request.getComponent())
+                .setMenuType(upperText(request.getMenuType()))
+                .setMenuName(text(request.getMenuName()))
+                .setRoutePath(text(request.getRoutePath()))
+                .setComponent(text(request.getComponent()))
                 .setPermission(text(request.getPermission()))
-                .setIcon(request.getIcon())
+                .setIcon(text(request.getIcon()))
                 .setSortOrder(defaultInt(request.getSortOrder()))
                 .setVisible(defaultVisible(request.getVisible()));
     }
@@ -622,11 +624,17 @@ public class AdminSystemRepository {
     }
 
     private static String text(String value) {
-        return value == null || value.isBlank() ? null : value.trim();
+        return AdminTextSupport.trimToNull(value);
+    }
+
+    private static String upperText(String value) {
+        String text = text(value);
+        return text == null ? null : text.toUpperCase(Locale.ROOT);
     }
 
     private static String enabledStatus(String status) {
-        return status == null || status.isBlank() ? "ENABLED" : status;
+        String text = upperText(status);
+        return text == null ? "ENABLED" : text;
     }
 
     private static Integer defaultInt(Integer value) {
@@ -649,7 +657,7 @@ public class AdminSystemRepository {
         if (!Boolean.TRUE.equals(request.getSensitive())) {
             return false;
         }
-        String configValue = request.getConfigValue();
-        return configValue == null || configValue.isBlank() || "******".equals(configValue);
+        String configValue = text(request.getConfigValue());
+        return configValue == null || "******".equals(configValue);
     }
 }

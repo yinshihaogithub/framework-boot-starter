@@ -54,7 +54,7 @@ class AdminSystemRepositoryTest {
         ConfigRequest request = new ConfigRequest();
         request.setConfigKey("oauth.client-secret");
         request.setConfigName("OAuth Secret");
-        request.setConfigValue("******");
+        request.setConfigValue("\u00A0******\u3000");
         request.setSensitive(true);
 
         repository.updateConfig(9L, request);
@@ -69,7 +69,7 @@ class AdminSystemRepositoryTest {
         ConfigRequest request = new ConfigRequest();
         request.setConfigKey("oauth.client-secret");
         request.setConfigName("OAuth Secret");
-        request.setConfigValue(" ");
+        request.setConfigValue("\u00A0\u3000");
         request.setSensitive(true);
 
         repository.updateConfig(9L, request);
@@ -127,6 +127,87 @@ class AdminSystemRepositoryTest {
                 "insertDictType",
                 "insertDictItem",
                 "insertConfig");
+    }
+
+    @Test
+    void createResourcesNormalizeBoundaryTextBeforeMapperInsert() {
+        UserCreateRequest user = userRequest(List.of(2L));
+        user.setUsername("\u00A0alice\u3000");
+        user.setNickname("\u3000Alice\u00A0");
+        user.setMobile("\u00A013800000000\u3000");
+        user.setEmail("\u3000alice@example.com\u00A0");
+        TenantRequest tenant = tenantRequest();
+        tenant.setTenantCode("\u00A0tenant-a\u3000");
+        tenant.setTenantName("\u3000Tenant A\u00A0");
+        tenant.setStatus("\u00A0enabled\u3000");
+        DeptRequest dept = deptRequest();
+        dept.setDeptName("\u3000研发部\u00A0");
+        dept.setStatus("\u00A0enabled\u3000");
+        RoleRequest role = roleRequest();
+        role.setRoleCode("\u00A0ops\u3000");
+        role.setRoleName("\u3000运维\u00A0");
+        role.setStatus("\u00A0enabled\u3000");
+        MenuRequest menu = menuRequest();
+        menu.setMenuType("\u3000menu\u00A0");
+        menu.setMenuName("\u00A0系统管理\u3000");
+        menu.setRoutePath("\u3000/system\u00A0");
+        menu.setComponent("\u00A0System\u3000");
+        menu.setPermission("\u00A0system:view\u3000");
+        menu.setIcon("\u3000Setting\u00A0");
+        DictTypeRequest dictType = dictTypeRequest();
+        dictType.setDictCode("\u00A0sys_status\u3000");
+        dictType.setDictName("\u3000系统状态\u00A0");
+        dictType.setStatus("\u00A0enabled\u3000");
+        DictItemRequest dictItem = dictItemRequest();
+        dictItem.setDictCode("\u3000sys_status\u00A0");
+        dictItem.setItemLabel("\u00A0启用\u3000");
+        dictItem.setItemValue("\u3000ENABLED\u00A0");
+        dictItem.setStatus("\u00A0enabled\u3000");
+        ConfigRequest config = configRequest();
+        config.setConfigKey("\u00A0app.name\u3000");
+        config.setConfigName("\u3000应用名称\u00A0");
+        config.setConfigValue("\u00A0Framework\u3000");
+        config.setRemark("\u3000公开显示名称\u00A0");
+
+        repository.createUser(user, "password-hash");
+        repository.createTenant(tenant);
+        repository.createDept(dept);
+        repository.createRole(role);
+        repository.createMenu(menu);
+        repository.createDictType(dictType);
+        repository.createDictItem(dictItem);
+        repository.createConfig(config);
+
+        assertThat(mapper.insertedUser.getUsername()).isEqualTo("alice");
+        assertThat(mapper.insertedUser.getNickname()).isEqualTo("Alice");
+        assertThat(mapper.insertedUser.getMobile()).isEqualTo("13800000000");
+        assertThat(mapper.insertedUser.getEmail()).isEqualTo("alice@example.com");
+        assertThat(mapper.insertedUser.getStatus()).isEqualTo("ENABLED");
+        assertThat(mapper.insertedTenant.getTenantCode()).isEqualTo("tenant-a");
+        assertThat(mapper.insertedTenant.getTenantName()).isEqualTo("Tenant A");
+        assertThat(mapper.insertedTenant.getStatus()).isEqualTo("ENABLED");
+        assertThat(mapper.insertedDept.getDeptName()).isEqualTo("研发部");
+        assertThat(mapper.insertedDept.getStatus()).isEqualTo("ENABLED");
+        assertThat(mapper.insertedRole.getRoleCode()).isEqualTo("ops");
+        assertThat(mapper.insertedRole.getRoleName()).isEqualTo("运维");
+        assertThat(mapper.insertedRole.getStatus()).isEqualTo("ENABLED");
+        assertThat(mapper.insertedMenu.getMenuType()).isEqualTo("MENU");
+        assertThat(mapper.insertedMenu.getMenuName()).isEqualTo("系统管理");
+        assertThat(mapper.insertedMenu.getRoutePath()).isEqualTo("/system");
+        assertThat(mapper.insertedMenu.getComponent()).isEqualTo("System");
+        assertThat(mapper.insertedMenu.getPermission()).isEqualTo("system:view");
+        assertThat(mapper.insertedMenu.getIcon()).isEqualTo("Setting");
+        assertThat(mapper.insertedDictType.getDictCode()).isEqualTo("sys_status");
+        assertThat(mapper.insertedDictType.getDictName()).isEqualTo("系统状态");
+        assertThat(mapper.insertedDictType.getStatus()).isEqualTo("ENABLED");
+        assertThat(mapper.insertedDictItem.getDictCode()).isEqualTo("sys_status");
+        assertThat(mapper.insertedDictItem.getItemLabel()).isEqualTo("启用");
+        assertThat(mapper.insertedDictItem.getItemValue()).isEqualTo("ENABLED");
+        assertThat(mapper.insertedDictItem.getStatus()).isEqualTo("ENABLED");
+        assertThat(mapper.insertedConfig.getConfigKey()).isEqualTo("app.name");
+        assertThat(mapper.insertedConfig.getConfigName()).isEqualTo("应用名称");
+        assertThat(mapper.insertedConfig.getConfigValue()).isEqualTo("\u00A0Framework\u3000");
+        assertThat(mapper.insertedConfig.getRemark()).isEqualTo("公开显示名称");
     }
 
     @Test
@@ -432,6 +513,14 @@ class AdminSystemRepositoryTest {
         private List<ConfigItem> configs = List.of();
         private List<Dept> allDepts = List.of();
         private List<Menu> allMenus = List.of();
+        private AdminSystemModels.AdminUser insertedUser;
+        private Tenant insertedTenant;
+        private Dept insertedDept;
+        private Role insertedRole;
+        private Menu insertedMenu;
+        private DictType insertedDictType;
+        private DictItem insertedDictItem;
+        private ConfigItem insertedConfig;
         private ConfigItem updatedConfig;
         private boolean preserveValue;
         private boolean assignGeneratedIds = true;
@@ -480,41 +569,49 @@ class AdminSystemRepositoryTest {
                         }
                         case "insertUser" -> {
                             operations.add("insertUser");
+                            insertedUser = (AdminSystemModels.AdminUser) args[0];
                             assignGeneratedId(args[0]);
                             yield insertUserResult;
                         }
                         case "insertTenant" -> {
                             operations.add("insertTenant");
+                            insertedTenant = (Tenant) args[0];
                             assignGeneratedId(args[0]);
                             yield insertTenantResult;
                         }
                         case "insertDept" -> {
                             operations.add("insertDept");
+                            insertedDept = (Dept) args[0];
                             assignGeneratedId(args[0]);
                             yield insertDeptResult;
                         }
                         case "insertRole" -> {
                             operations.add("insertRole");
+                            insertedRole = (Role) args[0];
                             assignGeneratedId(args[0]);
                             yield insertRoleResult;
                         }
                         case "insertMenu" -> {
                             operations.add("insertMenu");
+                            insertedMenu = (Menu) args[0];
                             assignGeneratedId(args[0]);
                             yield insertMenuResult;
                         }
                         case "insertDictType" -> {
                             operations.add("insertDictType");
+                            insertedDictType = (DictType) args[0];
                             assignGeneratedId(args[0]);
                             yield insertDictTypeResult;
                         }
                         case "insertDictItem" -> {
                             operations.add("insertDictItem");
+                            insertedDictItem = (DictItem) args[0];
                             assignGeneratedId(args[0]);
                             yield insertDictItemResult;
                         }
                         case "insertConfig" -> {
                             operations.add("insertConfig");
+                            insertedConfig = (ConfigItem) args[0];
                             assignGeneratedId(args[0]);
                             yield insertConfigResult;
                         }
