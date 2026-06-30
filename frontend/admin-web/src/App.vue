@@ -535,7 +535,13 @@
               <el-table-column prop="messageId" label="消息ID" min-width="170" show-overflow-tooltip />
               <el-table-column prop="parentMessageId" label="父消息" min-width="160" show-overflow-tooltip />
               <el-table-column prop="businessKey" label="业务键" min-width="150" show-overflow-tooltip />
-              <el-table-column prop="traceId" label="Trace ID" min-width="190" show-overflow-tooltip />
+              <el-table-column prop="traceId" label="Trace ID" min-width="190" show-overflow-tooltip>
+                <template #default="{ row }">
+                  <el-button link type="primary" class="trace-link" :disabled="!row.traceId" @click="openTrace(row.traceId)">
+                    {{ row.traceId || '-' }}
+                  </el-button>
+                </template>
+              </el-table-column>
               <el-table-column prop="queueName" label="队列" min-width="160" show-overflow-tooltip />
               <el-table-column prop="exchange" label="交换机" min-width="150" show-overflow-tooltip />
               <el-table-column prop="routingKey" label="路由键" min-width="150" show-overflow-tooltip />
@@ -589,7 +595,13 @@
               <el-table-column prop="messageId" label="消息ID" min-width="170" show-overflow-tooltip />
               <el-table-column prop="parentMessageId" label="父消息" min-width="160" show-overflow-tooltip />
               <el-table-column prop="businessKey" label="业务键" min-width="150" show-overflow-tooltip />
-              <el-table-column prop="traceId" label="Trace ID" min-width="190" show-overflow-tooltip />
+              <el-table-column prop="traceId" label="Trace ID" min-width="190" show-overflow-tooltip>
+                <template #default="{ row }">
+                  <el-button link type="primary" class="trace-link" :disabled="!row.traceId" @click="openTrace(row.traceId)">
+                    {{ row.traceId || '-' }}
+                  </el-button>
+                </template>
+              </el-table-column>
               <el-table-column label="重试" width="92">
                 <template #default="{ row }">{{ row.retryCount ?? 0 }}/{{ row.maxRetry ?? '-' }}</template>
               </el-table-column>
@@ -930,7 +942,13 @@
               <el-table-column prop="operatorName" label="操作人" min-width="120" show-overflow-tooltip />
               <el-table-column prop="clientIp" label="客户端IP" min-width="140" show-overflow-tooltip />
               <el-table-column prop="elapsedMs" label="耗时" width="92" />
-              <el-table-column prop="traceId" label="Trace ID" min-width="190" show-overflow-tooltip />
+              <el-table-column prop="traceId" label="Trace ID" min-width="190" show-overflow-tooltip>
+                <template #default="{ row }">
+                  <el-button link type="primary" class="trace-link" :disabled="!row.traceId" @click="openTrace(row.traceId)">
+                    {{ row.traceId || '-' }}
+                  </el-button>
+                </template>
+              </el-table-column>
               <el-table-column label="状态" width="90">
                 <template #default="{ row }"><el-tag :type="row.success === false ? 'danger' : 'success'" size="small">{{ row.success === false ? 'FAIL' : 'OK' }}</el-tag></template>
               </el-table-column>
@@ -2507,9 +2525,14 @@ async function deleteFile(row: FileRecord) {
 }
 
 async function searchTrace() {
-  const traceId = trimToUndefined(traceKeyword.value)
+  await openTrace(traceKeyword.value)
+}
+
+async function openTrace(value?: string) {
+  const traceId = trimToUndefined(value)
   if (!traceId) return
   activeView.value = 'trace'
+  traceKeyword.value = traceId
   logQuery.traceId = traceId
   logQuery.pageNum = 1
   await loadTrace()
@@ -3403,6 +3426,17 @@ function formatHealthDetails(details?: Record<string, unknown>) {
 
 .trace-warnings {
   margin-bottom: 12px;
+}
+
+.trace-link {
+  max-width: 100%;
+  vertical-align: baseline;
+}
+
+.trace-link :deep(span) {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .trace-event {
