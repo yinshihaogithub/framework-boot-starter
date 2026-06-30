@@ -39,6 +39,7 @@ class AdminAuthServiceTest {
     void loginRejectsBlankCredentials() {
         AdminAuthController.LoginRequest request = new AdminAuthController.LoginRequest();
         request.setUsername("admin");
+        request.setPassword("\u00A0\u3000");
 
         Result<AdminAuthController.LoginResponse> result = service.login(request, "127.0.0.1");
 
@@ -80,7 +81,7 @@ class AdminAuthServiceTest {
         repository.user = enabledUser();
         repository.menus = List.of(menu(1L, "dashboard"));
         AdminAuthController.LoginRequest request = new AdminAuthController.LoginRequest();
-        request.setUsername(" admin ");
+        request.setUsername("\u00A0admin\u3000");
         request.setPassword("Admin@123");
 
         Result<AdminAuthController.LoginResponse> result = service.login(request, "10.0.0.8");
@@ -103,7 +104,7 @@ class AdminAuthServiceTest {
         AdminAuthController.LoginRequest request = new AdminAuthController.LoginRequest();
         request.setUsername("admin");
         request.setPassword("Admin@123");
-        request.setDeviceId(" ios ");
+        request.setDeviceId("\u00A0ios\u3000");
         String longClientIp = "1".repeat(80);
 
         Result<AdminAuthController.LoginResponse> result = service.login(request, longClientIp);
@@ -301,7 +302,7 @@ class AdminAuthServiceTest {
 
     @Test
     void logoutPassesPureBearerTokenToSessionManager() {
-        Result<String> result = service.logout(FrameworkConstants.TOKEN_PREFIX + "abc.def");
+        Result<String> result = service.logout(FrameworkConstants.TOKEN_PREFIX + "\u00A0abc.def\u3000");
 
         assertThat(result.isSuccess()).isTrue();
         assertThat(sessionManager.logoutToken).isEqualTo("abc.def");

@@ -18,7 +18,7 @@ public final class AdminClientIpResolver {
             return null;
         }
         String forwarded = request.getHeader(FORWARDED_FOR_HEADER);
-        if (forwarded != null && !forwarded.isBlank()) {
+        if (AdminTextSupport.hasText(forwarded)) {
             for (String item : forwarded.split(",")) {
                 String candidate = normalize(item);
                 if (candidate != null) {
@@ -30,10 +30,10 @@ public final class AdminClientIpResolver {
     }
 
     private static String normalize(String value) {
-        if (value == null || value.isBlank()) {
+        String normalized = AdminTextSupport.trimToNull(value);
+        if (normalized == null) {
             return null;
         }
-        String normalized = value.trim();
         if (UNKNOWN.equalsIgnoreCase(normalized) || containsControlCharacter(normalized)) {
             return null;
         }

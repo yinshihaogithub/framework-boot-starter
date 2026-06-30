@@ -4,6 +4,7 @@ import com.framework.admin.audit.AdminAuditService;
 import com.framework.admin.system.AdminSystemModels.AdminUser;
 import com.framework.admin.system.AdminSystemModels.Menu;
 import com.framework.admin.system.AdminSystemRepository;
+import com.framework.admin.support.AdminTextSupport;
 import com.framework.auth.context.LoginUser;
 import com.framework.auth.context.UserContextHolder;
 import com.framework.auth.service.LoginSecurityService;
@@ -61,7 +62,7 @@ public class AdminAuthService {
         if (request == null || isBlank(request.getUsername()) || isBlank(request.getPassword())) {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), "用户名和密码不能为空");
         }
-        String username = request.getUsername().trim();
+        String username = AdminTextSupport.trimBoundarySpace(request.getUsername());
         if (username.length() > USERNAME_MAX_LENGTH) {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), "用户名长度不能超过64个字符");
         }
@@ -126,7 +127,8 @@ public class AdminAuthService {
     public Result<String> logout(String authorization) {
         try {
             if (authorization != null && authorization.startsWith(FrameworkConstants.TOKEN_PREFIX)) {
-                sessionManager.logout(authorization.substring(FrameworkConstants.TOKEN_PREFIX.length()).trim());
+                sessionManager.logout(AdminTextSupport.trimBoundarySpace(
+                        authorization.substring(FrameworkConstants.TOKEN_PREFIX.length())));
             }
             return Result.success("已退出");
         } catch (RuntimeException e) {
@@ -257,14 +259,14 @@ public class AdminAuthService {
     }
 
     private boolean isBlank(String value) {
-        return value == null || value.isBlank();
+        return !AdminTextSupport.hasText(value);
     }
 
     private String normalizeDeviceId(String deviceId) {
-        if (isBlank(deviceId)) {
+        String normalized = AdminTextSupport.trimToNull(deviceId);
+        if (normalized == null) {
             return DEFAULT_DEVICE_ID;
         }
-        String normalized = deviceId.trim();
         return normalized.length() > DEVICE_ID_MAX_LENGTH ? null : normalized;
     }
 

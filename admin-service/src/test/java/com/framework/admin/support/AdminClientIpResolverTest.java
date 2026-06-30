@@ -11,7 +11,7 @@ class AdminClientIpResolverTest {
     void resolvesFirstTrustedForwardedIp() {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.setRemoteAddr("127.0.0.1");
-        request.addHeader("X-Forwarded-For", " unknown, 10.0.0.8, 10.0.0.9");
+        request.addHeader("X-Forwarded-For", "\u00A0unknown\u3000, \u300010.0.0.8\u00A0, 10.0.0.9");
 
         assertThat(AdminClientIpResolver.resolve(request)).isEqualTo("10.0.0.8");
     }
@@ -19,8 +19,8 @@ class AdminClientIpResolverTest {
     @Test
     void fallsBackToRemoteAddressWhenForwardedHeaderIsUnsafe() {
         MockHttpServletRequest request = new MockHttpServletRequest();
-        request.setRemoteAddr("127.0.0.1");
-        request.addHeader("X-Forwarded-For", "bad\nip, unknown, ");
+        request.setRemoteAddr("\u00A0127.0.0.1\u3000");
+        request.addHeader("X-Forwarded-For", "bad\nip, \u00A0unknown\u3000, \u00A0\u3000");
 
         assertThat(AdminClientIpResolver.resolve(request)).isEqualTo("127.0.0.1");
     }
