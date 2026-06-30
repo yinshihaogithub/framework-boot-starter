@@ -240,6 +240,25 @@ class AdminAuthServiceTest {
     }
 
     @Test
+    void loginDoesNotCreateSessionWhenMenuQueryFails() {
+        repository.user = enabledUser();
+        repository.menusFailure = new RuntimeException("database down");
+        AdminAuthController.LoginRequest request = new AdminAuthController.LoginRequest();
+        request.setUsername("admin");
+        request.setPassword("Admin@123");
+
+        Result<AdminAuthController.LoginResponse> result = service.login(request, "10.0.0.8");
+
+        assertThat(result.getCode()).isEqualTo(ResultCode.SERVICE_ERROR.getCode());
+        assertThat(result.getMessage()).isEqualTo("登录服务暂不可用");
+        assertThat(sessionManager.createdDeviceId).isNull();
+        assertThat(repository.lastLoginUserId).isNull();
+        assertThat(repository.loginLogs)
+                .extracting(LoginLogRecord::username, LoginLogRecord::success, LoginLogRecord::message)
+                .containsExactly(tuple("admin", false, "登录服务暂不可用"));
+    }
+
+    @Test
     void loginContinuesWhenLastLoginUpdateFails() {
         repository.user = enabledUser();
         repository.lastLoginFailure = new RuntimeException("database down");

@@ -84,6 +84,7 @@ public class AdminAuthService {
                 return Result.fail(ResultCode.LOGIN_FAIL);
             }
             clearLoginFailure(loginSecurity, username);
+            List<Menu> menus = safeList(systemRepository.listMenusByUserId(user.getId()));
             LoginUser loginUser = sessionManager.createSession(
                     user.getId(),
                     user.getUsername(),
@@ -92,7 +93,6 @@ public class AdminAuthService {
                     safeList(user.getRoles()).toArray(String[]::new),
                     safeList(user.getPermissions()).toArray(String[]::new));
             updateLastLogin(user.getId());
-            List<Menu> menus = safeList(systemRepository.listMenusByUserId(user.getId()));
             insertLoginLog(username, user.getId(), safeClientIp, true, "登录成功");
             return Result.success(new AdminAuthController.LoginResponse()
                     .setAccessToken(loginUser.getAccessToken())
