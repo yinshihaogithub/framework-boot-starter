@@ -2,6 +2,7 @@ package com.framework.security.aspect;
 
 import com.framework.auth.context.LoginUser;
 import com.framework.auth.context.UserContextHolder;
+import com.framework.auth.support.AuthTextSupport;
 import com.framework.core.exception.AuthException;
 import com.framework.core.exception.PermissionException;
 import com.framework.security.annotation.IgnoreToken;
@@ -115,8 +116,8 @@ public class PermissionAspect {
 
     private List<String> normalizeItems(String[] values) {
         return Arrays.stream(values != null ? values : new String[0])
-                .filter(value -> value != null && !value.isBlank())
-                .map(String::trim)
+                .map(AuthTextSupport::trimToNull)
+                .filter(value -> value != null)
                 .toList();
     }
 

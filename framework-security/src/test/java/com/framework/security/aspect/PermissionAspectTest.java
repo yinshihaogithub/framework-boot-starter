@@ -79,8 +79,8 @@ class PermissionAspectTest {
     void trimsRoleAndPermissionValuesBeforeChecking() {
         UserContextHolder.set(new LoginUser()
                 .setUserId(1L)
-                .setRoles(new String[]{" ADMIN "})
-                .setPermissions(new String[]{" user:edit "}));
+                .setRoles(new String[]{"\u00A0ADMIN\u3000"})
+                .setPermissions(new String[]{"\u3000user:edit\u00A0"}));
         TrimmedRequirementService service = proxy(new TrimmedRequirementService());
 
         assertThat(service.update()).isEqualTo("ok");
@@ -166,22 +166,22 @@ class PermissionAspectTest {
     }
 
     public static class TrimmedRequirementService {
-        @RequireRole("ADMIN")
-        @RequirePermission("user:edit")
+        @RequireRole("\u3000ADMIN\u00A0")
+        @RequirePermission("\u00A0user:edit\u3000")
         public String update() {
             return "ok";
         }
     }
 
     public static class EmptyRoleService {
-        @RequireRole(value = {" ", ""}, logicalAnd = true)
+        @RequireRole(value = {"\u00A0", "\u3000"}, logicalAnd = true)
         public String adminOnly() {
             return "ok";
         }
     }
 
     public static class EmptyPermissionService {
-        @RequirePermission(value = {" ", ""}, logicalAnd = true)
+        @RequirePermission(value = {"\u00A0", "\u3000"}, logicalAnd = true)
         public String edit() {
             return "ok";
         }

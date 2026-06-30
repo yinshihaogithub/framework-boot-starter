@@ -44,6 +44,8 @@ class SessionManagerTest {
                 new String[]{"ADMIN"}, new String[]{"user:view"}), "tenantId不能为空");
         assertSessionParamError(() -> sessionManager.createSession(1L, "alice", "tenant-a", " ",
                 new String[]{"ADMIN"}, new String[]{"user:view"}), "deviceId不能为空");
+        assertSessionParamError(() -> sessionManager.createSession(1L, "\u00A0\u3000", "tenant-a", "web",
+                new String[]{"ADMIN"}, new String[]{"user:view"}), "username不能为空");
         assertSessionParamError(() -> sessionManager.createSession(1L, "alice", "tenant-a", "d".repeat(129),
                 new String[]{"ADMIN"}, new String[]{"user:view"}), "deviceId长度不能超过128个字符");
 
@@ -52,9 +54,9 @@ class SessionManagerTest {
 
     @Test
     void createSessionNormalizesIdentityAndAuthorities() {
-        LoginUser user = sessionManager.createSession(1L, " alice ", " tenant-a ", " web ",
-                new String[]{" ADMIN ", null, "", "AUDITOR"},
-                new String[]{" user:view ", " ", null, "user:edit"});
+        LoginUser user = sessionManager.createSession(1L, "\u00A0alice\u3000", "\u3000tenant-a\u00A0", "\u00A0web\u3000",
+                new String[]{"\u3000ADMIN\u00A0", null, "\u00A0", "AUDITOR"},
+                new String[]{"\u00A0user:view\u3000", "\u3000", null, "user:edit"});
 
         assertThat(user.getUsername()).isEqualTo("alice");
         assertThat(user.getTenantId()).isEqualTo("tenant-a");

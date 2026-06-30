@@ -2,6 +2,7 @@ package com.framework.auth.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.framework.auth.context.LoginUser;
+import com.framework.auth.support.AuthTextSupport;
 import com.framework.auth.jwt.JwtUtils;
 import com.framework.core.constant.FrameworkConstants;
 import com.framework.core.exception.AuthException;
@@ -165,7 +166,7 @@ public class SessionManager {
             }
             Long userId = jwtUtils.getUserId(accessToken);
             String deviceId = jwtUtils.getDeviceId(accessToken);
-            if (userId == null || deviceId == null || deviceId.isBlank()) {
+            if (userId == null || !AuthTextSupport.hasText(deviceId)) {
                 return false;
             }
             return Boolean.TRUE.equals(redis.hasKey(buildSessionKey(userId, deviceId)));
@@ -217,7 +218,7 @@ public class SessionManager {
     public List<OnlineSession> listOnlineSessions() {
         return scanKeys(FrameworkConstants.SESSION_PREFIX + "*").stream()
                 .map(this::readOnlineSession)
-                .filter(session -> session.userId() != null && hasText(session.deviceId()))
+                .filter(session -> session.userId() != null && AuthTextSupport.hasText(session.deviceId()))
                 .sorted(Comparator.comparingLong(OnlineSession::loginTime).reversed())
                 .toList();
     }
@@ -352,10 +353,10 @@ public class SessionManager {
     }
 
     private String requireSessionText(String value, String fieldName) {
-        if (!hasText(value)) {
+        if (!AuthTextSupport.hasText(value)) {
             throw new AuthException(ResultCode.PARAM_ERROR, fieldName + "不能为空");
         }
-        String normalized = value.trim();
+        String normalized = AuthTextSupport.trimBoundarySpace(value);
         if (normalized.length() > SESSION_FIELD_MAX_LENGTH) {
             throw new AuthException(ResultCode.PARAM_ERROR, fieldName + "长度不能超过128个字符");
         }
@@ -368,8 +369,9 @@ public class SessionManager {
         }
         List<String> normalized = new ArrayList<>(values.length);
         for (String value : values) {
-            if (hasText(value)) {
-                normalized.add(value.trim());
+            String normalizedValue = AuthTextSupport.trimToNull(value);
+            if (normalizedValue != null) {
+                normalized.add(normalizedValue);
             }
         }
         return normalized.toArray(String[]::new);
@@ -405,7 +407,7 @@ public class SessionManager {
             return new String[0];
         }
         try {
-            return OBJECT_MAPPER.readValue(String.valueOf(value), String[].class);
+            return normalizeArray(OBJECT_MAPPER.readValue(String.valueOf(value), String[].class));
         } catch (Exception e) {
             log.warn("会话权限数据反序列化失败: {}", e.getMessage());
             return new String[0];
@@ -430,10 +432,6 @@ public class SessionManager {
     private long parseLongOrDefault(Object value, long defaultValue) {
         Long parsed = parseLong(value);
         return parsed == null ? defaultValue : parsed;
-    }
-
-    private boolean hasText(String value) {
-        return value != null && !value.isBlank();
     }
 
     public record OnlineSession(Long userId, String username, String tenantId, String deviceId,
