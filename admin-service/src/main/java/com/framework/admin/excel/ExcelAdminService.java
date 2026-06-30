@@ -161,7 +161,7 @@ public class ExcelAdminService {
                             .setRawData("{\"username\":\"\",\"nickname\":\"空用户名\"}"),
                     new ExcelAdminModels.ErrorRecord()
                             .setRowIndex(3)
-                            .setErrorMessage("手机号格式错误")
+                            .setErrorMessage(errorMessage)
                             .setRawData("{\"username\":\"ops\",\"mobile\":\"123\"}")
             ));
             auditSuccess(servletRequest, "登记导入失败任务", "CREATE",

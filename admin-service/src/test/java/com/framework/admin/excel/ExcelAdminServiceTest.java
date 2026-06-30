@@ -141,6 +141,28 @@ class ExcelAdminServiceTest {
     }
 
     @Test
+    void importFailureTaskNormalizesRequestAndUsesSameErrorMessageForAllErrorRows() {
+        InMemoryExcelAdminRepository repository = new InMemoryExcelAdminRepository();
+        ExcelAdminModels.FailureRequest request = new ExcelAdminModels.FailureRequest();
+        request.setTaskName(" 用户导入失败 ");
+        request.setBizType(" system-user ");
+        request.setErrorMessage(" 模板字段缺失 ");
+        ExcelAdminService service = service(repository, null);
+
+        ExcelAdminService.ActionResult<ExcelAdminModels.TaskResult> result =
+                service.createImportFailureTask(request, null);
+
+        assertThat(result.success()).isTrue();
+        assertThat(repository.tasks)
+                .extracting(ExcelAdminModels.Task::getTaskName, ExcelAdminModels.Task::getBizType,
+                        ExcelAdminModels.Task::getErrorMessage)
+                .containsExactly(org.assertj.core.groups.Tuple.tuple("用户导入失败", "system-user", "模板字段缺失"));
+        assertThat(repository.errors(result.data().getTaskId()))
+                .extracting(ExcelAdminModels.ErrorRecord::getErrorMessage)
+                .containsExactly("模板字段缺失", "模板字段缺失");
+    }
+
+    @Test
     void importFailureTaskSucceedsWhenAuditFails() {
         InMemoryExcelAdminRepository repository = new InMemoryExcelAdminRepository();
         ExcelAdminService service = service(repository, null, new ThrowingAuditService());
