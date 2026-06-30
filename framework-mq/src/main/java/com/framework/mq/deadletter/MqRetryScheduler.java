@@ -2,8 +2,10 @@ package com.framework.mq.deadletter;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.framework.core.trace.TraceContext;
 import com.framework.mq.core.MessageWrapper;
 import com.framework.mq.producer.MqMessageSenderRegistry;
+import com.framework.mq.support.MqTextSupport;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 
@@ -84,6 +86,7 @@ public class MqRetryScheduler {
     private void retryMessage(MqFailedMessage msg) {
         try {
             MqFailedMessage retrying = msg.copy();
+            normalizeRecordMetadata(retrying);
             retrying.setStatus(MqFailedMessage.STATUS_RETRYING);
             retrying.setUpdateTime(new Date());
             if (!deadLetterHandler.updateRecord(retrying)) {
@@ -118,6 +121,7 @@ public class MqRetryScheduler {
             log.error("[重试失败] id={}, messageId={}, error={}", msg.getId(), msg.getMessageId(), failureMessage);
 
             MqFailedMessage failed = msg.copy();
+            normalizeRecordMetadata(failed);
             int newRetryCount = retryCount(failed) + 1;
             failed.setRetryCount(newRetryCount);
 
@@ -164,6 +168,7 @@ public class MqRetryScheduler {
 
         try {
             MqFailedMessage retrying = msg.copy();
+            normalizeRecordMetadata(retrying);
             retrying.setStatus(MqFailedMessage.STATUS_RETRYING);
             retrying.setOperator(normalizedOperator);
             retrying.setCompensateRemark(normalizedRemark);
@@ -175,6 +180,7 @@ public class MqRetryScheduler {
 
             senderRegistry.activeSender().send(retrying.getExchange(), retrying.getRoutingKey(), restoreWrapper(retrying));
             MqFailedMessage updated = retrying.copy();
+            normalizeRecordMetadata(updated);
             updated.setStatus(MqFailedMessage.STATUS_MANUAL);
             updated.setOperator(normalizedOperator);
             updated.setCompensateRemark(normalizedRemark);
@@ -197,6 +203,7 @@ public class MqRetryScheduler {
 
     private void recordManualRetryFailure(MqFailedMessage msg, String operator, String remark, Exception exception) {
         MqFailedMessage updated = msg.copy();
+        normalizeRecordMetadata(updated);
         int newRetryCount = retryCount(updated) + 1;
         updated.setRetryCount(newRetryCount);
         updated.setOperator(operator);
@@ -277,6 +284,7 @@ public class MqRetryScheduler {
         } else {
             fillMissingMetadata(wrapper, msg);
         }
+        normalizeWrapperMetadata(wrapper);
         return wrapper;
     }
 
@@ -317,11 +325,12 @@ public class MqRetryScheduler {
     }
 
     private String messageType(MqFailedMessage msg) {
-        return isBlank(msg.getMessageType()) ? LEGACY_MESSAGE_TYPE : msg.getMessageType();
+        String messageType = normalize(msg.getMessageType());
+        return messageType == null ? LEGACY_MESSAGE_TYPE : messageType;
     }
 
     private boolean isBlank(String value) {
-        return value == null || value.isBlank();
+        return !MqTextSupport.hasText(value);
     }
 
     private int retryCount(MqFailedMessage msg) {
@@ -333,27 +342,58 @@ public class MqRetryScheduler {
     }
 
     private String appendErrorMessage(String current, String addition) {
-        return isBlank(current) ? addition : current + " | " + addition;
+        String currentText = normalizeMessage(current);
+        String additionText = normalizeMessage(addition);
+        if (additionText == null) {
+            return currentText;
+        }
+        return currentText == null ? additionText : currentText + " | " + additionText;
     }
 
     private String failureMessage(Exception exception) {
         if (exception == null) {
             return "unknown error";
         }
-        String message = exception.getMessage();
-        if (message != null && !message.isBlank()) {
+        String message = normalizeMessage(exception.getMessage());
+        if (message != null) {
             return message;
         }
-        String simpleName = exception.getClass().getSimpleName();
-        return simpleName.isBlank() ? exception.getClass().getName() : simpleName;
+        String simpleName = normalize(exception.getClass().getSimpleName());
+        return simpleName == null ? exception.getClass().getName() : simpleName;
     }
 
     private String normalize(String value) {
-        if (value == null) {
-            return null;
-        }
-        String trimmed = value.trim();
-        return trimmed.isEmpty() ? null : trimmed;
+        return MqTextSupport.trimToNull(value);
+    }
+
+    private String normalizeMessage(String value) {
+        String text = normalize(value);
+        return text == null ? null : text.replaceAll("[\\s\\p{Zs}]+", " ");
+    }
+
+    private void normalizeWrapperMetadata(MessageWrapper<?> wrapper) {
+        wrapper.setMessageId(normalize(wrapper.getMessageId()));
+        wrapper.setTraceId(TraceContext.normalizeTraceId(normalize(wrapper.getTraceId())));
+        wrapper.setParentMessageId(normalize(wrapper.getParentMessageId()));
+        wrapper.setBusinessKey(normalize(wrapper.getBusinessKey()));
+        wrapper.setType(messageType(wrapper.getType()));
+    }
+
+    private void normalizeRecordMetadata(MqFailedMessage message) {
+        message.setMessageId(normalize(message.getMessageId()));
+        message.setTraceId(TraceContext.normalizeTraceId(normalize(message.getTraceId())));
+        message.setParentMessageId(normalize(message.getParentMessageId()));
+        message.setBusinessKey(normalize(message.getBusinessKey()));
+        message.setMessageType(messageType(message));
+        message.setExchange(normalize(message.getExchange()));
+        message.setRoutingKey(normalize(message.getRoutingKey()));
+        message.setQueueName(normalize(message.getQueueName()));
+        message.setTenantId(normalize(message.getTenantId()));
+    }
+
+    private String messageType(String value) {
+        String messageType = normalize(value);
+        return messageType == null ? LEGACY_MESSAGE_TYPE : messageType;
     }
 
     private void requireId(Long id) {

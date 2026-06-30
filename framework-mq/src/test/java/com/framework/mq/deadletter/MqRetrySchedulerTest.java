@@ -57,7 +57,7 @@ class MqRetrySchedulerTest {
                 3
         );
 
-        boolean result = scheduler.manualRetry(1L, " ops-user ", " fixed inventory ");
+        boolean result = scheduler.manualRetry(1L, "\u00A0ops-user\u3000", "\u3000fixed inventory\u00A0");
 
         assertThat(result).isTrue();
         assertThat(sender.destination).isEqualTo("order.exchange");
@@ -151,11 +151,11 @@ class MqRetrySchedulerTest {
         MqRetryScheduler scheduler = new MqRetryScheduler(
                 deadLetterHandler,
                 new MqMessageSenderRegistry(properties(MqProperties.Provider.RABBIT),
-                        List.of(new FailingSender("broker unavailable"))),
+                        List.of(new FailingSender("broker\u00A0unavailable\nretry later"))),
                 3
         );
 
-        boolean result = scheduler.manualRetry(1L, " ops-user ", " retry now ");
+        boolean result = scheduler.manualRetry(1L, "\u00A0ops-user\u3000", "\u3000retry now\u00A0");
 
         assertThat(result).isFalse();
         MqFailedMessage saved = repository.findById(1L).orElseThrow();
@@ -163,7 +163,10 @@ class MqRetrySchedulerTest {
         assertThat(saved.getRetryCount()).isEqualTo(2);
         assertThat(saved.getOperator()).isEqualTo("ops-user");
         assertThat(saved.getCompensateRemark()).isEqualTo("retry now");
-        assertThat(saved.getErrorMessage()).contains("failed", "手动重发失败: broker unavailable");
+        assertThat(saved.getErrorMessage())
+                .contains("failed", "手动重发失败: broker unavailable retry later")
+                .doesNotContain("\n")
+                .doesNotContain("\u00A0");
         assertThat(saved.getNextRetryTime()).isNotNull();
     }
 
@@ -221,7 +224,7 @@ class MqRetrySchedulerTest {
         MqRetryScheduler scheduler = new MqRetryScheduler(
                 deadLetterHandler,
                 new MqMessageSenderRegistry(properties(MqProperties.Provider.RABBIT),
-                        List.of(new FailingSender(" "))),
+                        List.of(new FailingSender("\u00A0\u3000"))),
                 3
         );
 
@@ -260,10 +263,11 @@ class MqRetrySchedulerTest {
     @Test
     void manualRetryWrapsLegacyRawPayloadWithFailedMessageMetadata() {
         MqFailedMessage failedMessage = failedMessage("{\"legacy\":true}");
-        failedMessage.setMessageId("legacy-msg");
-        failedMessage.setTraceId("legacy-trace");
-        failedMessage.setBusinessKey("ORDER-2");
-        failedMessage.setMessageType("LegacyEvent");
+        failedMessage.setMessageId("\u00A0legacy-msg\u3000");
+        failedMessage.setTraceId("\u3000legacy-trace\u00A0");
+        failedMessage.setParentMessageId("\u00A0legacy-parent\u3000");
+        failedMessage.setBusinessKey("\u00A0ORDER-2\u3000");
+        failedMessage.setMessageType("\u3000LegacyEvent\u00A0");
         InMemoryMqFailedMessageRepository repository = new InMemoryMqFailedMessageRepository(List.of(failedMessage));
         DeadLetterHandler deadLetterHandler = new DeadLetterHandler(repository, new MqProperties());
         RecordingSender sender = new RecordingSender();
@@ -278,15 +282,62 @@ class MqRetrySchedulerTest {
         assertThat(result).isTrue();
         assertThat(sender.wrapper.getMessageId()).isEqualTo("legacy-msg");
         assertThat(sender.wrapper.getTraceId()).isEqualTo("legacy-trace");
+        assertThat(sender.wrapper.getParentMessageId()).isEqualTo("legacy-parent");
         assertThat(sender.wrapper.getBusinessKey()).isEqualTo("ORDER-2");
         assertThat(sender.wrapper.getType()).isEqualTo("LegacyEvent");
         assertThat(sender.wrapper.getPayload()).isEqualTo("{\"legacy\":true}");
+        MqFailedMessage saved = repository.findById(1L).orElseThrow();
+        assertThat(saved.getMessageId()).isEqualTo("legacy-msg");
+        assertThat(saved.getTraceId()).isEqualTo("legacy-trace");
+        assertThat(saved.getParentMessageId()).isEqualTo("legacy-parent");
+        assertThat(saved.getBusinessKey()).isEqualTo("ORDER-2");
+        assertThat(saved.getMessageType()).isEqualTo("LegacyEvent");
+    }
+
+    @Test
+    void manualRetryFillsUnicodeBlankWrapperMetadataFromFailedRecord() throws Exception {
+        MessageWrapper<String> original = MessageWrapper.of("ORDER-1", "OrderCreated", "payload");
+        original.setMessageId("\u00A0\u3000");
+        original.setTraceId("\u3000");
+        original.setParentMessageId("\u00A0");
+        original.setBusinessKey("\u3000");
+        original.setType("\u00A0\u3000");
+        MqFailedMessage failedMessage = failedMessage(objectMapper.writeValueAsString(original));
+        failedMessage.setMessageId("\u00A0record-msg\u3000");
+        failedMessage.setTraceId("\u00A0record-trace\u3000");
+        failedMessage.setParentMessageId("\u3000record-parent\u00A0");
+        failedMessage.setBusinessKey("\u00A0ORDER-3\u3000");
+        failedMessage.setMessageType("\u3000RecordEvent\u00A0");
+        InMemoryMqFailedMessageRepository repository = new InMemoryMqFailedMessageRepository(List.of(failedMessage));
+        DeadLetterHandler deadLetterHandler = new DeadLetterHandler(repository, new MqProperties());
+        RecordingSender sender = new RecordingSender();
+        MqRetryScheduler scheduler = new MqRetryScheduler(
+                deadLetterHandler,
+                new MqMessageSenderRegistry(properties(MqProperties.Provider.RABBIT), List.of(sender)),
+                3
+        );
+
+        boolean result = scheduler.manualRetry(1L, "ops-user");
+
+        assertThat(result).isTrue();
+        assertThat(sender.wrapper.getMessageId()).isEqualTo("record-msg");
+        assertThat(sender.wrapper.getTraceId()).isEqualTo("record-trace");
+        assertThat(sender.wrapper.getParentMessageId()).isEqualTo("record-parent");
+        assertThat(sender.wrapper.getBusinessKey()).isEqualTo("ORDER-3");
+        assertThat(sender.wrapper.getType()).isEqualTo("RecordEvent");
+        assertThat(sender.wrapper.getPayload()).isEqualTo("payload");
+        MqFailedMessage saved = repository.findById(1L).orElseThrow();
+        assertThat(saved.getMessageId()).isEqualTo("record-msg");
+        assertThat(saved.getTraceId()).isEqualTo("record-trace");
+        assertThat(saved.getParentMessageId()).isEqualTo("record-parent");
+        assertThat(saved.getBusinessKey()).isEqualTo("ORDER-3");
+        assertThat(saved.getMessageType()).isEqualTo("RecordEvent");
     }
 
     @Test
     void manualRetryUsesLegacyTypeWhenFailedRecordMissesMessageType() {
         MqFailedMessage failedMessage = failedMessage("{\"legacy\":true}");
-        failedMessage.setMessageType(null);
+        failedMessage.setMessageType("\u00A0\u3000");
         InMemoryMqFailedMessageRepository repository = new InMemoryMqFailedMessageRepository(List.of(failedMessage));
         DeadLetterHandler deadLetterHandler = new DeadLetterHandler(repository, new MqProperties());
         RecordingSender sender = new RecordingSender();
@@ -300,6 +351,7 @@ class MqRetrySchedulerTest {
 
         assertThat(result).isTrue();
         assertThat(sender.wrapper.getType()).isEqualTo("LegacyMessage");
+        assertThat(repository.findById(1L).orElseThrow().getMessageType()).isEqualTo("LegacyMessage");
     }
 
     @Test
