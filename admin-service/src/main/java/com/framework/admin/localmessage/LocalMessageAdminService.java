@@ -2,6 +2,7 @@ package com.framework.admin.localmessage;
 
 import com.framework.admin.audit.AdminAuditService;
 import com.framework.admin.support.AdminPageSupport;
+import com.framework.admin.support.AdminTextSupport;
 import com.framework.core.result.PageResult;
 import com.framework.core.result.ResultCode;
 import com.framework.core.trace.TraceContext;
@@ -258,14 +259,11 @@ public class LocalMessageAdminService {
     }
 
     private boolean isBlank(String value) {
-        return value == null || value.isBlank();
+        return !AdminTextSupport.hasText(value);
     }
 
     private String trimToNull(String value) {
-        if (isBlank(value)) {
-            return null;
-        }
-        return value.trim();
+        return AdminTextSupport.trimToNull(value);
     }
 
     private String normalizeTraceIdFilter(String traceId) {

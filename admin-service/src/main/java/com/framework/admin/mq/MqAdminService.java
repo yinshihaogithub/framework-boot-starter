@@ -2,6 +2,7 @@ package com.framework.admin.mq;
 
 import com.framework.admin.audit.AdminAuditService;
 import com.framework.admin.support.AdminPageSupport;
+import com.framework.admin.support.AdminTextSupport;
 import com.framework.auth.context.UserContextHolder;
 import com.framework.core.result.PageResult;
 import com.framework.core.result.ResultCode;
@@ -419,11 +420,11 @@ public class MqAdminService {
     }
 
     private boolean isBlank(String value) {
-        return value == null || value.isBlank();
+        return !AdminTextSupport.hasText(value);
     }
 
     private String text(String value) {
-        return isBlank(value) ? null : value.trim();
+        return AdminTextSupport.trimToNull(value);
     }
 
     private String normalizeTraceIdFilter(String traceId) {
@@ -445,18 +446,17 @@ public class MqAdminService {
     }
 
     private String operator(String operator) {
-        if (!isBlank(operator)) {
-            return operator.trim();
+        String normalizedOperator = text(operator);
+        if (normalizedOperator != null) {
+            return normalizedOperator;
         }
-        String username = UserContextHolder.getUsername();
-        return isBlank(username) ? "admin" : username;
+        String username = text(UserContextHolder.getUsername());
+        return username == null ? "admin" : username;
     }
 
     private String remark(String remark, String defaultRemark) {
-        if (!isBlank(remark)) {
-            return remark.trim();
-        }
-        return defaultRemark;
+        String normalizedRemark = text(remark);
+        return normalizedRemark == null ? defaultRemark : normalizedRemark;
     }
 
     private String retryUnavailableMessage() {

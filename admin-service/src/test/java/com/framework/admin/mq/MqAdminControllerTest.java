@@ -66,7 +66,7 @@ class MqAdminControllerTest {
         MqAdminController controller = controller(handler, new MqProperties(), null);
 
         Result<PageResult<MqAdminDTO.MqFailedMessageVO>> result = controller.listFailedMessages(
-                null, " pending ", "trace-a", null, "ordercreated", 1, 50);
+                null, "\u00A0pending\u3000", "trace-a", null, "ordercreated", 1, 50);
 
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getData().getTotal()).isEqualTo(1);
@@ -107,7 +107,8 @@ class MqAdminControllerTest {
         MqAdminController controller = controller(handler, new MqProperties(), null);
 
         Result<PageResult<MqAdminDTO.MqFailedMessageVO>> result = controller.listFailedMessages(
-                " order.queue ", " pending ", " trace-a ", "order-", " ordercreated ", 1, 20);
+                "\u00A0order.queue\u3000", "\u3000pending\u00A0", "\u00A0trace-a\u3000", "\u3000order-\u00A0",
+                "\u00A0ordercreated\u3000", 1, 20);
 
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getData().getTotal()).isEqualTo(2);
@@ -216,7 +217,7 @@ class MqAdminControllerTest {
         RecordingAuditService auditService = new RecordingAuditService();
         MqAdminController controller = controller(handler, properties, sender, scheduler, auditService);
 
-        Result<String> result = controller.retryOne(1L, " ops ", " manual retry ", null);
+        Result<String> result = controller.retryOne(1L, "\u00A0ops\u3000", "\u3000manual retry\u00A0", null);
 
         assertThat(result.isSuccess()).isTrue();
         MqFailedMessage saved = repository.findById(1L).orElseThrow();
@@ -266,8 +267,8 @@ class MqAdminControllerTest {
         MqAdminController controller = controller(handler, properties, sender, scheduler, auditService);
         MqAdminDTO.ManualRetryRequest request = new MqAdminDTO.ManualRetryRequest()
                 .setIds(List.of(1L, 1L))
-                .setOperator(" ops ")
-                .setRemark(" batch retry ");
+                .setOperator("\u3000ops\u00A0")
+                .setRemark("\u00A0batch retry\u3000");
 
         Result<MqAdminDTO.ManualRetryResult> result = controller.batchRetry(request, null);
 
@@ -382,8 +383,8 @@ class MqAdminControllerTest {
         DeadLetterHandler handler = new DeadLetterHandler(repository, new MqProperties());
         RecordingAuditService auditService = new RecordingAuditService();
         MqAdminController.ManualCompensationRequest request = new MqAdminController.ManualCompensationRequest();
-        request.setOperator(" ops ");
-        request.setRemark(" order checked ");
+        request.setOperator("\u00A0ops\u3000");
+        request.setRemark("\u3000order checked\u00A0");
         MqAdminController controller = controller(handler, new MqProperties(), null, null, auditService);
 
         Result<String> result = controller.manualSuccess(1L, request, null);

@@ -46,7 +46,7 @@ class LocalMessageAdminControllerTest {
                 .setNextRetryTime(LocalDateTime.now().plusMinutes(5));
         repository.save(message);
         LocalMessageAdminController.FailureRequest request = new LocalMessageAdminController.FailureRequest();
-        request.setReason(" manual stop ");
+        request.setReason("\u00A0manual stop\u3000");
         LocalMessageAdminController controller = controller(repository);
 
         Result<String> result = controller.markFailure(1L, request, null);
@@ -67,7 +67,7 @@ class LocalMessageAdminControllerTest {
                 .setRetryCount(1)
                 .setNextRetryTime(LocalDateTime.now().plusMinutes(5)));
         LocalMessageAdminController.FailureRequest request = new LocalMessageAdminController.FailureRequest();
-        request.setReason(" ");
+        request.setReason("\u00A0\u3000");
         LocalMessageAdminController controller = controller(repository);
 
         Result<String> result = controller.markFailure(5L, request, null);
@@ -446,7 +446,7 @@ class LocalMessageAdminControllerTest {
         LocalMessageAdminController controller = controller(repository);
 
         Result<PageResult<LocalMessageVO>> result = controller.list(
-                " order.created ", null, " trace-a ", " ORD-", 1, 20);
+                "\u00A0order.created\u3000", null, "\u3000trace-a\u00A0", "\u00A0ORD-\u3000", 1, 20);
 
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getData().getTotal()).isEqualTo(2);
@@ -466,7 +466,7 @@ class LocalMessageAdminControllerTest {
         LocalMessageAdminController controller = controller(repository);
 
         Result<PageResult<LocalMessageVO>> result = controller.list(
-                null, " pending ", null, null, 1, 20);
+                null, "\u00A0pending\u3000", null, null, 1, 20);
 
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getData().getTotal()).isEqualTo(1);
