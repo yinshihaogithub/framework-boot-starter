@@ -82,9 +82,9 @@ public class AdminSystemRepository {
                     .setEmail(request.getEmail())
                     .setPasswordHash(passwordHash)
                     .setStatus("ENABLED");
-            mapper.insertUser(user);
-            replaceUserRoles(user.getId(), request.getRoleIds());
-            return user.getId();
+            Long userId = createdId("system user", mapper.insertUser(user), user.getId());
+            replaceUserRoles(userId, request.getRoleIds());
+            return userId;
         });
     }
 
@@ -167,8 +167,7 @@ public class AdminSystemRepository {
                 .setTenantCode(request.getTenantCode())
                 .setTenantName(request.getTenantName())
                 .setStatus(enabledStatus(request.getStatus()));
-        mapper.insertTenant(tenant);
-        return tenant.getId();
+        return createdId("system tenant", mapper.insertTenant(tenant), tenant.getId());
     }
 
     public boolean updateTenant(Long id, TenantRequest request) {
@@ -206,8 +205,7 @@ public class AdminSystemRepository {
                 .setDeptName(request.getDeptName())
                 .setSortOrder(defaultInt(request.getSortOrder()))
                 .setStatus(enabledStatus(request.getStatus()));
-        mapper.insertDept(dept);
-        return dept.getId();
+        return createdId("system dept", mapper.insertDept(dept), dept.getId());
     }
 
     public boolean updateDept(Long id, DeptRequest request) {
@@ -243,8 +241,7 @@ public class AdminSystemRepository {
                 .setRoleName(request.getRoleName())
                 .setSortOrder(defaultInt(request.getSortOrder()))
                 .setStatus(enabledStatus(request.getStatus()));
-        mapper.insertRole(role);
-        return role.getId();
+        return createdId("system role", mapper.insertRole(role), role.getId());
     }
 
     public boolean updateRole(Long roleId, RoleRequest request) {
@@ -279,7 +276,7 @@ public class AdminSystemRepository {
                 return;
             }
             for (Long menuId : menuIds) {
-                mapper.insertRoleMenu(roleId, menuId);
+                requireAffected("system role menu insert", mapper.insertRoleMenu(roleId, menuId));
             }
         });
     }
@@ -290,8 +287,7 @@ public class AdminSystemRepository {
 
     public Long createMenu(MenuRequest request) {
         Menu menu = toMenu(null, request);
-        mapper.insertMenu(menu);
-        return menu.getId();
+        return createdId("system menu", mapper.insertMenu(menu), menu.getId());
     }
 
     public boolean updateMenu(Long menuId, MenuRequest request) {
@@ -339,8 +335,7 @@ public class AdminSystemRepository {
                 .setDictCode(request.getDictCode())
                 .setDictName(request.getDictName())
                 .setStatus(enabledStatus(request.getStatus()));
-        mapper.insertDictType(dictType);
-        return dictType.getId();
+        return createdId("system dict type", mapper.insertDictType(dictType), dictType.getId());
     }
 
     public boolean updateDictType(Long id, DictTypeRequest request) {
@@ -374,8 +369,7 @@ public class AdminSystemRepository {
                 .setItemValue(request.getItemValue())
                 .setSortOrder(defaultInt(request.getSortOrder()))
                 .setStatus(enabledStatus(request.getStatus()));
-        mapper.insertDictItem(item);
-        return item.getId();
+        return createdId("system dict item", mapper.insertDictItem(item), item.getId());
     }
 
     public boolean updateDictItem(Long id, DictItemRequest request) {
@@ -407,8 +401,7 @@ public class AdminSystemRepository {
                 .setConfigValue(request.getConfigValue())
                 .setSensitive(defaultBoolean(request.getSensitive()))
                 .setRemark(request.getRemark());
-        mapper.insertConfig(config);
-        return config.getId();
+        return createdId("system config", mapper.insertConfig(config), config.getId());
     }
 
     public boolean updateConfig(Long id, ConfigRequest request) {
@@ -433,11 +426,25 @@ public class AdminSystemRepository {
     private void replaceUserRoles(Long userId, List<Long> roleIds) {
         mapper.deleteUserRoles(userId);
         if (roleIds == null || roleIds.isEmpty()) {
-            mapper.insertUserRole(userId, DEFAULT_ROLE_ID);
+            requireAffected("system user role insert", mapper.insertUserRole(userId, DEFAULT_ROLE_ID));
             return;
         }
         for (Long roleId : roleIds) {
-            mapper.insertUserRole(userId, roleId);
+            requireAffected("system user role insert", mapper.insertUserRole(userId, roleId));
+        }
+    }
+
+    private Long createdId(String operation, int affectedRows, Long id) {
+        requireAffected(operation + " insert", affectedRows);
+        if (id == null) {
+            throw new IllegalStateException(operation + " generated id missing");
+        }
+        return id;
+    }
+
+    private void requireAffected(String operation, int affectedRows) {
+        if (affectedRows <= 0) {
+            throw new IllegalStateException(operation + " failed");
         }
     }
 
