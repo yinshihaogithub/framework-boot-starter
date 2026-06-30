@@ -28,7 +28,7 @@ class AbstractMessageWrapperConsumerTest {
     void trimsIdempotentKeyBeforeCheckingAndMarkingRedis() throws Exception {
         RecordingRedisTemplate redisTemplate = new RecordingRedisTemplate();
         RecordingConsumer consumer = new RecordingConsumer(redisTemplate);
-        MessageWrapper<String> wrapper = MessageWrapper.of(" ORDER-9 ", "OrderCreated", "payload");
+        MessageWrapper<String> wrapper = MessageWrapper.of("\u00A0ORDER-9\u3000", "OrderCreated", "payload");
 
         boolean consumed = consumer.consume(objectMapper.writeValueAsString(wrapper));
 
@@ -47,10 +47,27 @@ class AbstractMessageWrapperConsumerTest {
         MessageWrapper<String> wrapper = MessageWrapper.of("ORDER-10", "OrderCreated", "payload");
         wrapper.setTraceId("bad\ntrace");
 
-        boolean consumed = consumer.consume(objectMapper.writeValueAsString(wrapper), " header-trace ", "ORDER-10");
+        boolean consumed = consumer.consume(objectMapper.writeValueAsString(wrapper), "\u00A0header-trace\u3000", "ORDER-10");
 
         assertThat(consumed).isTrue();
         assertThat(consumer.observedTrace).hasValue("header-trace");
+    }
+
+    @Test
+    void fallsBackToTrimmedMessageIdWhenBusinessKeyIsBlank() throws Exception {
+        RecordingRedisTemplate redisTemplate = new RecordingRedisTemplate();
+        RecordingConsumer consumer = new RecordingConsumer(redisTemplate);
+        MessageWrapper<String> wrapper = MessageWrapper.of("\u00A0\u3000", "OrderCreated", "payload");
+
+        boolean consumed = consumer.consume(
+                objectMapper.writeValueAsString(wrapper),
+                null,
+                "\u00A0fallback-message-id\u3000"
+        );
+
+        assertThat(consumed).isTrue();
+        assertThat(redisTemplate.lastHasKey).isEqualTo("framework:mq:consumed:fallback-message-id");
+        assertThat(redisTemplate.lastSetKey).isEqualTo("framework:mq:consumed:fallback-message-id");
     }
 
     @Test

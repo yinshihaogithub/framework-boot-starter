@@ -34,7 +34,7 @@ class AbstractKafkaMqConsumerTest {
                 "ORDER-1",
                 objectMapper.writeValueAsString(wrapper)
         );
-        record.headers().add(FrameworkConstants.TRACE_ID_HEADER, "kafka-trace".getBytes(StandardCharsets.UTF_8));
+        record.headers().add(FrameworkConstants.TRACE_ID_HEADER, "\u00A0kafka-trace\u3000".getBytes(StandardCharsets.UTF_8));
 
         boolean consumed = consumer.handleRecord(record);
 

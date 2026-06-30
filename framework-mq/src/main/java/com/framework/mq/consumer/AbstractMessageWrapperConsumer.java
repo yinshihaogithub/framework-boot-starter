@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JavaType;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.framework.core.trace.TraceContext;
 import com.framework.mq.core.MessageWrapper;
+import com.framework.mq.support.MqTextSupport;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
@@ -34,7 +35,7 @@ public abstract class AbstractMessageWrapperConsumer<T> {
     }
 
     public boolean consume(String body, String headerTraceId, String fallbackMessageId) throws Exception {
-        if (body == null || body.isBlank()) {
+        if (!MqTextSupport.hasText(body)) {
             throw new IllegalArgumentException("message body must not be blank");
         }
         Map<String, String> previousContext = TraceContext.copyContextMap();
@@ -63,35 +64,35 @@ public abstract class AbstractMessageWrapperConsumer<T> {
     }
 
     private boolean isAlreadyConsumed(String key) {
-        if (redisTemplate == null || key == null || key.isBlank()) {
+        String normalizedKey = MqTextSupport.trimToNull(key);
+        if (redisTemplate == null || normalizedKey == null) {
             return false;
         }
         try {
-            return Boolean.TRUE.equals(redisTemplate.hasKey(IDEMPOTENT_PREFIX + key));
+            return Boolean.TRUE.equals(redisTemplate.hasKey(IDEMPOTENT_PREFIX + normalizedKey));
         } catch (Exception e) {
-            log.warn("[MQ消费] Redis幂等检查失败 key={} error={}", key, e.getMessage());
+            log.warn("[MQ消费] Redis幂等检查失败 key={} error={}", normalizedKey, e.getMessage());
             return false;
         }
     }
 
     private void markConsumed(String key) {
-        if (redisTemplate == null || key == null || key.isBlank()) {
+        String normalizedKey = MqTextSupport.trimToNull(key);
+        if (redisTemplate == null || normalizedKey == null) {
             return;
         }
         try {
-            redisTemplate.opsForValue().set(IDEMPOTENT_PREFIX + key, "1", 7, TimeUnit.DAYS);
+            redisTemplate.opsForValue().set(IDEMPOTENT_PREFIX + normalizedKey, "1", 7, TimeUnit.DAYS);
         } catch (Exception e) {
-            log.warn("[MQ消费] Redis幂等标记失败 key={} error={}", key, e.getMessage());
+            log.warn("[MQ消费] Redis幂等标记失败 key={} error={}", normalizedKey, e.getMessage());
         }
     }
 
     private String firstText(String... values) {
         for (String value : values) {
-            if (value != null) {
-                String trimmed = value.trim();
-                if (!trimmed.isBlank()) {
-                    return trimmed;
-                }
+            String trimmed = MqTextSupport.trimToNull(value);
+            if (trimmed != null) {
+                return trimmed;
             }
         }
         return null;
@@ -99,7 +100,7 @@ public abstract class AbstractMessageWrapperConsumer<T> {
 
     private String firstTraceId(String... values) {
         for (String value : values) {
-            String traceId = TraceContext.normalizeTraceId(value);
+            String traceId = TraceContext.normalizeTraceId(MqTextSupport.trimToNull(value));
             if (traceId != null) {
                 return traceId;
             }

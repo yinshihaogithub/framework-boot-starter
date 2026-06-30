@@ -14,6 +14,7 @@ import org.springframework.data.redis.core.ValueOperations;
 
 import java.lang.reflect.Proxy;
 import java.nio.charset.StandardCharsets;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -31,11 +32,11 @@ class AbstractMqConsumerTest {
     void consumesRabbitMessageWithoutRedisAndRestoresPreviousContext() throws Exception {
         RecordingRabbitConsumer consumer = new RecordingRabbitConsumer();
         MessageWrapper<String> wrapper = MessageWrapper.of("ORDER-3", "OrderCreated", "订单创建");
-        wrapper.setTraceId("wrapper-trace");
+        wrapper.setTraceId("\u00A0wrapper-trace\u3000");
         MessageProperties properties = new MessageProperties();
         properties.setDeliveryTag(100L);
         properties.setMessageId("rabbit-message-id");
-        properties.setHeader(FrameworkConstants.TRACE_ID_HEADER, "header-trace");
+        properties.setHeader(FrameworkConstants.TRACE_ID_HEADER, "\u00A0header-trace\u3000");
         Message message = new Message(
                 objectMapper.writeValueAsString(wrapper).getBytes(StandardCharsets.UTF_8),
                 properties);
@@ -48,6 +49,52 @@ class AbstractMqConsumerTest {
         assertThat(consumer.lastWrapper().getPayload()).isEqualTo("订单创建");
         assertThat(TraceContext.getTraceId()).isEqualTo("caller-trace");
         assertThat(channel.ackedDeliveryTag()).isEqualTo(100L);
+        assertThat(channel.nacked()).isFalse();
+    }
+
+    @Test
+    void fallsBackToTrimmedRabbitHeaderTraceWhenWrapperTraceIsUnsafe() throws Exception {
+        RecordingRabbitConsumer consumer = new RecordingRabbitConsumer();
+        MessageWrapper<String> wrapper = MessageWrapper.of("ORDER-31", "OrderCreated", "订单创建");
+        wrapper.setTraceId("bad\ntrace");
+        MessageProperties properties = new MessageProperties();
+        properties.setDeliveryTag(103L);
+        properties.setMessageId("rabbit-message-id");
+        properties.setHeader(FrameworkConstants.TRACE_ID_HEADER, "\u00A0header-trace\u3000");
+        Message message = new Message(
+                objectMapper.writeValueAsString(wrapper).getBytes(StandardCharsets.UTF_8),
+                properties);
+        RecordingChannel channel = new RecordingChannel();
+
+        consumer.handleMessage(message, channel.proxy());
+
+        assertThat(consumer.observedTrace()).hasValue("header-trace");
+        assertThat(channel.ackedDeliveryTag()).isEqualTo(103L);
+        assertThat(channel.nacked()).isFalse();
+    }
+
+    @Test
+    void fallsBackToTrimmedRabbitMessageIdForIdempotentKeyWhenBusinessKeyIsBlank() throws Exception {
+        RecordingRedisTemplate redisTemplate = new RecordingRedisTemplate();
+        RecordingRabbitConsumer consumer = new RecordingRabbitConsumer(redisTemplate);
+        MessageWrapper<String> wrapper = MessageWrapper.of("\u00A0\u3000", "OrderCreated", "订单创建");
+        wrapper.setTraceId("wrapper-trace");
+        MessageProperties properties = new MessageProperties();
+        properties.setDeliveryTag(104L);
+        properties.setMessageId("\u00A0rabbit-message-id\u3000");
+        Message message = new Message(
+                objectMapper.writeValueAsString(wrapper).getBytes(StandardCharsets.UTF_8),
+                properties);
+        RecordingChannel channel = new RecordingChannel();
+
+        consumer.handleMessage(message, channel.proxy());
+
+        assertThat(redisTemplate.lastHasKey).isEqualTo("framework:mq:consumed:rabbit-message-id");
+        assertThat(redisTemplate.lastSetKey).isEqualTo("framework:mq:consumed:rabbit-message-id");
+        assertThat(redisTemplate.lastSetValue).isEqualTo("1");
+        assertThat(redisTemplate.lastSetTimeout).isEqualTo(7L);
+        assertThat(redisTemplate.lastSetUnit).isEqualTo(TimeUnit.DAYS);
+        assertThat(channel.ackedDeliveryTag()).isEqualTo(104L);
         assertThat(channel.nacked()).isFalse();
     }
 
@@ -184,6 +231,38 @@ class AbstractMqConsumerTest {
 
         private static IllegalStateException unavailable() {
             return new IllegalStateException("redis unavailable");
+        }
+    }
+
+    private static class RecordingRedisTemplate extends StringRedisTemplate {
+
+        private String lastHasKey;
+        private String lastSetKey;
+        private String lastSetValue;
+        private long lastSetTimeout;
+        private TimeUnit lastSetUnit;
+
+        @Override
+        public Boolean hasKey(String key) {
+            lastHasKey = key;
+            return false;
+        }
+
+        @Override
+        @SuppressWarnings("unchecked")
+        public ValueOperations<String, String> opsForValue() {
+            return (ValueOperations<String, String>) Proxy.newProxyInstance(
+                    ValueOperations.class.getClassLoader(),
+                    new Class<?>[]{ValueOperations.class},
+                    (proxy, method, args) -> {
+                        if ("set".equals(method.getName()) && args != null && args.length == 4) {
+                            lastSetKey = (String) args[0];
+                            lastSetValue = (String) args[1];
+                            lastSetTimeout = (Long) args[2];
+                            lastSetUnit = (TimeUnit) args[3];
+                        }
+                        return RecordingChannel.defaultValue(method.getReturnType());
+                    });
         }
     }
 }

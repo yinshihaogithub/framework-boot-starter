@@ -3,6 +3,7 @@ package com.framework.mq.consumer;
 import com.framework.core.constant.FrameworkConstants;
 import com.framework.core.trace.TraceContext;
 import com.framework.mq.core.MessageWrapper;
+import com.framework.mq.support.MqTextSupport;
 import com.fasterxml.jackson.databind.JavaType;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rabbitmq.client.Channel;
@@ -60,27 +61,28 @@ public abstract class AbstractMqConsumer<T> {
      */
     public void handleMessage(Message message, Channel channel) throws Exception {
         long deliveryTag = message.getMessageProperties().getDeliveryTag();
-        String messageId = message.getMessageProperties().getMessageId();
+        String messageId = MqTextSupport.trimToNull(message.getMessageProperties().getMessageId());
         Integer retryCount = getRetryCount(message);
         Map<String, String> previousContext = TraceContext.copyContextMap();
 
         try {
             String headerTraceId = getHeader(message, FrameworkConstants.TRACE_ID_HEADER);
-            if (headerTraceId != null && !headerTraceId.isBlank()) {
+            if (headerTraceId != null) {
                 TraceContext.getOrCreateTraceId(headerTraceId);
             }
 
             // 反序列化
             String body = new String(message.getBody(), StandardCharsets.UTF_8);
+            if (!MqTextSupport.hasText(body)) {
+                throw new IllegalArgumentException("message body must not be blank");
+            }
             JavaType javaType = objectMapper.getTypeFactory().constructParametricType(
                     MessageWrapper.class, payloadType);
             MessageWrapper<T> wrapper = objectMapper.readValue(body, javaType);
-            TraceContext.getOrCreateTraceId(wrapper.getTraceId());
+            TraceContext.getOrCreateTraceId(firstTraceId(wrapper.getTraceId(), headerTraceId));
 
             // 使用 messageId 或 businessKey 做幂等
-            String idempotentKey = wrapper.getBusinessKey() != null
-                    ? wrapper.getBusinessKey()
-                    : (messageId != null ? messageId : wrapper.getMessageId());
+            String idempotentKey = firstText(wrapper.getBusinessKey(), messageId, wrapper.getMessageId());
 
             // 幂等检查
             if (isAlreadyConsumed(idempotentKey)) {
@@ -91,7 +93,7 @@ public abstract class AbstractMqConsumer<T> {
 
             // 执行消费
             log.info("[MQ消费] messageId={}, traceId={}, type={}, retryCount={}",
-                    messageId, wrapper.getTraceId(), wrapper.getType(), retryCount);
+                    messageId, TraceContext.getTraceId(), wrapper.getType(), retryCount);
             doConsume(wrapper);
 
             // 标记已消费（TTL 7天，防止重复消费）
@@ -127,15 +129,16 @@ public abstract class AbstractMqConsumer<T> {
      * 幂等检查：Redis SETNX
      */
     private boolean isAlreadyConsumed(String key) {
-        if (redisTemplate == null || key == null || key.isEmpty()) {
+        String normalizedKey = MqTextSupport.trimToNull(key);
+        if (redisTemplate == null || normalizedKey == null) {
             return false;
         }
-        String redisKey = IDEMPOTENT_PREFIX + key;
+        String redisKey = IDEMPOTENT_PREFIX + normalizedKey;
         try {
             // key 已存在说明已消费过
             return Boolean.TRUE.equals(redisTemplate.hasKey(redisKey));
         } catch (Exception e) {
-            log.warn("[MQ消费] Redis幂等检查失败 key={} error={}", key, e.getMessage());
+            log.warn("[MQ消费] Redis幂等检查失败 key={} error={}", normalizedKey, e.getMessage());
             return false;
         }
     }
@@ -144,14 +147,15 @@ public abstract class AbstractMqConsumer<T> {
      * 标记已消费
      */
     private void markConsumed(String key) {
-        if (redisTemplate == null || key == null || key.isEmpty()) {
+        String normalizedKey = MqTextSupport.trimToNull(key);
+        if (redisTemplate == null || normalizedKey == null) {
             return;
         }
-        String redisKey = IDEMPOTENT_PREFIX + key;
+        String redisKey = IDEMPOTENT_PREFIX + normalizedKey;
         try {
             redisTemplate.opsForValue().set(redisKey, "1", 7, TimeUnit.DAYS);
         } catch (Exception e) {
-            log.warn("[MQ消费] Redis幂等标记失败 key={} error={}", key, e.getMessage());
+            log.warn("[MQ消费] Redis幂等标记失败 key={} error={}", normalizedKey, e.getMessage());
         }
     }
 
@@ -168,6 +172,26 @@ public abstract class AbstractMqConsumer<T> {
 
     private String getHeader(Message message, String headerName) {
         Object value = message.getMessageProperties().getHeader(headerName);
-        return value == null ? null : value.toString();
+        return value == null ? null : MqTextSupport.trimToNull(value.toString());
+    }
+
+    private String firstText(String... values) {
+        for (String value : values) {
+            String trimmed = MqTextSupport.trimToNull(value);
+            if (trimmed != null) {
+                return trimmed;
+            }
+        }
+        return null;
+    }
+
+    private String firstTraceId(String... values) {
+        for (String value : values) {
+            String traceId = TraceContext.normalizeTraceId(MqTextSupport.trimToNull(value));
+            if (traceId != null) {
+                return traceId;
+            }
+        }
+        return null;
     }
 }

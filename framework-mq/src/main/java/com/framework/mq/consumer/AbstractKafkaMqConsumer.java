@@ -1,6 +1,7 @@
 package com.framework.mq.consumer;
 
 import com.framework.core.constant.FrameworkConstants;
+import com.framework.mq.support.MqTextSupport;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.header.Header;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -25,6 +26,8 @@ public abstract class AbstractKafkaMqConsumer<T> extends AbstractMessageWrapperC
 
     private String traceId(ConsumerRecord<String, String> record) {
         Header header = record.headers().lastHeader(FrameworkConstants.TRACE_ID_HEADER);
-        return header == null || header.value() == null ? null : new String(header.value(), StandardCharsets.UTF_8);
+        return header == null || header.value() == null
+                ? null
+                : MqTextSupport.trimToNull(new String(header.value(), StandardCharsets.UTF_8));
     }
 }
