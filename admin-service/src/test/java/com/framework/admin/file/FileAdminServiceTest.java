@@ -39,18 +39,28 @@ class FileAdminServiceTest {
         repository.count = 1;
         repository.stats = Map.of("active", 1L, "deleted", 0L, "totalSize", 3L);
 
-        PageResult<FileAdminModels.FileRecord> page = service.list(" a ", "system", "order-1", " text ", -1, 500);
+        PageResult<FileAdminModels.FileRecord> page = service.list(" a ", " system ", " order-1 ", " text ", -1, 500);
 
         assertThat(page.getPageNum()).isEqualTo(1);
         assertThat(page.getPageSize()).isEqualTo(200);
         assertThat(page.getRecords()).hasSize(1);
         assertThat(repository.listPageNum).isEqualTo(1);
         assertThat(repository.listPageSize).isEqualTo(200);
-        assertThat(repository.listKeyword).isEqualTo(" a ");
+        assertThat(repository.listKeyword).isEqualTo("a");
         assertThat(repository.listBusinessType).isEqualTo("system");
         assertThat(repository.listBusinessKey).isEqualTo("order-1");
-        assertThat(repository.listContentType).isEqualTo(" text ");
+        assertThat(repository.listContentType).isEqualTo("text");
         assertThat(service.stats()).containsEntry("totalSize", 3L);
+    }
+
+    @Test
+    void listTreatsBlankFiltersAsNull() {
+        service.list("   ", "\t", "\n", "", 1, 20);
+
+        assertThat(repository.listKeyword).isNull();
+        assertThat(repository.listBusinessType).isNull();
+        assertThat(repository.listBusinessKey).isNull();
+        assertThat(repository.listContentType).isNull();
     }
 
     @Test

@@ -54,10 +54,14 @@ public class FileAdminService {
                                                        String contentType, int pageNum, int pageSize) {
         int safePageNum = AdminPageSupport.safePageNum(pageNum);
         int safePageSize = AdminPageSupport.safePageSize(pageSize);
+        String safeKeyword = text(keyword);
+        String safeBusinessType = text(businessType);
+        String safeBusinessKey = text(businessKey);
+        String safeContentType = text(contentType);
         try {
             return PageResult.of(
-                    repository.list(keyword, businessType, businessKey, contentType, safePageNum, safePageSize),
-                    repository.count(keyword, businessType, businessKey, contentType),
+                    repository.list(safeKeyword, safeBusinessType, safeBusinessKey, safeContentType, safePageNum, safePageSize),
+                    repository.count(safeKeyword, safeBusinessType, safeBusinessKey, safeContentType),
                     safePageNum,
                     safePageSize);
         } catch (RuntimeException e) {
