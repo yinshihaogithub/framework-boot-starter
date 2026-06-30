@@ -19,6 +19,11 @@
             <artifactId>framework-core</artifactId>
         </dependency>
         <dependency>
+            <groupId>com.framework</groupId>
+            <artifactId>framework-auth</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>

@@ -1,6 +1,8 @@
 package com.framework.log.aspect;
 
 import com.framework.core.trace.TraceContext;
+import com.framework.auth.context.LoginUser;
+import com.framework.auth.context.UserContextHolder;
 import com.framework.log.annotation.OperationLog;
 import com.framework.log.config.LogProperties;
 import com.framework.log.entity.OperationLogEntity;
@@ -24,6 +26,7 @@ class OperationLogAspectTest {
     @AfterEach
     void tearDown() {
         TraceContext.clear();
+        UserContextHolder.clear();
         RequestContextHolder.resetRequestAttributes();
     }
 
@@ -35,6 +38,7 @@ class OperationLogAspectTest {
         request.addHeader("X-Forwarded-For", "203.0.113.7, 10.0.0.1");
         RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
         TraceContext.putTraceId("trace-order");
+        UserContextHolder.set(new LoginUser().setUserId(7L).setUsername("alice"));
 
         Map<String, Object> result = service.create(Map.of(
                 "orderNo", "O-100",
@@ -52,6 +56,8 @@ class OperationLogAspectTest {
         assertThat(entity.getUri()).isEqualTo("/orders");
         assertThat(entity.getHttpMethod()).isEqualTo("POST");
         assertThat(entity.getClientIp()).isEqualTo("203.0.113.7");
+        assertThat(entity.getOperatorId()).isEqualTo(7L);
+        assertThat(entity.getOperatorName()).isEqualTo("alice");
         assertThat(entity.getTraceId()).isEqualTo("trace-order");
         assertThat(entity.getSuccess()).isTrue();
         assertThat(entity.getParams())

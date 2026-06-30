@@ -63,13 +63,14 @@ public class OperationLogAspect {
             Throwable finalError = error;
             String traceId = TraceContext.getTraceId();
             RequestInfo requestInfo = getCurrentRequestInfo();
+            UserInfo userInfo = getCurrentUserInfo();
             Map<String, String> contextMap = TraceContext.copyContextMap();
 
             // 异步记录日志
             CompletableFuture.runAsync(TraceContext.wrap(() -> {
                 try {
                     recordLog(annotation, method, joinPoint.getArgs(), finalResult,
-                            finalError, finalElapsed, traceId, requestInfo);
+                            finalError, finalElapsed, traceId, requestInfo, userInfo);
                 } catch (Exception e) {
                     log.error("[操作日志] 记录失败", e);
                 }
@@ -79,8 +80,9 @@ public class OperationLogAspect {
 
     private void recordLog(OperationLog annotation, Method method, Object[] args,
                            Object result, Throwable error, long elapsed,
-                           String traceId, RequestInfo requestInfo) {
-        OperationLogEntity entity = buildEntity(annotation, method, args, result, error, elapsed, traceId, requestInfo);
+                           String traceId, RequestInfo requestInfo, UserInfo userInfo) {
+        OperationLogEntity entity = buildEntity(annotation, method, args, result, error, elapsed,
+                traceId, requestInfo, userInfo);
         Map<String, Object> logData = new HashMap<>();
         logData.put("module", entity.getModule());
         logData.put("action", entity.getAction());
@@ -93,6 +95,8 @@ public class OperationLogAspect {
         logData.put("uri", entity.getUri());
         logData.put("httpMethod", entity.getHttpMethod());
         logData.put("ip", entity.getClientIp());
+        logData.put("operatorId", entity.getOperatorId());
+        logData.put("operatorName", entity.getOperatorName());
         logData.put("params", entity.getParams());
         logData.put("result", entity.getResult());
         logData.put("error", entity.getErrorMessage());
@@ -102,7 +106,7 @@ public class OperationLogAspect {
 
     private OperationLogEntity buildEntity(OperationLog annotation, Method method, Object[] args,
                                            Object result, Throwable error, long elapsed,
-                                           String traceId, RequestInfo requestInfo) {
+                                           String traceId, RequestInfo requestInfo, UserInfo userInfo) {
         OperationLogEntity entity = new OperationLogEntity();
         entity.setLogType(error == null ? "OPERATION" : "EXCEPTION");
         entity.setModule(annotation.module());
@@ -128,6 +132,10 @@ public class OperationLogAspect {
             entity.setHttpMethod(requestInfo.method());
             entity.setClientIp(requestInfo.ip());
         }
+        if (userInfo != null) {
+            entity.setOperatorId(userInfo.userId());
+            entity.setOperatorName(userInfo.username());
+        }
         return entity;
     }
 
@@ -152,6 +160,35 @@ public class OperationLogAspect {
         return attrs != null ? attrs.getRequest() : null;
     }
 
+    private UserInfo getCurrentUserInfo() {
+        try {
+            Class<?> clazz = Class.forName("com.framework.auth.context.UserContextHolder");
+            Long userId = valueAsLong(clazz.getMethod("getUserId").invoke(null));
+            String username = valueAsString(clazz.getMethod("getUsername").invoke(null));
+            return userId == null && username == null ? null : new UserInfo(userId, username);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private Long valueAsLong(Object value) {
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        if (value instanceof String text) {
+            try {
+                return Long.parseLong(text);
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    private String valueAsString(Object value) {
+        return value == null ? null : value.toString();
+    }
+
     private String getClientIp(HttpServletRequest request) {
         String ip = request.getHeader("X-Forwarded-For");
         if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
@@ -172,5 +209,8 @@ public class OperationLogAspect {
     }
 
     private record RequestInfo(String uri, String method, String ip) {
+    }
+
+    private record UserInfo(Long userId, String username) {
     }
 }
