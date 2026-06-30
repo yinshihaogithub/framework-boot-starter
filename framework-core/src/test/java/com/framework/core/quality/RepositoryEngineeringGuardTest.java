@@ -1275,12 +1275,17 @@ class RepositoryEngineeringGuardTest {
                 .contains("log.warn(\"[权限缓存] 读取权限失败")
                 .contains("log.warn(\"[权限缓存] 刷新失败")
                 .contains("log.warn(\"[权限缓存] 清空失败")
+                .contains("ScanOptions.scanOptions()")
+                .contains("try (Cursor<String> cursor = redis.scan")
+                .doesNotContain("redis.keys(")
                 .contains("return null")
                 .contains("return false");
         assertThat(cacheServiceTest)
                 .contains("readFailuresFallbackToMissingCache")
                 .contains("writeFailuresDoNotLeakToBusinessFlow")
                 .contains("deleteFailuresDoNotLeakToBusinessFlow")
+                .contains("clearAllUsesScanInsteadOfBlockingKeys")
+                .contains("keyPatterns).isEmpty()")
                 .contains("redis unavailable");
     }
 

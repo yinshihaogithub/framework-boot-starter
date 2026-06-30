@@ -2,11 +2,14 @@ package com.framework.security.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.Cursor;
+import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
-import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -20,6 +23,8 @@ public class PermissionCacheService {
     private static final String ROLE_CACHE_PREFIX = "framework:perm:roles:";
     private static final String PERM_CACHE_PREFIX = "framework:perm:perms:";
     private static final long CACHE_TTL = 3600; // 1小时
+    private static final long SCAN_COUNT = 500;
+    private static final int DELETE_BATCH_SIZE = 500;
 
     private final StringRedisTemplate redis;
     private final ObjectMapper objectMapper;
@@ -134,17 +139,61 @@ public class PermissionCacheService {
      */
     public void clearAll() {
         try {
-            Set<String> roleKeys = redis.keys(ROLE_CACHE_PREFIX + "*");
-            Set<String> permKeys = redis.keys(PERM_CACHE_PREFIX + "*");
-            if (roleKeys != null) {
-                redis.delete(roleKeys);
+            DeleteResult roleResult = deleteByPattern(ROLE_CACHE_PREFIX + "*");
+            DeleteResult permissionResult = deleteByPattern(PERM_CACHE_PREFIX + "*");
+            long deleted = roleResult.deleted() + permissionResult.deleted();
+            if (roleResult.success() && permissionResult.success()) {
+                log.info("[权限缓存] 已清空所有缓存 count={}", deleted);
+            } else {
+                log.warn("[权限缓存] 清空失败 deleted={}, roleSuccess={}, permissionSuccess={}",
+                        deleted, roleResult.success(), permissionResult.success());
             }
-            if (permKeys != null) {
-                redis.delete(permKeys);
-            }
-            log.info("[权限缓存] 已清空所有缓存");
         } catch (Exception e) {
             log.warn("[权限缓存] 清空失败 error={}", e.getMessage());
         }
+    }
+
+    private DeleteResult deleteByPattern(String pattern) {
+        long deleted = 0;
+        boolean success = true;
+        List<String> batch = new ArrayList<>(DELETE_BATCH_SIZE);
+        try (Cursor<String> cursor = redis.scan(ScanOptions.scanOptions()
+                .match(pattern)
+                .count(SCAN_COUNT)
+                .build())) {
+            while (cursor.hasNext()) {
+                batch.add(cursor.next());
+                if (batch.size() >= DELETE_BATCH_SIZE) {
+                    DeleteResult batchResult = deleteBatch(batch);
+                    deleted += batchResult.deleted();
+                    success = success && batchResult.success();
+                }
+            }
+            DeleteResult batchResult = deleteBatch(batch);
+            deleted += batchResult.deleted();
+            success = success && batchResult.success();
+        } catch (Exception e) {
+            log.warn("[权限缓存] 扫描清理失败 pattern={}, error={}", pattern, e.getMessage());
+            success = false;
+        }
+        return new DeleteResult(deleted, success);
+    }
+
+    private DeleteResult deleteBatch(Collection<String> keys) {
+        if (keys.isEmpty()) {
+            return new DeleteResult(0, true);
+        }
+        List<String> batch = new ArrayList<>(keys);
+        keys.clear();
+        try {
+            Long deleted = redis.delete(batch);
+            return new DeleteResult(deleted == null ? 0 : deleted, true);
+        } catch (Exception e) {
+            log.warn("[权限缓存] 批量删除失败 count={}, error={}", batch.size(), e.getMessage());
+            return new DeleteResult(0, false);
+        }
+    }
+
+    private record DeleteResult(long deleted, boolean success) {
     }
 }
