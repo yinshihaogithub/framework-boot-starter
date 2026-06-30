@@ -272,7 +272,18 @@ public class DefaultLocalMessageService implements LocalMessageService {
     }
 
     private static String normalize(String value) {
-        return value == null ? null : value.trim();
+        if (value == null) {
+            return null;
+        }
+        int start = 0;
+        int end = value.length();
+        while (start < end && isBoundarySpace(value.charAt(start))) {
+            start++;
+        }
+        while (end > start && isBoundarySpace(value.charAt(end - 1))) {
+            end--;
+        }
+        return value.substring(start, end);
     }
 
     private static String normalizeOptional(String value) {
@@ -281,6 +292,18 @@ public class DefaultLocalMessageService implements LocalMessageService {
     }
 
     private static boolean hasText(String value) {
-        return value != null && !value.isBlank();
+        if (value == null) {
+            return false;
+        }
+        for (int i = 0; i < value.length(); i++) {
+            if (!isBoundarySpace(value.charAt(i))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean isBoundarySpace(char value) {
+        return Character.isWhitespace(value) || Character.isSpaceChar(value);
     }
 }

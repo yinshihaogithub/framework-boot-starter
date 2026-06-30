@@ -107,6 +107,9 @@ class DefaultLocalMessageServiceTest {
         assertThatThrownBy(() -> service.publish(" ", "ORD-1", "{}"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("topic");
+        assertThatThrownBy(() -> service.publish("\u00A0\u3000", "ORD-1", "{}"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("topic");
         assertThatThrownBy(() -> service.publish("order.created", "ORD-1", " "))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("payload");
@@ -124,6 +127,36 @@ class DefaultLocalMessageServiceTest {
         LocalMessage message = service.publish(" order.created ", "ORD-1", "{}");
 
         assertThat(message.getTopic()).isEqualTo("order.created");
+        assertThat(service.retryDueMessages()).isEqualTo(1);
+        assertThat(handled).hasValue(1);
+        assertThat(repository.findById(message.getId()).orElseThrow().getStatus())
+                .isEqualTo(LocalMessageStatus.SUCCESS);
+    }
+
+    @Test
+    void publishNormalizesUnicodeBoundarySpacesBeforePersistenceAndDispatch() {
+        InMemoryLocalMessageRepository repository = new InMemoryLocalMessageRepository();
+        AtomicInteger handled = new AtomicInteger();
+        DefaultLocalMessageService service = new DefaultLocalMessageService(repository, properties(), List.of(handler(
+                "\u00A0order.created\u3000",
+                message -> handled.incrementAndGet()
+        )));
+
+        LocalMessage message = service.publish(new LocalMessage()
+                .setMessageId("\u00A0local-msg-1\u3000")
+                .setTopic("\u00A0order.created\u3000")
+                .setBusinessKey("\u00A0ORD-1\u3000")
+                .setTenantId("\u00A0tenant-a\u3000")
+                .setOperator("\u00A0ops-user\u3000")
+                .setSource("\u00A0order-service\u3000")
+                .setPayload("{}"));
+
+        assertThat(message.getMessageId()).isEqualTo("local-msg-1");
+        assertThat(message.getTopic()).isEqualTo("order.created");
+        assertThat(message.getBusinessKey()).isEqualTo("ORD-1");
+        assertThat(message.getTenantId()).isEqualTo("tenant-a");
+        assertThat(message.getOperator()).isEqualTo("ops-user");
+        assertThat(message.getSource()).isEqualTo("order-service");
         assertThat(service.retryDueMessages()).isEqualTo(1);
         assertThat(handled).hasValue(1);
         assertThat(repository.findById(message.getId()).orElseThrow().getStatus())
