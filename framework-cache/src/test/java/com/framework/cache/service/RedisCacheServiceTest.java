@@ -47,14 +47,12 @@ class RedisCacheServiceTest {
     @Test
     void usesConfiguredDefaultTtlForSimpleSetAndLoader() {
         RecordingRedis redis = new RecordingRedis();
-        RedisCacheService cacheService = new RedisCacheService(redis, 120);
+        RedisCacheService cacheService = new RedisCacheService(redis, 120, () -> 7);
 
         cacheService.set("user:1", "alice");
         cacheService.get("user:2", String.class, () -> "bob");
 
-        assertThat(redis.setTtls).hasSize(2);
-        assertThat(redis.setTtls)
-                .allSatisfy(ttl -> assertThat(ttl).isBetween(120L, 179L));
+        assertThat(redis.setTtls).containsExactly(127L, 127L);
     }
 
     @Test

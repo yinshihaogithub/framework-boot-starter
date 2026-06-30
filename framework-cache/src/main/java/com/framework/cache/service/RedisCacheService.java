@@ -10,8 +10,10 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.LongSupplier;
 
 /**
  * Redis 缓存实现
@@ -25,10 +27,12 @@ public class RedisCacheService implements CacheService {
     private static final String NULL_VALUE = "\0NULL\0";
     private static final String NULL_VALUE_PREFIX = "framework:cache:null:";
     private static final long DEFAULT_TTL_SECONDS = 3600;
+    private static final long TTL_JITTER_BOUND = 60;
 
     private final StringRedisTemplate redis;
     private final ObjectMapper objectMapper;
     private final long defaultTtlSeconds;
+    private final LongSupplier ttlJitterSupplier;
     private final ReentrantLock lock = new ReentrantLock();
 
     public RedisCacheService(StringRedisTemplate redis) {
@@ -36,11 +40,16 @@ public class RedisCacheService implements CacheService {
     }
 
     public RedisCacheService(StringRedisTemplate redis, long defaultTtlSeconds) {
+        this(redis, defaultTtlSeconds, () -> ThreadLocalRandom.current().nextLong(TTL_JITTER_BOUND));
+    }
+
+    RedisCacheService(StringRedisTemplate redis, long defaultTtlSeconds, LongSupplier ttlJitterSupplier) {
         if (defaultTtlSeconds <= 0) {
             throw new IllegalArgumentException("framework.cache.remote.default-ttl (defaultTtl) must be greater than 0");
         }
         this.redis = Objects.requireNonNull(redis, "redis must not be null");
         this.defaultTtlSeconds = defaultTtlSeconds;
+        this.ttlJitterSupplier = Objects.requireNonNull(ttlJitterSupplier, "ttlJitterSupplier must not be null");
         this.objectMapper = new ObjectMapper();
     }
 
@@ -55,8 +64,8 @@ public class RedisCacheService implements CacheService {
         CacheSupport.requireTtl(ttl, unit);
         try {
             String json = objectMapper.writeValueAsString(value);
-            // 防雪崩：TTL 随机化（在原 TTL 基础上随机增加 0-60 秒）
-            long randomTtl = ttl + (long) (Math.random() * 60);
+            // 防雪崩：TTL 随机化（在原 TTL 基础上随机增加 0-59 个当前时间单位）
+            long randomTtl = ttl + Math.floorMod(ttlJitterSupplier.getAsLong(), TTL_JITTER_BOUND);
             redis.opsForValue().set(key, json, randomTtl, unit);
         } catch (Exception e) {
             log.warn("[Redis缓存] 设置失败 key={} error={}", key, e.getMessage());
