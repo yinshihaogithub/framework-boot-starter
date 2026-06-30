@@ -69,7 +69,7 @@ public class NotifyAdminRepository {
     }
 
     public long countTemplatesByStatus(String status) {
-        return mapper.countTemplatesByStatus(status);
+        return mapper.countTemplatesByStatus(normalize(status));
     }
 
     private NotifyAdminMapper.TemplateRow toTemplateRow(NotifyAdminModels.TemplateRequest request) {
@@ -159,10 +159,11 @@ public class NotifyAdminRepository {
         if (values == null || values.isEmpty()) {
             return null;
         }
-        return String.join(",", values.stream()
+        List<String> normalized = values.stream()
                 .filter(value -> value != null && !value.isBlank())
                 .map(String::trim)
-                .toList());
+                .toList();
+        return normalized.isEmpty() ? null : String.join(",", normalized);
     }
 
     private static List<String> split(String value) {

@@ -45,6 +45,24 @@ class NotifyAdminRepositoryTest {
     }
 
     @Test
+    void createTemplateDefaultsStatusAndDropsBlankReceivers() {
+        NotifyAdminModels.TemplateRequest request = new NotifyAdminModels.TemplateRequest();
+        request.setTemplateCode("welcome");
+        request.setTemplateName("欢迎");
+        request.setChannel("log");
+        request.setTitle("hello");
+        request.setContent("content");
+        request.setReceivers(Arrays.asList(" ", null));
+        request.setStatus(" ");
+
+        Long id = repository.createTemplate(request);
+
+        assertThat(id).isEqualTo(7L);
+        assertThat(mapper.templateRow.getReceivers()).isNull();
+        assertThat(mapper.templateRow.getStatus()).isEqualTo("ENABLED");
+    }
+
+    @Test
     void findTemplateSplitsReceivers() {
         mapper.templateRow = new NotifyAdminMapper.TemplateRow()
                 .setId(1L)
@@ -72,6 +90,57 @@ class NotifyAdminRepositoryTest {
     }
 
     @Test
+    void listRecordsNormalizesFilterAndMapsRows() {
+        mapper.recordRows = List.of(new NotifyAdminMapper.RecordRow()
+                .setId(3L)
+                .setTemplateCode("welcome")
+                .setChannel("EMAIL")
+                .setTitle("hello")
+                .setContent("content")
+                .setReceivers(" admin@example.com, ,ops@example.com ")
+                .setWebhookUrl("https://example.com/hook")
+                .setSuccess(false)
+                .setResultMessage("failed")
+                .setTraceId("trace-1")
+                .setOperatorName("admin")
+                .setCreateTime("2026-01-01 10:00:00"));
+
+        List<NotifyAdminModels.Record> records = repository.listRecords(" email ", false, 3, 15);
+
+        assertThat(mapper.channel).isEqualTo("EMAIL");
+        assertThat(mapper.success).isFalse();
+        assertThat(mapper.offset).isEqualTo(30);
+        assertThat(mapper.pageSize).isEqualTo(15);
+        assertThat(records).hasSize(1);
+        NotifyAdminModels.Record record = records.get(0);
+        assertThat(record.getId()).isEqualTo(3L);
+        assertThat(record.getReceivers()).containsExactly("admin@example.com", "ops@example.com");
+        assertThat(record.getWebhookUrl()).isEqualTo("https://example.com/hook");
+        assertThat(record.getSuccess()).isFalse();
+        assertThat(record.getResultMessage()).isEqualTo("failed");
+        assertThat(record.getTraceId()).isEqualTo("trace-1");
+        assertThat(record.getOperatorName()).isEqualTo("admin");
+        assertThat(record.getCreateTime()).isEqualTo("2026-01-01 10:00:00");
+    }
+
+    @Test
+    void countQueriesNormalizeArguments() {
+        assertThat(repository.countTemplates(" welcome ", " log ", " enabled ")).isEqualTo(11L);
+        assertThat(mapper.keywordLike).isEqualTo("%welcome%");
+        assertThat(mapper.channel).isEqualTo("LOG");
+        assertThat(mapper.status).isEqualTo("ENABLED");
+
+        assertThat(repository.countRecords(" email ", false)).isEqualTo(12L);
+        assertThat(mapper.channel).isEqualTo("EMAIL");
+        assertThat(mapper.success).isFalse();
+
+        assertThat(repository.countTemplatesByStatus(" disabled ")).isEqualTo(13L);
+        assertThat(mapper.status).isEqualTo("DISABLED");
+        assertThat(repository.countRecordsBySuccess(true)).isEqualTo(14L);
+        assertThat(mapper.success).isTrue();
+    }
+
+    @Test
     void updateAndDeleteTemplateReportAffectedRows() {
         NotifyAdminModels.TemplateRequest request = new NotifyAdminModels.TemplateRequest();
         request.setTemplateCode("welcome");
@@ -96,8 +165,10 @@ class NotifyAdminRepositoryTest {
         private String status;
         private int offset;
         private int pageSize;
+        private Boolean success;
         private TemplateRow templateRow;
         private RecordRow recordRow;
+        private List<RecordRow> recordRows = List.of();
         private int updateTemplateResult = 1;
         private int deleteTemplateResult = 1;
 
@@ -116,7 +187,7 @@ class NotifyAdminRepositoryTest {
             this.keywordLike = keywordLike;
             this.channel = channel;
             this.status = status;
-            return 0;
+            return 11L;
         }
 
         @Override
@@ -152,26 +223,29 @@ class NotifyAdminRepositoryTest {
         @Override
         public List<RecordRow> listRecords(String channel, Boolean success, int offset, int pageSize) {
             this.channel = channel;
+            this.success = success;
             this.offset = offset;
             this.pageSize = pageSize;
-            return List.of();
+            return recordRows;
         }
 
         @Override
         public long countRecords(String channel, Boolean success) {
             this.channel = channel;
-            return 0;
+            this.success = success;
+            return 12L;
         }
 
         @Override
         public long countRecordsBySuccess(boolean success) {
-            return 0;
+            this.success = success;
+            return 14L;
         }
 
         @Override
         public long countTemplatesByStatus(String status) {
             this.status = status;
-            return 0;
+            return 13L;
         }
     }
 }
