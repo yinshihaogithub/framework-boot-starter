@@ -105,6 +105,27 @@ class TraceAdminServiceTest {
     }
 
     @Test
+    void timelineMessagesAreSingleLineAndBounded() {
+        OperationLogEntity log = operationLog("trace-a", false, "删除用户", "/admin/users/1", new Date(1_000));
+        log.setErrorMessage("log line\n" + "x".repeat(1500));
+        MqFailedMessage mqMessage = mqMessage(1L, "trace-a", MqFailedMessage.STATUS_EXHAUSTED, new Date(2_000));
+        mqMessage.setErrorMessage("mq line\n" + "y".repeat(1500));
+        LocalMessage localMessage = localMessage(1L, "trace-a", LocalMessageStatus.FAILED,
+                LocalDateTime.of(2026, 1, 1, 12, 0));
+        localMessage.setErrorMessage("local line\n" + "z".repeat(1500));
+        TraceAdminService service = service(List.of(log), List.of(mqMessage), List.of(localMessage));
+
+        TraceDetail detail = service.detail("trace-a");
+
+        assertThat(detail.getTimeline()).hasSize(3);
+        assertThat(detail.getTimeline())
+                .extracting("message")
+                .allSatisfy(message -> assertThat((String) message)
+                        .hasSize(1024)
+                        .doesNotContain("\n"));
+    }
+
+    @Test
     void ordersTraceTimelineByNewestTimeWithNullsLast() {
         TraceAdminService service = service(
                 List.of(
@@ -241,6 +262,22 @@ class TraceAdminServiceTest {
                 .containsExactly(
                         "操作日志数据不可用: operation log table unavailable",
                         "本地消息数据不可用: local message table unavailable");
+    }
+
+    @Test
+    void warningMessagesAreSingleLineAndBounded() {
+        TraceAdminService service = new TraceAdminService(
+                failingProvider("provider line\n" + "x".repeat(900)),
+                provider(null),
+                provider(null));
+
+        TraceDetail detail = service.detail("trace-warning");
+
+        assertThat(detail.getWarnings()).hasSize(1);
+        assertThat(detail.getWarnings().get(0))
+                .startsWith("操作日志数据不可用: provider line ")
+                .hasSize("操作日志数据不可用: ".length() + 512)
+                .doesNotContain("\n");
     }
 
     private static TraceAdminService service(List<OperationLogEntity> logs,
@@ -454,25 +491,29 @@ class TraceAdminServiceTest {
     }
 
     private static <T> ObjectProvider<T> failingProvider() {
+        return failingProvider("trace optional provider unavailable");
+    }
+
+    private static <T> ObjectProvider<T> failingProvider(String message) {
         return new ObjectProvider<>() {
             @Override
             public T getObject(Object... args) {
-                throw new IllegalStateException("trace optional provider unavailable");
+                throw new IllegalStateException(message);
             }
 
             @Override
             public T getIfAvailable() {
-                throw new IllegalStateException("trace optional provider unavailable");
+                throw new IllegalStateException(message);
             }
 
             @Override
             public T getIfUnique() {
-                throw new IllegalStateException("trace optional provider unavailable");
+                throw new IllegalStateException(message);
             }
 
             @Override
             public T getObject() {
-                throw new IllegalStateException("trace optional provider unavailable");
+                throw new IllegalStateException(message);
             }
 
             @Override

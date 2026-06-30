@@ -32,6 +32,8 @@ public class TraceAdminService {
     private static final String LOG_COUNT_WARNING = "操作日志统计不可用";
     private static final String MQ_WARNING = "MQ失败消息数据不可用";
     private static final String LOCAL_MESSAGE_WARNING = "本地消息数据不可用";
+    private static final int MAX_TIMELINE_MESSAGE_LENGTH = 1024;
+    private static final int MAX_WARNING_MESSAGE_LENGTH = 512;
 
     private final ObjectProvider<OperationLogMapper> operationLogMapperProvider;
     private final ObjectProvider<DeadLetterHandler> deadLetterHandlerProvider;
@@ -155,8 +157,8 @@ public class TraceAdminService {
     }
 
     private String warning(String source, Exception exception) {
-        String message = exception == null ? null : exception.getMessage();
-        return source + (message == null || message.isBlank() ? "" : ": " + message);
+        String message = summarize(exception == null ? null : exception.getMessage(), MAX_WARNING_MESSAGE_LENGTH);
+        return source + (message == null ? "" : ": " + message);
     }
 
     private void addTruncationWarning(String label, TraceSourceData<?> data, List<String> warnings) {
@@ -206,24 +208,42 @@ public class TraceAdminService {
                 .setSource("LOG")
                 .setTitle(firstNonBlank(log.getAction(), log.getUri(), log.getMethod()))
                 .setStatus(Boolean.FALSE.equals(log.getSuccess()) ? "FAILED" : "SUCCESS")
-                .setMessage(log.getErrorMessage())
+                .setMessage(timelineMessage(log.getErrorMessage()))
                 .setTime(log.getCreateTime())));
         mqMessages.forEach(message -> events.add(new TraceEvent()
                 .setSource("MQ")
                 .setTitle(firstNonBlank(message.getMessageType(), message.getQueueName(), message.getMessageId()))
                 .setStatus(message.getStatus())
-                .setMessage(message.getErrorMessage())
+                .setMessage(timelineMessage(message.getErrorMessage()))
                 .setBusinessKey(message.getBusinessKey())
                 .setTime(message.getCreateTime())));
         localMessages.forEach(message -> events.add(new TraceEvent()
                 .setSource("LOCAL_MESSAGE")
                 .setTitle(firstNonBlank(message.getTopic(), message.getMessageId()))
                 .setStatus(String.valueOf(message.getStatus()))
-                .setMessage(message.getErrorMessage())
+                .setMessage(timelineMessage(message.getErrorMessage()))
                 .setBusinessKey(message.getBusinessKey())
                 .setTime(toDate(message.getCreateTime()))));
         events.sort(Comparator.comparing(TraceEvent::getTime, newestFirst()));
         return events;
+    }
+
+    private String timelineMessage(String message) {
+        return summarize(message, MAX_TIMELINE_MESSAGE_LENGTH);
+    }
+
+    private String summarize(String value, int maxLength) {
+        if (value == null) {
+            return null;
+        }
+        String normalized = value.replaceAll("\\s+", " ").trim();
+        if (normalized.isEmpty()) {
+            return null;
+        }
+        if (normalized.length() <= maxLength) {
+            return normalized;
+        }
+        return normalized.substring(0, maxLength);
     }
 
     private <T extends Comparable<? super T>> Comparator<T> newestFirst() {
