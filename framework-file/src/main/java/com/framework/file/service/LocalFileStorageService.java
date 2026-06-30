@@ -66,13 +66,32 @@ public class LocalFileStorageService implements FileStorageService {
         if (value == null || value.isBlank()) {
             return "file";
         }
-        String normalized = value.trim().replace('\\', '/');
+        String normalized = trimBoundarySpace(value).replace('\\', '/');
         int index = normalized.lastIndexOf('/');
-        String filename = index < 0 ? normalized : normalized.substring(index + 1).trim();
+        String filename = index < 0 ? normalized : trimBoundarySpace(normalized.substring(index + 1));
         if (filename.isBlank() || ".".equals(filename) || "..".equals(filename)) {
             return "file";
         }
         return filename;
+    }
+
+    private String trimBoundarySpace(String value) {
+        if (value == null) {
+            return "";
+        }
+        int start = 0;
+        int end = value.length();
+        while (start < end && isBoundarySpace(value.charAt(start))) {
+            start++;
+        }
+        while (end > start && isBoundarySpace(value.charAt(end - 1))) {
+            end--;
+        }
+        return value.substring(start, end);
+    }
+
+    private boolean isBoundarySpace(char value) {
+        return Character.isWhitespace(value) || Character.isSpaceChar(value);
     }
 
     private Path basePath() {

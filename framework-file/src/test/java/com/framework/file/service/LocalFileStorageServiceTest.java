@@ -105,6 +105,22 @@ class LocalFileStorageServiceTest {
     }
 
     @Test
+    void trimsUnicodeBoundarySpacesBeforeSanitizingAndValidatingExtension() throws Exception {
+        FileProperties properties = properties();
+        properties.setAllowedExtensions(List.of("jpg"));
+        LocalFileStorageService storageService = new LocalFileStorageService(properties);
+
+        StoredFile storedFile = storageService.store(
+                "\u00A0avatar.JPG\u3000",
+                new ByteArrayInputStream("hello".getBytes(StandardCharsets.UTF_8))
+        );
+
+        assertThat(storedFile.getOriginalFilename()).isEqualTo("avatar.JPG");
+        assertThat(storedFile.getKey()).endsWith("-avatar.JPG");
+        assertThat(Files.exists(tempDir.resolve(storedFile.getKey()))).isTrue();
+    }
+
+    @Test
     void rejectsHiddenOrTrailingDotFilenamesWhenExtensionWhitelistIsConfigured() {
         FileProperties properties = properties();
         properties.setAllowedExtensions(List.of("env", "txt"));
