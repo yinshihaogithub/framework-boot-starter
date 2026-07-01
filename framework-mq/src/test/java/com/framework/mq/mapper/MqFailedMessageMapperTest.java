@@ -5,6 +5,7 @@ import org.apache.ibatis.annotations.Delete;
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Options;
+import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.ClassPathResource;
@@ -38,6 +39,28 @@ class MqFailedMessageMapperTest {
         assertThat(sql(update.getAnnotation(Update.class).value()))
                 .contains("UPDATE ${tableName} SET")
                 .contains("WHERE id = #{message.id}");
+
+        Method list = MqFailedMessageMapper.class.getMethod("list", String.class, String.class, String.class,
+                String.class, String.class, String.class, int.class, int.class);
+        assertThat(sql(list.getAnnotation(Select.class).value()))
+                .contains("ORDER BY create_time DESC, id DESC")
+                .contains("LOWER(message_type) = LOWER(#{messageType})")
+                .contains("LIMIT #{offset}, #{pageSize}");
+
+        Method count = MqFailedMessageMapper.class.getMethod("count", String.class, String.class, String.class,
+                String.class, String.class, String.class);
+        assertThat(sql(count.getAnnotation(Select.class).value()))
+                .contains("SELECT COUNT(*)")
+                .contains("trace_id LIKE #{traceIdLike}")
+                .contains("business_key LIKE #{businessKeyLike}");
+
+        Method countAll = MqFailedMessageMapper.class.getMethod("countAll", String.class);
+        assertThat(sql(countAll.getAnnotation(Select.class).value()))
+                .contains("SELECT COUNT(*) FROM ${tableName}");
+
+        Method countByStatus = MqFailedMessageMapper.class.getMethod("countByStatus", String.class, String.class);
+        assertThat(sql(countByStatus.getAnnotation(Select.class).value()))
+                .contains("WHERE status = #{status}");
 
         Method cleanup = MqFailedMessageMapper.class.getMethod("deleteProcessed",
                 String.class, String.class, String.class, String.class);

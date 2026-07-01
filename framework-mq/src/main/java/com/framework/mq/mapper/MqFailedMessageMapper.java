@@ -139,6 +139,58 @@ public interface MqFailedMessageMapper {
     @ResultMap("mqFailedMessageMap")
     List<MqFailedMessage> findAll(@Param("tableName") String tableName);
 
+    @Select("""
+            <script>
+            SELECT *
+            FROM ${tableName}
+            <where>
+                <if test="queueName != null">AND queue_name = #{queueName}</if>
+                <if test="status != null">AND status = #{status}</if>
+                <if test="traceIdLike != null">AND trace_id LIKE #{traceIdLike}</if>
+                <if test="businessKeyLike != null">AND business_key LIKE #{businessKeyLike}</if>
+                <if test="messageType != null">AND LOWER(message_type) = LOWER(#{messageType})</if>
+            </where>
+            ORDER BY create_time DESC, id DESC
+            LIMIT #{offset}, #{pageSize}
+            </script>
+            """)
+    @ResultMap("mqFailedMessageMap")
+    List<MqFailedMessage> list(@Param("tableName") String tableName,
+                               @Param("queueName") String queueName,
+                               @Param("status") String status,
+                               @Param("traceIdLike") String traceIdLike,
+                               @Param("businessKeyLike") String businessKeyLike,
+                               @Param("messageType") String messageType,
+                               @Param("offset") int offset,
+                               @Param("pageSize") int pageSize);
+
+    @Select("""
+            <script>
+            SELECT COUNT(*)
+            FROM ${tableName}
+            <where>
+                <if test="queueName != null">AND queue_name = #{queueName}</if>
+                <if test="status != null">AND status = #{status}</if>
+                <if test="traceIdLike != null">AND trace_id LIKE #{traceIdLike}</if>
+                <if test="businessKeyLike != null">AND business_key LIKE #{businessKeyLike}</if>
+                <if test="messageType != null">AND LOWER(message_type) = LOWER(#{messageType})</if>
+            </where>
+            </script>
+            """)
+    long count(@Param("tableName") String tableName,
+               @Param("queueName") String queueName,
+               @Param("status") String status,
+               @Param("traceIdLike") String traceIdLike,
+               @Param("businessKeyLike") String businessKeyLike,
+               @Param("messageType") String messageType);
+
+    @Select("SELECT COUNT(*) FROM ${tableName}")
+    long countAll(@Param("tableName") String tableName);
+
+    @Select("SELECT COUNT(*) FROM ${tableName} WHERE status = #{status}")
+    long countByStatus(@Param("tableName") String tableName,
+                       @Param("status") String status);
+
     @Delete("DELETE FROM ${tableName} WHERE id = #{id}")
     int deleteById(@Param("tableName") String tableName, @Param("id") Long id);
 

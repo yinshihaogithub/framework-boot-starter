@@ -3,6 +3,7 @@ package com.framework.admin.dashboard;
 import com.framework.admin.excel.ExcelAdminMapper;
 import com.framework.admin.file.FileAdminMapper;
 import com.framework.admin.localmessage.LocalMessageAdminMapperSupport;
+import com.framework.admin.mq.MqAdminMapperSupport;
 import com.framework.admin.notify.NotifyAdminMapper;
 import com.framework.admin.system.AdminSystemModels.ConfigItem;
 import com.framework.admin.system.AdminSystemMapperSupport;
@@ -10,7 +11,8 @@ import com.framework.localmessage.config.LocalMessageProperties;
 import com.framework.localmessage.mapper.LocalMessageMapper;
 import com.framework.localmessage.model.LocalMessageStatus;
 import com.framework.log.mapper.OperationLogMapper;
-import com.framework.mq.deadletter.DeadLetterHandler;
+import com.framework.mq.config.MqProperties;
+import com.framework.mq.mapper.MqFailedMessageMapper;
 import com.framework.mq.deadletter.MqFailedMessage;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
@@ -26,7 +28,8 @@ import java.util.Map;
 @Service
 public class DashboardService {
 
-    private final ObjectProvider<DeadLetterHandler> deadLetterHandlerProvider;
+    private final ObjectProvider<MqFailedMessageMapper> mqFailedMessageMapperProvider;
+    private final ObjectProvider<MqProperties> mqPropertiesProvider;
     private final ObjectProvider<LocalMessageMapper> localMessageMapperProvider;
     private final ObjectProvider<LocalMessageProperties> localMessagePropertiesProvider;
     private final ObjectProvider<OperationLogMapper> operationLogMapperProvider;
@@ -35,7 +38,8 @@ public class DashboardService {
     private final ObjectProvider<FileAdminMapper> fileAdminMapperProvider;
     private final ObjectProvider<AdminSystemMapperSupport> adminSystemMapperSupportProvider;
 
-    public DashboardService(ObjectProvider<DeadLetterHandler> deadLetterHandlerProvider,
+    public DashboardService(ObjectProvider<MqFailedMessageMapper> mqFailedMessageMapperProvider,
+                            ObjectProvider<MqProperties> mqPropertiesProvider,
                             ObjectProvider<LocalMessageMapper> localMessageMapperProvider,
                             ObjectProvider<LocalMessageProperties> localMessagePropertiesProvider,
                             ObjectProvider<OperationLogMapper> operationLogMapperProvider,
@@ -43,7 +47,8 @@ public class DashboardService {
                             ObjectProvider<ExcelAdminMapper> excelAdminMapperProvider,
                             ObjectProvider<FileAdminMapper> fileAdminMapperProvider,
                             ObjectProvider<AdminSystemMapperSupport> adminSystemMapperSupportProvider) {
-        this.deadLetterHandlerProvider = deadLetterHandlerProvider;
+        this.mqFailedMessageMapperProvider = mqFailedMessageMapperProvider;
+        this.mqPropertiesProvider = mqPropertiesProvider;
         this.localMessageMapperProvider = localMessageMapperProvider;
         this.localMessagePropertiesProvider = localMessagePropertiesProvider;
         this.operationLogMapperProvider = operationLogMapperProvider;
@@ -72,27 +77,22 @@ public class DashboardService {
         metrics.put("manual", 0L);
         metrics.put("exhausted", 0L);
         metrics.put("total", 0L);
-        DeadLetterHandler handler = available(deadLetterHandlerProvider);
-        if (handler == null) {
+        MqFailedMessageMapper mapper = available(mqFailedMessageMapperProvider);
+        String tableName = mqFailedMessageTableName();
+        if (mapper == null || tableName == null) {
             return metrics;
         }
         try {
-            var store = handler.getFailedMessageStore();
-            metrics.put("pending", countMq(store, MqFailedMessage.STATUS_PENDING));
-            metrics.put("retrying", countMq(store, MqFailedMessage.STATUS_RETRYING));
-            metrics.put("manual", countMq(store, MqFailedMessage.STATUS_MANUAL));
-            metrics.put("exhausted", countMq(store, MqFailedMessage.STATUS_EXHAUSTED));
-            metrics.put("total", (long) store.size());
+            var stats = MqAdminMapperSupport.stats(mapper, tableName);
+            metrics.put("pending", stats.getPendingCount());
+            metrics.put("retrying", stats.getRetryingCount());
+            metrics.put("manual", mapper.countByStatus(tableName, MqFailedMessage.STATUS_MANUAL));
+            metrics.put("exhausted", stats.getExhaustedCount());
+            metrics.put("total", stats.getTotalCount());
         } catch (Exception ignored) {
             return zero(metrics);
         }
         return metrics;
-    }
-
-    private long countMq(Map<Long, MqFailedMessage> store, String status) {
-        return store.values().stream()
-                .filter(message -> status.equals(message.getStatus()))
-                .count();
     }
 
     private Map<String, Long> localMessageMetrics() {
@@ -221,6 +221,18 @@ public class DashboardService {
         }
         try {
             return LocalMessageAdminMapperSupport.tableName(properties);
+        } catch (RuntimeException ignored) {
+            return null;
+        }
+    }
+
+    private String mqFailedMessageTableName() {
+        MqProperties properties = available(mqPropertiesProvider);
+        if (properties == null) {
+            return null;
+        }
+        try {
+            return MqAdminMapperSupport.tableName(properties);
         } catch (RuntimeException ignored) {
             return null;
         }

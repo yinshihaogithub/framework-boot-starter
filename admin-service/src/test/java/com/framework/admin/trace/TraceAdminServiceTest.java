@@ -10,19 +10,15 @@ import com.framework.localmessage.model.LocalMessageStatus;
 import com.framework.log.entity.OperationLogEntity;
 import com.framework.log.mapper.OperationLogMapper;
 import com.framework.mq.config.MqProperties;
-import com.framework.mq.deadletter.DeadLetterHandler;
 import com.framework.mq.deadletter.MqFailedMessage;
-import com.framework.mq.deadletter.MqFailedMessageRepository;
+import com.framework.mq.mapper.MqFailedMessageMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 
 import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.Date;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.Optional;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -222,7 +218,7 @@ class TraceAdminServiceTest {
     @Test
     void returnsEmptyDetailWhenOptionalRuntimesAreMissing() {
         TraceAdminService service = new TraceAdminService(provider(null), provider(null), provider(null),
-                provider(null));
+                provider(null), provider(null));
 
         TraceDetail detail = service.detail("trace-empty");
 
@@ -250,8 +246,8 @@ class TraceAdminServiceTest {
 
     @Test
     void returnsEmptyDetailWhenOptionalProvidersFail() {
-        TraceAdminService service = new TraceAdminService(failingProvider(), failingProvider(), failingProvider(),
-                provider(null));
+        TraceAdminService service = new TraceAdminService(failingProvider(), failingProvider(), provider(null),
+                failingProvider(), provider(null));
 
         TraceDetail detail = service.detail("trace-provider-failed");
 
@@ -275,7 +271,8 @@ class TraceAdminServiceTest {
     void returnsWarningsWhenTraceDataQueriesFail() {
         TraceAdminService service = new TraceAdminService(
                 provider(failingMapper()),
-                provider(null),
+                provider(failingMqFailedMessageMapper()),
+                provider(mqProperties()),
                 provider(failingLocalMessageMapper()),
                 provider(localMessageProperties()));
 
@@ -289,6 +286,7 @@ class TraceAdminServiceTest {
         assertThat(detail.getWarnings())
                 .containsExactly(
                         "操作日志数据不可用: operation log table unavailable",
+                        "MQ失败消息数据不可用: mq failed message table unavailable",
                         "本地消息数据不可用: local message table unavailable");
     }
 
@@ -296,6 +294,7 @@ class TraceAdminServiceTest {
     void warningMessagesAreSingleLineAndBounded() {
         TraceAdminService service = new TraceAdminService(
                 failingProvider("provider\u00A0line\n" + "x".repeat(900)),
+                provider(null),
                 provider(null),
                 provider(null),
                 provider(null));
@@ -315,7 +314,8 @@ class TraceAdminServiceTest {
                                              List<LocalMessage> localMessages) {
         return new TraceAdminService(
                 provider(mapper(logs)),
-                provider(new DeadLetterHandler(new InMemoryMqFailedMessageRepository(mqMessages), new MqProperties())),
+                provider(mqFailedMessageMapper(mqMessages)),
+                provider(mqProperties()),
                 provider(localMessageMapper(localMessages)),
                 provider(localMessageProperties()));
     }
@@ -413,6 +413,147 @@ class TraceAdminServiceTest {
 
             @Override
             public int deleteBefore(Date beforeDate) {
+                return 0;
+            }
+        };
+    }
+
+    private static MqFailedMessageMapper mqFailedMessageMapper(List<MqFailedMessage> messages) {
+        return new MqFailedMessageMapper() {
+            @Override
+            public void createTableIfNotExists(String tableName) {
+            }
+
+            @Override
+            public int insert(String tableName, MqFailedMessage message) {
+                return 1;
+            }
+
+            @Override
+            public int update(String tableName, MqFailedMessage message) {
+                return 1;
+            }
+
+            @Override
+            public MqFailedMessage findById(String tableName, Long id) {
+                return messages.stream().filter(message -> id.equals(message.getId())).findFirst().orElse(null);
+            }
+
+            @Override
+            public List<MqFailedMessage> findAll(String tableName) {
+                return messages;
+            }
+
+            @Override
+            public List<MqFailedMessage> list(String tableName, String queueName, String status,
+                                              String traceIdLike, String businessKeyLike, String messageType,
+                                              int offset, int pageSize) {
+                return messages.stream()
+                        .filter(message -> queueName == null || queueName.equals(message.getQueueName()))
+                        .filter(message -> status == null || status.equals(message.getStatus()))
+                        .filter(message -> matchesLike(message.getTraceId(), traceIdLike))
+                        .filter(message -> matchesLike(message.getBusinessKey(), businessKeyLike))
+                        .filter(message -> messageType == null
+                                || messageType.equalsIgnoreCase(message.getMessageType()))
+                        .sorted(Comparator.comparing(MqFailedMessage::getCreateTime, newestDateFirst()))
+                        .skip(offset)
+                        .limit(pageSize)
+                        .toList();
+            }
+
+            @Override
+            public long count(String tableName, String queueName, String status,
+                              String traceIdLike, String businessKeyLike, String messageType) {
+                return messages.stream()
+                        .filter(message -> queueName == null || queueName.equals(message.getQueueName()))
+                        .filter(message -> status == null || status.equals(message.getStatus()))
+                        .filter(message -> matchesLike(message.getTraceId(), traceIdLike))
+                        .filter(message -> matchesLike(message.getBusinessKey(), businessKeyLike))
+                        .filter(message -> messageType == null
+                                || messageType.equalsIgnoreCase(message.getMessageType()))
+                        .count();
+            }
+
+            @Override
+            public long countAll(String tableName) {
+                return messages.size();
+            }
+
+            @Override
+            public long countByStatus(String tableName, String status) {
+                return messages.stream().filter(message -> status.equals(message.getStatus())).count();
+            }
+
+            @Override
+            public int deleteById(String tableName, Long id) {
+                return 0;
+            }
+
+            @Override
+            public int deleteProcessed(String tableName, String successStatus,
+                                       String exhaustedStatus, String manualStatus) {
+                return 0;
+            }
+        };
+    }
+
+    private static MqFailedMessageMapper failingMqFailedMessageMapper() {
+        return new MqFailedMessageMapper() {
+            @Override
+            public void createTableIfNotExists(String tableName) {
+            }
+
+            @Override
+            public int insert(String tableName, MqFailedMessage message) {
+                return 1;
+            }
+
+            @Override
+            public int update(String tableName, MqFailedMessage message) {
+                return 1;
+            }
+
+            @Override
+            public MqFailedMessage findById(String tableName, Long id) {
+                return null;
+            }
+
+            @Override
+            public List<MqFailedMessage> findAll(String tableName) {
+                return List.of();
+            }
+
+            @Override
+            public List<MqFailedMessage> list(String tableName, String queueName, String status,
+                                              String traceIdLike, String businessKeyLike, String messageType,
+                                              int offset, int pageSize) {
+                throw new IllegalStateException("mq failed message table unavailable");
+            }
+
+            @Override
+            public long count(String tableName, String queueName, String status,
+                              String traceIdLike, String businessKeyLike, String messageType) {
+                return 0;
+            }
+
+            @Override
+            public long countAll(String tableName) {
+                return 0;
+            }
+
+            @Override
+            public long countByStatus(String tableName, String status) {
+                return 0;
+            }
+
+            @Override
+            public int deleteById(String tableName, Long id) {
+                return 0;
+            }
+
+            @Override
+            public int deleteProcessed(String tableName, String successStatus,
+                                       String exhaustedStatus, String manualStatus) {
                 return 0;
             }
         };
@@ -557,6 +698,10 @@ class TraceAdminServiceTest {
         return Comparator.nullsLast(Comparator.reverseOrder());
     }
 
+    private static Comparator<Date> newestDateFirst() {
+        return Comparator.nullsLast(Comparator.reverseOrder());
+    }
+
     private static boolean matchesLike(String value, String like) {
         if (like == null) {
             return true;
@@ -571,6 +716,12 @@ class TraceAdminServiceTest {
     private static LocalMessageProperties localMessageProperties() {
         LocalMessageProperties properties = new LocalMessageProperties();
         properties.setTableName("framework_local_message");
+        return properties;
+    }
+
+    private static MqProperties mqProperties() {
+        MqProperties properties = new MqProperties();
+        properties.setFailedMessageTableName("framework_mq_failed_message");
         return properties;
     }
 
@@ -636,47 +787,4 @@ class TraceAdminServiceTest {
         };
     }
 
-    private static class InMemoryMqFailedMessageRepository implements MqFailedMessageRepository {
-        private final Map<Long, MqFailedMessage> messages = new LinkedHashMap<>();
-
-        private InMemoryMqFailedMessageRepository(List<MqFailedMessage> initialMessages) {
-            initialMessages.forEach(message -> messages.put(message.getId(), message));
-        }
-
-        @Override
-        public MqFailedMessage save(MqFailedMessage message) {
-            messages.put(message.getId(), message);
-            return message;
-        }
-
-        @Override
-        public boolean update(MqFailedMessage message) {
-            messages.put(message.getId(), message);
-            return true;
-        }
-
-        @Override
-        public Optional<MqFailedMessage> findById(Long id) {
-            return Optional.ofNullable(messages.get(id));
-        }
-
-        @Override
-        public List<MqFailedMessage> findAll() {
-            return List.copyOf(messages.values());
-        }
-
-        @Override
-        public boolean deleteById(Long id) {
-            return messages.remove(id) != null;
-        }
-
-        @Override
-        public int deleteProcessed() {
-            int before = messages.size();
-            messages.values().removeIf(message -> MqFailedMessage.STATUS_SUCCESS.equals(message.getStatus())
-                    || MqFailedMessage.STATUS_EXHAUSTED.equals(message.getStatus())
-                    || MqFailedMessage.STATUS_MANUAL.equals(message.getStatus()));
-            return before - messages.size();
-        }
-    }
 }

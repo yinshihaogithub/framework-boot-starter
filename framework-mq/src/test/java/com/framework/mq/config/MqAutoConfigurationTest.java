@@ -194,6 +194,29 @@ class MqAutoConfigurationTest {
         }
 
         @Override
+        public List<MqFailedMessage> list(String tableName, String queueName, String status,
+                                          String traceIdLike, String businessKeyLike, String messageType,
+                                          int offset, int pageSize) {
+            return List.of();
+        }
+
+        @Override
+        public long count(String tableName, String queueName, String status,
+                          String traceIdLike, String businessKeyLike, String messageType) {
+            return 0;
+        }
+
+        @Override
+        public long countAll(String tableName) {
+            return 0;
+        }
+
+        @Override
+        public long countByStatus(String tableName, String status) {
+            return 0;
+        }
+
+        @Override
         public int deleteById(String tableName, Long id) {
             return 0;
         }

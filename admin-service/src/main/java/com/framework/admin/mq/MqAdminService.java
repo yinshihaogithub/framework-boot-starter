@@ -12,6 +12,7 @@ import com.framework.mq.deadletter.DeadLetterHandler;
 import com.framework.mq.deadletter.MqAdminDTO;
 import com.framework.mq.deadletter.MqFailedMessage;
 import com.framework.mq.deadletter.MqRetryScheduler;
+import com.framework.mq.mapper.MqFailedMessageMapper;
 import com.framework.mq.producer.MqMessageSender;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
@@ -22,8 +23,6 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
@@ -39,6 +38,7 @@ public class MqAdminService {
     private final ObjectProvider<DeadLetterHandler> deadLetterHandlerProvider;
     private final ObjectProvider<MqRetryScheduler> retrySchedulerProvider;
     private final ObjectProvider<MqProperties> mqPropertiesProvider;
+    private final ObjectProvider<MqFailedMessageMapper> mqFailedMessageMapperProvider;
     private final ObjectProvider<MqMessageSender> messageSenderProvider;
     private final ObjectProvider<RabbitAdmin> rabbitAdminProvider;
     private final ApplicationContext applicationContext;
@@ -47,6 +47,7 @@ public class MqAdminService {
     public MqAdminService(ObjectProvider<DeadLetterHandler> deadLetterHandlerProvider,
                           ObjectProvider<MqRetryScheduler> retrySchedulerProvider,
                           ObjectProvider<MqProperties> mqPropertiesProvider,
+                          ObjectProvider<MqFailedMessageMapper> mqFailedMessageMapperProvider,
                           ObjectProvider<MqMessageSender> messageSenderProvider,
                           ObjectProvider<RabbitAdmin> rabbitAdminProvider,
                           ApplicationContext applicationContext,
@@ -54,6 +55,7 @@ public class MqAdminService {
         this.deadLetterHandlerProvider = deadLetterHandlerProvider;
         this.retrySchedulerProvider = retrySchedulerProvider;
         this.mqPropertiesProvider = mqPropertiesProvider;
+        this.mqFailedMessageMapperProvider = mqFailedMessageMapperProvider;
         this.messageSenderProvider = messageSenderProvider;
         this.rabbitAdminProvider = rabbitAdminProvider;
         this.applicationContext = applicationContext;
@@ -62,20 +64,11 @@ public class MqAdminService {
 
     public MqAdminDTO.MqStats stats() {
         MqAdminDTO.MqStats stats = new MqAdminDTO.MqStats();
-        DeadLetterHandler handler = available(deadLetterHandlerProvider);
-        if (handler != null) {
+        MqFailedMessageMapper mapper = available(mqFailedMessageMapperProvider);
+        String tableName = mqFailedMessageTableName();
+        if (mapper != null && tableName != null) {
             try {
-                var store = handler.getFailedMessageStore();
-                stats.setPendingCount(store.values().stream()
-                        .filter(m -> MqFailedMessage.STATUS_PENDING.equals(m.getStatus())).count());
-                stats.setRetryingCount(store.values().stream()
-                        .filter(m -> MqFailedMessage.STATUS_RETRYING.equals(m.getStatus())).count());
-                stats.setSuccessCount(store.values().stream()
-                        .filter(m -> MqFailedMessage.STATUS_SUCCESS.equals(m.getStatus())
-                                || MqFailedMessage.STATUS_MANUAL.equals(m.getStatus())).count());
-                stats.setExhaustedCount(store.values().stream()
-                        .filter(m -> MqFailedMessage.STATUS_EXHAUSTED.equals(m.getStatus())).count());
-                stats.setTotalCount(store.size());
+                stats = MqAdminMapperSupport.stats(mapper, tableName);
             } catch (Exception e) {
                 log.debug("获取MQ失败消息统计失败: {}", e.getMessage());
             }
@@ -89,12 +82,8 @@ public class MqAdminService {
                                                                        String traceId, String businessKey,
                                                                        String messageType, int pageNum,
                                                                        int pageSize) {
-        DeadLetterHandler handler = available(deadLetterHandlerProvider);
         int safePageNum = AdminPageSupport.safePageNum(pageNum);
         int safePageSize = AdminPageSupport.safePageSize(pageSize);
-        if (handler == null) {
-            return PageResult.empty(safePageNum, safePageSize);
-        }
         String normalizedQueueName = text(queueName);
         String normalizedStatus = upper(status);
         String normalizedTraceId = normalizeTraceIdFilter(traceId);
@@ -103,25 +92,22 @@ public class MqAdminService {
         if (isInvalidTraceIdFilter(traceId, normalizedTraceId)) {
             return PageResult.empty(safePageNum, safePageSize);
         }
+        MqFailedMessageMapper mapper = available(mqFailedMessageMapperProvider);
+        String tableName = mqFailedMessageTableName();
+        if (mapper == null || tableName == null) {
+            return PageResult.empty(safePageNum, safePageSize);
+        }
 
         try {
-            List<MqFailedMessage> filtered = handler.getFailedMessageStore().values().stream()
-                    .filter(m -> isBlank(normalizedQueueName) || normalizedQueueName.equals(m.getQueueName()))
-                    .filter(m -> isBlank(normalizedStatus) || normalizedStatus.equals(m.getStatus()))
-                    .filter(m -> isBlank(normalizedTraceId) || contains(m.getTraceId(), normalizedTraceId))
-                    .filter(m -> isBlank(normalizedBusinessKey) || contains(m.getBusinessKey(), normalizedBusinessKey))
-                    .filter(m -> isBlank(normalizedMessageType)
-                            || normalizedMessageType.equalsIgnoreCase(m.getMessageType()))
-                    .sorted(Comparator.comparing(MqFailedMessage::getCreateTime, newestFirst()))
-                    .collect(Collectors.toList());
-
-            int total = filtered.size();
-            long offset = (long) (safePageNum - 1) * safePageSize;
-            int start = offset < total ? (int) offset : total;
-            int end = Math.min(start + safePageSize, total);
-            List<MqAdminDTO.MqFailedMessageVO> page = start < total
-                    ? filtered.subList(start, end).stream().map(this::toVO).collect(Collectors.toList())
-                    : Collections.emptyList();
+            List<MqAdminDTO.MqFailedMessageVO> page = MqAdminMapperSupport.list(
+                            mapper, tableName, normalizedQueueName, normalizedStatus, normalizedTraceId,
+                            normalizedBusinessKey, normalizedMessageType, safePageNum, safePageSize)
+                    .stream()
+                    .map(this::toVO)
+                    .toList();
+            long total = MqAdminMapperSupport.count(
+                    mapper, tableName, normalizedQueueName, normalizedStatus, normalizedTraceId,
+                    normalizedBusinessKey, normalizedMessageType);
             return PageResult.of(page, total, safePageNum, safePageSize);
         } catch (Exception e) {
             log.debug("查询MQ失败消息失败: {}", e.getMessage());
@@ -134,13 +120,16 @@ public class MqAdminService {
         if (invalidId != null) {
             return invalidId;
         }
-        DeadLetterHandler handler = available(deadLetterHandlerProvider);
-        if (handler == null) {
-            return ActionResult.fail(ResultCode.SERVICE_ERROR, "MQ死信存储未启用");
+        MqFailedMessageMapper mapper = available(mqFailedMessageMapperProvider);
+        String tableName = mqFailedMessageTableName();
+        if (mapper == null || tableName == null) {
+            return ActionResult.fail(ResultCode.SERVICE_ERROR, "MQ失败消息表未启用");
         }
         try {
-            MqFailedMessage message = handler.getById(id);
-            return message == null ? ActionResult.fail(ResultCode.NOT_FOUND, "消息不存在") : ActionResult.success(toVO(message));
+            return MqAdminMapperSupport.findById(mapper, tableName, id)
+                    .map(this::toVO)
+                    .map(ActionResult::success)
+                    .orElseGet(() -> ActionResult.fail(ResultCode.NOT_FOUND, "消息不存在"));
         } catch (Exception e) {
             log.debug("查询MQ失败消息详情失败: {}", e.getMessage());
             return ActionResult.fail(ResultCode.SERVICE_ERROR, "MQ失败消息查询失败");
@@ -331,6 +320,19 @@ public class MqAdminService {
         return queues;
     }
 
+    private String mqFailedMessageTableName() {
+        MqProperties properties = available(mqPropertiesProvider);
+        if (properties == null) {
+            return null;
+        }
+        try {
+            return MqAdminMapperSupport.tableName(properties);
+        } catch (RuntimeException e) {
+            log.debug("获取MQ失败消息表名失败: {}", e.getMessage());
+            return null;
+        }
+    }
+
     private MqAdminDTO.MqRuntimeInfo getRuntimeInfo() {
         MqProperties properties = available(mqPropertiesProvider);
         MqAdminDTO.MqRuntimeInfo info = new MqAdminDTO.MqRuntimeInfo();
@@ -416,10 +418,6 @@ public class MqAdminService {
                 .setCompensateRemark(msg.getCompensateRemark());
     }
 
-    private boolean contains(String value, String keyword) {
-        return value != null && value.contains(keyword);
-    }
-
     private boolean isBlank(String value) {
         return !AdminTextSupport.hasText(value);
     }
@@ -435,10 +433,6 @@ public class MqAdminService {
 
     private boolean isInvalidTraceIdFilter(String originalTraceId, String normalizedTraceId) {
         return !isBlank(originalTraceId) && normalizedTraceId == null;
-    }
-
-    private <T extends Comparable<? super T>> Comparator<T> newestFirst() {
-        return Comparator.nullsLast(Comparator.reverseOrder());
     }
 
     private String upper(String value) {

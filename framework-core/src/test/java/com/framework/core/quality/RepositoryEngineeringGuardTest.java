@@ -680,6 +680,14 @@ class RepositoryEngineeringGuardTest {
         String mapper = read(root.resolve("framework-mq/src/main/java/com/framework/mq/mapper/MqFailedMessageMapper.java"));
         String repository = read(root.resolve(
                 "framework-mq/src/main/java/com/framework/mq/deadletter/MybatisMqFailedMessageRepository.java"));
+        String adminMqService = read(root.resolve(
+                "admin-service/src/main/java/com/framework/admin/mq/MqAdminService.java"));
+        String adminMqMapperSupport = read(root.resolve(
+                "admin-service/src/main/java/com/framework/admin/mq/MqAdminMapperSupport.java"));
+        String dashboardService = read(root.resolve(
+                "admin-service/src/main/java/com/framework/admin/dashboard/DashboardService.java"));
+        String traceService = read(root.resolve(
+                "admin-service/src/main/java/com/framework/admin/trace/TraceAdminService.java"));
         String repositoryTest = read(root.resolve(
                 "framework-mq/src/test/java/com/framework/mq/deadletter/MybatisMqFailedMessageRepositoryTest.java"));
         String mapperTest = read(root.resolve(
@@ -693,11 +701,38 @@ class RepositoryEngineeringGuardTest {
                 .contains("@Mapper")
                 .contains("CREATE TABLE IF NOT EXISTS ${tableName}")
                 .contains("@Options(useGeneratedKeys = true, keyProperty = \"message.id\")")
-                .contains("WHERE status IN (#{successStatus}, #{exhaustedStatus}, #{manualStatus})");
+                .contains("WHERE status IN (#{successStatus}, #{exhaustedStatus}, #{manualStatus})")
+                .contains("ORDER BY create_time DESC, id DESC")
+                .contains("LIMIT #{offset}, #{pageSize}")
+                .contains("SELECT COUNT(*)");
         assertThat(repository)
                 .contains("mapper.insert(tableName, message)")
                 .contains("mapper.deleteProcessed(tableName")
                 .contains("mq failed message insert failed");
+        assertThat(adminMqService)
+                .contains("ObjectProvider<MqFailedMessageMapper>")
+                .contains("MqAdminMapperSupport.list")
+                .contains("MqAdminMapperSupport.count")
+                .contains("MqAdminMapperSupport.findById")
+                .doesNotContain("getFailedMessageStore()");
+        assertThat(adminMqMapperSupport)
+                .contains("mapper.list(")
+                .contains("mapper.count(")
+                .contains("mapper.countByStatus(")
+                .contains("listByTraceId")
+                .contains("countByTraceId");
+        assertThat(dashboardService)
+                .contains("ObjectProvider<MqFailedMessageMapper>")
+                .contains("ObjectProvider<MqProperties>")
+                .contains("MqAdminMapperSupport.stats")
+                .doesNotContain("ObjectProvider<DeadLetterHandler>");
+        assertThat(traceService)
+                .contains("ObjectProvider<MqFailedMessageMapper>")
+                .contains("ObjectProvider<MqProperties>")
+                .contains("MqAdminMapperSupport.listByTraceId")
+                .contains("MqAdminMapperSupport.countByTraceId")
+                .doesNotContain("DeadLetterHandler")
+                .doesNotContain("getFailedMessageStore()");
         assertThat(repositoryTest)
                 .contains("insertDelegatesAllCompensationColumnsAndRequiresGeneratedKey")
                 .contains("insertFailsWhenMapperDoesNotReturnGeneratedKey")

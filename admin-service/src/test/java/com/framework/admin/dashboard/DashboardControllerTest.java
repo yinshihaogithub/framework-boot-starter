@@ -10,6 +10,9 @@ import com.framework.localmessage.config.LocalMessageProperties;
 import com.framework.localmessage.mapper.LocalMessageMapper;
 import com.framework.localmessage.model.LocalMessage;
 import com.framework.localmessage.model.LocalMessageStatus;
+import com.framework.mq.config.MqProperties;
+import com.framework.mq.deadletter.MqFailedMessage;
+import com.framework.mq.mapper.MqFailedMessageMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 
@@ -25,6 +28,7 @@ class DashboardControllerTest {
     @Test
     void moduleStatusesMatchAdminRuntimeModules() {
         DashboardService service = new DashboardService(
+                provider(null),
                 provider(null),
                 provider(null),
                 provider(null),
@@ -56,7 +60,8 @@ class DashboardControllerTest {
     @Test
     void summaryIncludesOperationalCenterMetrics() {
         DashboardService service = new DashboardService(
-                provider(null),
+                provider(new FakeMqFailedMessageMapper()),
+                provider(mqProperties()),
                 provider(new FakeLocalMessageMapper()),
                 provider(localMessageProperties()),
                 provider(null),
@@ -69,6 +74,12 @@ class DashboardControllerTest {
         Result<DashboardController.DashboardSummary> result = controller.summary();
 
         assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getData().mq())
+                .containsEntry("pending", 2L)
+                .containsEntry("retrying", 1L)
+                .containsEntry("manual", 3L)
+                .containsEntry("exhausted", 2L)
+                .containsEntry("total", 8L);
         assertThat(result.getData().notifications())
                 .containsEntry("templates", 3L)
                 .containsEntry("successRecords", 7L)
@@ -96,6 +107,7 @@ class DashboardControllerTest {
                 provider(null),
                 provider(null),
                 provider(null),
+                provider(null),
                 provider(new FakeSystemMapperSupport(true)));
         DashboardController controller = new DashboardController(service);
 
@@ -108,6 +120,7 @@ class DashboardControllerTest {
     @Test
     void summaryFallsBackWhenOptionalProvidersFail() {
         DashboardService service = new DashboardService(
+                failingProvider(),
                 failingProvider(),
                 failingProvider(),
                 failingProvider(),
@@ -128,6 +141,72 @@ class DashboardControllerTest {
         assertThat(result.getData().excel()).containsEntry("total", 0L);
         assertThat(result.getData().files()).containsEntry("active", 0L);
         assertThat(result.getData().security().defaultPasswordChanged()).isTrue();
+    }
+
+    private static class FakeMqFailedMessageMapper implements MqFailedMessageMapper {
+        @Override
+        public void createTableIfNotExists(String tableName) {
+        }
+
+        @Override
+        public int insert(String tableName, MqFailedMessage message) {
+            return 1;
+        }
+
+        @Override
+        public int update(String tableName, MqFailedMessage message) {
+            return 1;
+        }
+
+        @Override
+        public MqFailedMessage findById(String tableName, Long id) {
+            return null;
+        }
+
+        @Override
+        public List<MqFailedMessage> findAll(String tableName) {
+            return List.of();
+        }
+
+        @Override
+        public List<MqFailedMessage> list(String tableName, String queueName, String status,
+                                          String traceIdLike, String businessKeyLike, String messageType,
+                                          int offset, int pageSize) {
+            return List.of();
+        }
+
+        @Override
+        public long count(String tableName, String queueName, String status,
+                          String traceIdLike, String businessKeyLike, String messageType) {
+            return status == null ? 8L : countByStatus(tableName, status);
+        }
+
+        @Override
+        public long countAll(String tableName) {
+            return 8L;
+        }
+
+        @Override
+        public long countByStatus(String tableName, String status) {
+            return switch (status) {
+                case MqFailedMessage.STATUS_PENDING -> 2L;
+                case MqFailedMessage.STATUS_RETRYING -> 1L;
+                case MqFailedMessage.STATUS_MANUAL -> 3L;
+                case MqFailedMessage.STATUS_EXHAUSTED -> 2L;
+                default -> 0L;
+            };
+        }
+
+        @Override
+        public int deleteById(String tableName, Long id) {
+            return 0;
+        }
+
+        @Override
+        public int deleteProcessed(String tableName, String successStatus,
+                                   String exhaustedStatus, String manualStatus) {
+            return 0;
+        }
     }
 
     private static class FakeLocalMessageMapper implements LocalMessageMapper {
@@ -395,6 +474,12 @@ class DashboardControllerTest {
     private static LocalMessageProperties localMessageProperties() {
         LocalMessageProperties properties = new LocalMessageProperties();
         properties.setTableName("framework_local_message");
+        return properties;
+    }
+
+    private static MqProperties mqProperties() {
+        MqProperties properties = new MqProperties();
+        properties.setFailedMessageTableName("framework_mq_failed_message");
         return properties;
     }
 

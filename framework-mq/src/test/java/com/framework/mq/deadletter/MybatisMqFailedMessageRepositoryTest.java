@@ -173,6 +173,33 @@ class MybatisMqFailedMessageRepositoryTest {
         }
 
         @Override
+        public List<MqFailedMessage> list(String tableName, String queueName, String status,
+                                          String traceIdLike, String businessKeyLike, String messageType,
+                                          int offset, int pageSize) {
+            this.tableName = tableName;
+            return List.of();
+        }
+
+        @Override
+        public long count(String tableName, String queueName, String status,
+                          String traceIdLike, String businessKeyLike, String messageType) {
+            this.tableName = tableName;
+            return 0;
+        }
+
+        @Override
+        public long countAll(String tableName) {
+            this.tableName = tableName;
+            return 0;
+        }
+
+        @Override
+        public long countByStatus(String tableName, String status) {
+            this.tableName = tableName;
+            return 0;
+        }
+
+        @Override
         public int deleteById(String tableName, Long id) {
             this.tableName = tableName;
             this.deletedId = id;

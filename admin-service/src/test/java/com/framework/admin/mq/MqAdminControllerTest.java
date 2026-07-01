@@ -13,6 +13,7 @@ import com.framework.mq.deadletter.MqAdminDTO;
 import com.framework.mq.deadletter.MqFailedMessage;
 import com.framework.mq.deadletter.MqFailedMessageRepository;
 import com.framework.mq.deadletter.MqRetryScheduler;
+import com.framework.mq.mapper.MqFailedMessageMapper;
 import com.framework.mq.producer.MqMessageSender;
 import com.framework.mq.producer.MqMessageSenderRegistry;
 import com.framework.security.annotation.RequirePermission;
@@ -24,6 +25,7 @@ import org.springframework.context.support.StaticApplicationContext;
 import org.springframework.web.bind.annotation.RequestParam;
 
 import java.lang.reflect.Method;
+import java.util.Comparator;
 import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -410,7 +412,7 @@ class MqAdminControllerTest {
         assertThat(page.getData().getRecords()).isEmpty();
         assertThat(detail.isSuccess()).isFalse();
         assertThat(detail.getCode()).isEqualTo(ResultCode.SERVICE_ERROR.getCode());
-        assertThat(detail.getMessage()).isEqualTo("MQ死信存储未启用");
+        assertThat(detail.getMessage()).isEqualTo("MQ失败消息表未启用");
     }
 
     @Test
@@ -716,6 +718,7 @@ class MqAdminControllerTest {
                 provider(handler),
                 provider(scheduler),
                 provider(properties),
+                provider(mapper(handler)),
                 provider(sender),
                 provider(null),
                 new StaticApplicationContext(),
@@ -725,6 +728,7 @@ class MqAdminControllerTest {
 
     private static MqAdminController failingController() {
         MqAdminService service = new MqAdminService(
+                failingProvider(),
                 failingProvider(),
                 failingProvider(),
                 failingProvider(),
@@ -829,6 +833,99 @@ class MqAdminControllerTest {
             public <T> void send(String destination, String routingKey, MessageWrapper<T> wrapper) {
             }
         };
+    }
+
+    private static MqFailedMessageMapper mapper(DeadLetterHandler handler) {
+        if (handler == null) {
+            return null;
+        }
+        return new MqFailedMessageMapper() {
+            @Override
+            public void createTableIfNotExists(String tableName) {
+            }
+
+            @Override
+            public int insert(String tableName, MqFailedMessage message) {
+                return 1;
+            }
+
+            @Override
+            public int update(String tableName, MqFailedMessage message) {
+                return 1;
+            }
+
+            @Override
+            public MqFailedMessage findById(String tableName, Long id) {
+                return handler.getById(id);
+            }
+
+            @Override
+            public List<MqFailedMessage> findAll(String tableName) {
+                return List.copyOf(handler.getFailedMessageStore().values());
+            }
+
+            @Override
+            public List<MqFailedMessage> list(String tableName, String queueName, String status,
+                                              String traceIdLike, String businessKeyLike, String messageType,
+                                              int offset, int pageSize) {
+                return handler.getFailedMessageStore().values().stream()
+                        .filter(message -> queueName == null || queueName.equals(message.getQueueName()))
+                        .filter(message -> status == null || status.equals(message.getStatus()))
+                        .filter(message -> matchesLike(message.getTraceId(), traceIdLike))
+                        .filter(message -> matchesLike(message.getBusinessKey(), businessKeyLike))
+                        .filter(message -> messageType == null
+                                || messageType.equalsIgnoreCase(message.getMessageType()))
+                        .sorted(Comparator.comparing(MqFailedMessage::getCreateTime, newestDateFirst()))
+                        .skip(offset)
+                        .limit(pageSize)
+                        .toList();
+            }
+
+            @Override
+            public long count(String tableName, String queueName, String status,
+                              String traceIdLike, String businessKeyLike, String messageType) {
+                return list(tableName, queueName, status, traceIdLike, businessKeyLike, messageType, 0,
+                        Integer.MAX_VALUE).size();
+            }
+
+            @Override
+            public long countAll(String tableName) {
+                return handler.getFailedMessageStore().size();
+            }
+
+            @Override
+            public long countByStatus(String tableName, String status) {
+                return handler.getFailedMessageStore().values().stream()
+                        .filter(message -> status.equals(message.getStatus()))
+                        .count();
+            }
+
+            @Override
+            public int deleteById(String tableName, Long id) {
+                return handler.removeRecord(id) ? 1 : 0;
+            }
+
+            @Override
+            public int deleteProcessed(String tableName, String successStatus,
+                                       String exhaustedStatus, String manualStatus) {
+                return 0;
+            }
+        };
+    }
+
+    private static Comparator<Date> newestDateFirst() {
+        return Comparator.nullsLast(Comparator.reverseOrder());
+    }
+
+    private static boolean matchesLike(String value, String like) {
+        if (like == null) {
+            return true;
+        }
+        if (like.startsWith("%") || like.endsWith("%")) {
+            String needle = like.replace("%", "");
+            return value != null && value.contains(needle);
+        }
+        return like.equals(value);
     }
 
     private static AdminAuditService auditService() {
