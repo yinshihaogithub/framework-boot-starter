@@ -541,88 +541,88 @@ class AdminSystemMapperSupportTest {
 
     @Test
     void deleteDeptDeletesSubtreeAndValidatesMainDeleteRows() {
-        mapper.allDepts = List.of(dept(7L, 0L), dept(8L, 7L), dept(9L, 0L));
+        mapper.deptSubtreeIds = List.of(7L, 8L);
 
         boolean deleted = mapperSupport.deleteDept(7L);
 
         assertThat(deleted).isTrue();
         assertThat(mapper.operations).containsExactly(
-                "listAllDepts",
+                "listDeptSubtreeIds:7",
                 "clearUserDeptIds:[7, 8]",
                 "deleteDeptIds:[7, 8]");
     }
 
     @Test
     void deleteDeptReturnsFalseWhenSubtreeIsMissing() {
-        mapper.allDepts = List.of(dept(9L, 0L));
+        mapper.deptSubtreeIds = List.of();
 
         boolean deleted = mapperSupport.deleteDept(7L);
 
         assertThat(deleted).isFalse();
-        assertThat(mapper.operations).containsExactly("listAllDepts");
+        assertThat(mapper.operations).containsExactly("listDeptSubtreeIds:7");
     }
 
     @Test
     void deleteDeptThrowsWhenMainDeleteAffectsTooFewRows() {
-        mapper.allDepts = List.of(dept(7L, 0L), dept(8L, 7L));
+        mapper.deptSubtreeIds = List.of(7L, 8L);
         mapper.deleteDeptIdsResult = 1;
 
         assertThatThrownBy(() -> mapperSupport.deleteDept(7L))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("system dept delete failed");
         assertThat(mapper.operations).containsExactly(
-                "listAllDepts",
+                "listDeptSubtreeIds:7",
                 "clearUserDeptIds:[7, 8]",
                 "deleteDeptIds:[7, 8]");
     }
 
     @Test
     void deleteMenuDeletesSubtreeAndValidatesMainDeleteRows() {
-        mapper.allMenus = List.of(menu(11L, 0L), menu(12L, 11L), menu(13L, 0L));
+        mapper.menuSubtreeIds = List.of(11L, 12L);
 
         boolean deleted = mapperSupport.deleteMenu(11L);
 
         assertThat(deleted).isTrue();
         assertThat(mapper.operations).containsExactly(
-                "listAllMenus",
+                "listMenuSubtreeIds:11",
                 "deleteRoleMenusByMenuIds:[11, 12]",
                 "deleteMenuIds:[11, 12]");
     }
 
     @Test
     void deleteMenuReturnsFalseWhenSubtreeIsMissing() {
-        mapper.allMenus = List.of(menu(13L, 0L));
+        mapper.menuSubtreeIds = List.of();
 
         boolean deleted = mapperSupport.deleteMenu(11L);
 
         assertThat(deleted).isFalse();
-        assertThat(mapper.operations).containsExactly("listAllMenus");
+        assertThat(mapper.operations).containsExactly("listMenuSubtreeIds:11");
     }
 
     @Test
     void deleteMenuThrowsWhenMainDeleteAffectsTooFewRows() {
-        mapper.allMenus = List.of(menu(11L, 0L), menu(12L, 11L));
+        mapper.menuSubtreeIds = List.of(11L, 12L);
         mapper.deleteMenuIdsResult = 1;
 
         assertThatThrownBy(() -> mapperSupport.deleteMenu(11L))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("system menu delete failed");
         assertThat(mapper.operations).containsExactly(
-                "listAllMenus",
+                "listMenuSubtreeIds:11",
                 "deleteRoleMenusByMenuIds:[11, 12]",
                 "deleteMenuIds:[11, 12]");
     }
 
     @Test
     void isMenuDescendantDetectsNestedMenuSubtree() {
-        mapper.allMenus = List.of(menu(11L, 0L), menu(12L, 11L), menu(13L, 12L), menu(14L, 0L));
+        mapper.menuSubtreeIds = List.of(11L, 12L, 13L);
 
         assertThat(mapperSupport.isMenuDescendant(11L, 13L)).isTrue();
         assertThat(mapperSupport.isMenuDescendant(11L, 14L)).isFalse();
         assertThat(mapperSupport.isMenuDescendant(11L, 11L)).isFalse();
         assertThat(mapper.operations).containsExactly(
-                "listAllMenus",
-                "listAllMenus");
+                "listMenuSubtreeIds:11",
+                "listMenuSubtreeIds:11");
     }
 
     @Test
@@ -674,8 +674,9 @@ class AdminSystemMapperSupportTest {
         private long dictTypeCount;
         private List<DictItem> dictItems = List.of();
         private long dictItemCount;
-        private List<Dept> allDepts = List.of();
         private List<Menu> allMenus = List.of();
+        private List<Long> deptSubtreeIds = List.of();
+        private List<Long> menuSubtreeIds = List.of();
         private AdminSystemModels.AdminUser insertedUser;
         private Tenant insertedTenant;
         private Dept insertedDept;
@@ -772,13 +773,17 @@ class AdminSystemMapperSupportTest {
                             operations.add("countDictItems:" + args[0] + ":" + args[1] + ":" + args[2]);
                             yield dictItemCount;
                         }
-                        case "listAllDepts" -> {
-                            operations.add("listAllDepts");
-                            yield allDepts;
-                        }
                         case "listAllMenus" -> {
                             operations.add("listAllMenus");
                             yield allMenus;
+                        }
+                        case "listDeptSubtreeIds" -> {
+                            operations.add("listDeptSubtreeIds:" + args[0]);
+                            yield deptSubtreeIds;
+                        }
+                        case "listMenuSubtreeIds" -> {
+                            operations.add("listMenuSubtreeIds:" + args[0]);
+                            yield menuSubtreeIds;
                         }
                         case "updateConfig" -> {
                             updatedConfig = (ConfigItem) args[0];

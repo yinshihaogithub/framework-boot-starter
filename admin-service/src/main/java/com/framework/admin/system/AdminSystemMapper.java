@@ -246,12 +246,20 @@ public interface AdminSystemMapper {
     List<Dept> listDeptsByTenantId(@Param("tenantId") Long tenantId);
 
     @Select("""
-            SELECT id, tenant_id AS tenantId, parent_id AS parentId, dept_name AS deptName, sort_order AS sortOrder,
-                   status, DATE_FORMAT(create_time, '%Y-%m-%d %H:%i:%s') AS createTime
-            FROM sys_dept
-            ORDER BY sort_order ASC, id ASC
+            WITH RECURSIVE dept_tree AS (
+                SELECT id
+                FROM sys_dept
+                WHERE id = #{rootId}
+                UNION ALL
+                SELECT d.id
+                FROM sys_dept d
+                JOIN dept_tree dt ON d.parent_id = dt.id
+            )
+            SELECT id
+            FROM dept_tree
+            ORDER BY id ASC
             """)
-    List<Dept> listAllDepts();
+    List<Long> listDeptSubtreeIds(@Param("rootId") Long rootId);
 
     @Insert("""
             INSERT INTO sys_dept (tenant_id, parent_id, dept_name, sort_order, status)
@@ -386,6 +394,22 @@ public interface AdminSystemMapper {
             ORDER BY sort_order ASC, id ASC
             """)
     List<Menu> listAllMenus();
+
+    @Select("""
+            WITH RECURSIVE menu_tree AS (
+                SELECT id
+                FROM sys_menu
+                WHERE id = #{rootId}
+                UNION ALL
+                SELECT m.id
+                FROM sys_menu m
+                JOIN menu_tree mt ON m.parent_id = mt.id
+            )
+            SELECT id
+            FROM menu_tree
+            ORDER BY id ASC
+            """)
+    List<Long> listMenuSubtreeIds(@Param("rootId") Long rootId);
 
     @Select("""
             SELECT DISTINCT m.id, m.parent_id AS parentId, m.menu_type AS menuType, m.menu_name AS menuName,

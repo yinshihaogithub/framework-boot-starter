@@ -234,7 +234,7 @@ public class AdminSystemMapperSupport {
 
     public boolean deleteDept(Long id) {
         return inTransaction(() -> {
-            List<Long> ids = collectDeptSubtreeIds(id);
+            List<Long> ids = listDeptSubtreeIds(id);
             if (ids.isEmpty()) {
                 return false;
             }
@@ -324,7 +324,7 @@ public class AdminSystemMapperSupport {
                 || DEFAULT_PARENT_ID.equals(possibleDescendantId) || menuId.equals(possibleDescendantId)) {
             return false;
         }
-        return collectMenuSubtreeIds(menuId).contains(possibleDescendantId);
+        return listMenuSubtreeIds(menuId).contains(possibleDescendantId);
     }
 
     public List<Menu> listMenuTree() {
@@ -342,7 +342,7 @@ public class AdminSystemMapperSupport {
 
     public boolean deleteMenu(Long menuId) {
         return inTransaction(() -> {
-            List<Long> ids = collectMenuSubtreeIds(menuId);
+            List<Long> ids = listMenuSubtreeIds(menuId);
             if (ids.isEmpty()) {
                 return false;
             }
@@ -566,41 +566,14 @@ public class AdminSystemMapperSupport {
         user.setPermissions(listPermissionsByUserId(user.getId()));
     }
 
-    private List<Long> collectMenuSubtreeIds(Long rootId) {
-        List<Long> ids = new ArrayList<>();
-        collectMenuSubtreeIds(rootId, mapper.listAllMenus(), ids);
-        return ids;
+    private List<Long> listMenuSubtreeIds(Long rootId) {
+        List<Long> ids = mapper.listMenuSubtreeIds(rootId);
+        return ids == null ? List.of() : ids;
     }
 
-    private void collectMenuSubtreeIds(Long parentId, List<Menu> menus, List<Long> ids) {
-        if (ids.contains(parentId)) {
-            return;
-        }
-        for (Menu menu : menus) {
-            if (menu.getId().equals(parentId)) {
-                ids.add(menu.getId());
-            }
-            if (menu.getParentId().equals(parentId)) {
-                collectMenuSubtreeIds(menu.getId(), menus, ids);
-            }
-        }
-    }
-
-    private List<Long> collectDeptSubtreeIds(Long rootId) {
-        List<Long> ids = new ArrayList<>();
-        collectDeptSubtreeIds(rootId, mapper.listAllDepts(), ids);
-        return ids;
-    }
-
-    private void collectDeptSubtreeIds(Long parentId, List<Dept> depts, List<Long> ids) {
-        for (Dept dept : depts) {
-            if (dept.getId().equals(parentId)) {
-                ids.add(dept.getId());
-            }
-            if (dept.getParentId().equals(parentId)) {
-                collectDeptSubtreeIds(dept.getId(), depts, ids);
-            }
-        }
+    private List<Long> listDeptSubtreeIds(Long rootId) {
+        List<Long> ids = mapper.listDeptSubtreeIds(rootId);
+        return ids == null ? List.of() : ids;
     }
 
     private List<Menu> buildMenuTree(List<Menu> menus) {

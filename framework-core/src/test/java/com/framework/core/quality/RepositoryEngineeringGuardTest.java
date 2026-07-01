@@ -508,6 +508,36 @@ class RepositoryEngineeringGuardTest {
     }
 
     @Test
+    void adminSystemSubtreeDeletesUseTargetedRecursiveQueries() throws Exception {
+        String mapper = read(root.resolve(
+                "admin-service/src/main/java/com/framework/admin/system/AdminSystemMapper.java"));
+        String mapperSupport = read(root.resolve(
+                "admin-service/src/main/java/com/framework/admin/system/AdminSystemMapperSupport.java"));
+        String mapperSupportTest = read(root.resolve(
+                "admin-service/src/test/java/com/framework/admin/system/AdminSystemMapperSupportTest.java"));
+
+        assertThat(mapper)
+                .as("department and menu subtree operations must stay in MySQL instead of Java full-table scans")
+                .contains("WITH RECURSIVE dept_tree")
+                .contains("List<Long> listDeptSubtreeIds")
+                .contains("WITH RECURSIVE menu_tree")
+                .contains("List<Long> listMenuSubtreeIds")
+                .doesNotContain("List<Dept> listAllDepts");
+        assertThat(mapperSupport)
+                .contains("listDeptSubtreeIds(id)")
+                .contains("listMenuSubtreeIds(menuId)")
+                .contains("mapper.listDeptSubtreeIds(rootId)")
+                .contains("mapper.listMenuSubtreeIds(rootId)")
+                .doesNotContain("collectDeptSubtreeIds(")
+                .doesNotContain("collectMenuSubtreeIds(")
+                .doesNotContain("mapper.listAllDepts()");
+        assertThat(mapperSupportTest)
+                .contains("listDeptSubtreeIds:7")
+                .contains("listMenuSubtreeIds:11")
+                .doesNotContain("listAllDepts");
+    }
+
+    @Test
     void mybatisMappersUseAnnotationSqlInsteadOfXmlMappers() throws Exception {
         try (Stream<Path> files = Files.walk(root)) {
             List<Path> xmlMapperFiles = files
