@@ -11,6 +11,7 @@ import com.framework.auth.service.PasswordExpireService;
 import com.framework.auth.service.SessionManager;
 import com.framework.core.constant.FrameworkConstants;
 import com.framework.core.exception.AuthException;
+import com.framework.core.exception.BusinessException;
 import com.framework.core.result.Result;
 import com.framework.core.result.ResultCode;
 import com.framework.crypto.util.PasswordUtils;
@@ -100,6 +101,69 @@ class AdminAuthServiceTest {
                 .extracting(LoginLogRecord::username, LoginLogRecord::userId, LoginLogRecord::clientIp,
                         LoginLogRecord::success, LoginLogRecord::message)
                 .containsExactly(tuple("admin", 1L, "10.0.0.8", true, "登录成功"));
+    }
+
+    @Test
+    void loginChecksPasswordExpirationBeforeCreatingSession() {
+        mapperSupport.user = enabledUser();
+        FakePasswordExpireService passwordExpireService = new FakePasswordExpireService();
+        AdminAuthService serviceWithPasswordPolicy = new AdminAuthService(
+                mapperSupport, sessionManager, provider((LoginSecurityService) null), null,
+                provider(passwordExpireService));
+        AdminAuthController.LoginRequest request = new AdminAuthController.LoginRequest();
+        request.setUsername("admin");
+        request.setPassword("Admin@123");
+
+        Result<AdminAuthController.LoginResponse> result = serviceWithPasswordPolicy.login(request, "10.0.0.8");
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(passwordExpireService.checkedUserIds).containsExactly(1L);
+        assertThat(sessionManager.createdDeviceId).isEqualTo("admin-web");
+    }
+
+    @Test
+    void loginRejectsExpiredPasswordBeforeCreatingSession() {
+        mapperSupport.user = enabledUser();
+        FakePasswordExpireService passwordExpireService = new FakePasswordExpireService();
+        passwordExpireService.checkFailure = new BusinessException(ResultCode.BUSINESS_ERROR,
+                "密码已过期 31 天，请修改密码");
+        AdminAuthService serviceWithPasswordPolicy = new AdminAuthService(
+                mapperSupport, sessionManager, provider((LoginSecurityService) null), null,
+                provider(passwordExpireService));
+        AdminAuthController.LoginRequest request = new AdminAuthController.LoginRequest();
+        request.setUsername("admin");
+        request.setPassword("Admin@123");
+
+        Result<AdminAuthController.LoginResponse> result = serviceWithPasswordPolicy.login(request, "10.0.0.8");
+
+        assertThat(result.getCode()).isEqualTo(ResultCode.BUSINESS_ERROR.getCode());
+        assertThat(result.getMessage()).isEqualTo("密码已过期 31 天，请修改密码");
+        assertThat(sessionManager.createdDeviceId).isNull();
+        assertThat(mapperSupport.lastLoginUserId).isNull();
+        assertThat(mapperSupport.loginLogs)
+                .extracting(LoginLogRecord::username, LoginLogRecord::userId, LoginLogRecord::clientIp,
+                        LoginLogRecord::success, LoginLogRecord::message)
+                .containsExactly(tuple("admin", 1L, "10.0.0.8", false, "密码已过期 31 天，请修改密码"));
+    }
+
+    @Test
+    void loginFailsClosedWhenPasswordExpirationProviderFails() {
+        mapperSupport.user = enabledUser();
+        AdminAuthService serviceWithFailingPasswordPolicy = new AdminAuthService(
+                mapperSupport, sessionManager, provider((LoginSecurityService) null), null, failingProvider());
+        AdminAuthController.LoginRequest request = new AdminAuthController.LoginRequest();
+        request.setUsername("admin");
+        request.setPassword("Admin@123");
+
+        Result<AdminAuthController.LoginResponse> result = serviceWithFailingPasswordPolicy.login(request, "10.0.0.8");
+
+        assertThat(result.getCode()).isEqualTo(ResultCode.SERVICE_ERROR.getCode());
+        assertThat(result.getMessage()).isEqualTo("密码过期策略服务暂不可用，请稍后重试");
+        assertThat(sessionManager.createdDeviceId).isNull();
+        assertThat(mapperSupport.loginLogs)
+                .extracting(LoginLogRecord::username, LoginLogRecord::userId,
+                        LoginLogRecord::success, LoginLogRecord::message)
+                .containsExactly(tuple("admin", 1L, false, "密码过期策略服务暂不可用，请稍后重试"));
     }
 
     @Test
@@ -732,11 +796,21 @@ class AdminAuthServiceTest {
     }
 
     private static class FakePasswordExpireService extends PasswordExpireService {
+        private final List<Long> checkedUserIds = new ArrayList<>();
         private final List<Long> recordedUserIds = new ArrayList<>();
+        private RuntimeException checkFailure;
         private RuntimeException recordFailure;
 
         private FakePasswordExpireService() {
             super(new org.springframework.data.redis.core.StringRedisTemplate(), 1);
+        }
+
+        @Override
+        public void checkPasswordExpired(Long userId) {
+            if (checkFailure != null) {
+                throw checkFailure;
+            }
+            checkedUserIds.add(userId);
         }
 
         @Override

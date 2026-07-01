@@ -1673,6 +1673,8 @@ class RepositoryEngineeringGuardTest {
         assertThat(service)
                 .contains("PasswordValidator.validateStrong(request.getNewPassword())")
                 .contains("PasswordUtils.verify(request.getOldPassword(), user.getPasswordHash())")
+                .contains("checkPasswordExpired(user.getId())")
+                .contains("passwordExpireService.checkPasswordExpired(userId)")
                 .contains("新密码不能与原密码相同")
                 .contains("DEFAULT_PASSWORD_CHANGED_CONFIG_KEY = \"admin.default.password.changed\"")
                 .contains("resetPasswordAndUpdateConfigValue(user.getId()")

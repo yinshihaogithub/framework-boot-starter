@@ -96,6 +96,12 @@ public class AdminAuthService {
                 return Result.fail(ResultCode.LOGIN_FAIL);
             }
             clearLoginFailure(loginSecurity, username);
+            try {
+                checkPasswordExpired(user.getId());
+            } catch (BusinessException e) {
+                insertLoginLog(username, user.getId(), safeClientIp, false, e.getMessage());
+                return Result.fail(e.getCode(), e.getMessage());
+            }
             List<Menu> menus = safeList(systemMapperSupport.listMenusByUserId(user.getId()));
             LoginUser loginUser = sessionManager.createSession(
                     user.getId(),
@@ -116,6 +122,22 @@ public class AdminAuthService {
         } catch (RuntimeException e) {
             insertLoginLog(username, null, safeClientIp, false, "登录服务暂不可用");
             return serviceError("登录", "登录服务暂不可用", e);
+        }
+    }
+
+    private void checkPasswordExpired(Long userId) {
+        if (passwordExpireServiceProvider == null) {
+            return;
+        }
+        PasswordExpireService passwordExpireService;
+        try {
+            passwordExpireService = passwordExpireServiceProvider.getIfAvailable();
+        } catch (RuntimeException e) {
+            log.warn("[后台认证] 密码过期服务不可用 userId={}, error={}", userId, e.getMessage());
+            throw new BusinessException(ResultCode.SERVICE_ERROR, "密码过期策略服务暂不可用，请稍后重试");
+        }
+        if (passwordExpireService != null) {
+            passwordExpireService.checkPasswordExpired(userId);
         }
     }
 
