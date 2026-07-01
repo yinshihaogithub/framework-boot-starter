@@ -129,14 +129,6 @@ public interface LocalMessageMapper {
                                        @Param("limit") int limit);
 
     @Select("""
-            SELECT *
-            FROM ${tableName}
-            ORDER BY id ASC
-            """)
-    @ResultMap("localMessageMap")
-    List<LocalMessage> findAll(@Param("tableName") String tableName);
-
-    @Select("""
             <script>
             SELECT *
             FROM ${tableName}

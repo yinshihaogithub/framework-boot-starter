@@ -19,7 +19,5 @@ public interface LocalMessageRepository {
 
     List<LocalMessage> findDueMessages(LocalDateTime now, int limit);
 
-    List<LocalMessage> findAll();
-
     boolean delete(Long id);
 }

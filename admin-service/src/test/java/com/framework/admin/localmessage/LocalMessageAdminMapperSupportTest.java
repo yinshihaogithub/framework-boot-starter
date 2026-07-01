@@ -124,11 +124,6 @@ class LocalMessageAdminMapperSupportTest {
         }
 
         @Override
-        public List<LocalMessage> findAll(String tableName) {
-            return List.of();
-        }
-
-        @Override
         public List<LocalMessage> list(String tableName, String topic, LocalMessageStatus status,
                                        String traceIdLike, String businessKeyLike, int offset, int pageSize) {
             this.listTableName = tableName;

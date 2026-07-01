@@ -587,11 +587,6 @@ class TraceAdminServiceTest {
             }
 
             @Override
-            public List<LocalMessage> findAll(String tableName) {
-                return messages;
-            }
-
-            @Override
             public List<LocalMessage> list(String tableName, String topic, LocalMessageStatus status,
                                            String traceIdLike, String businessKeyLike, int offset, int pageSize) {
                 return messages.stream()
@@ -657,11 +652,6 @@ class TraceAdminServiceTest {
             @Override
             public List<LocalMessage> findDueMessages(String tableName, LocalMessageStatus status,
                                                       LocalDateTime now, int limit) {
-                return List.of();
-            }
-
-            @Override
-            public List<LocalMessage> findAll(String tableName) {
                 return List.of();
             }
 

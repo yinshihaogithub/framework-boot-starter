@@ -308,6 +308,10 @@ class RepositoryEngineeringGuardTest {
                 "framework-local-message/src/main/java/com/framework/localmessage/config/LocalMessageAutoConfiguration.java"));
         String mapper = read(root.resolve(
                 "framework-local-message/src/main/java/com/framework/localmessage/mapper/LocalMessageMapper.java"));
+        String serviceInterface = read(root.resolve(
+                "framework-local-message/src/main/java/com/framework/localmessage/service/LocalMessageService.java"));
+        String repositoryInterface = read(root.resolve(
+                "framework-local-message/src/main/java/com/framework/localmessage/repository/LocalMessageRepository.java"));
         String repository = read(root.resolve(
                 "framework-local-message/src/main/java/com/framework/localmessage/repository/MybatisLocalMessageRepository.java"));
         String repositoryTest = read(root.resolve(
@@ -324,11 +328,19 @@ class RepositoryEngineeringGuardTest {
                 .contains("CREATE TABLE IF NOT EXISTS ${tableName}")
                 .contains("@Options(useGeneratedKeys = true, keyProperty = \"message.id\")")
                 .contains("WHERE status = #{status}")
-                .contains("LIMIT #{limit}");
+                .contains("LIMIT #{limit}")
+                .contains("LIMIT #{offset}, #{pageSize}")
+                .doesNotContain("findAll")
+                .doesNotContain("ORDER BY id ASC");
+        assertThat(serviceInterface)
+                .doesNotContain("findAll");
+        assertThat(repositoryInterface)
+                .doesNotContain("findAll");
         assertThat(repository)
                 .contains("mapper.insert(tableName, message)")
                 .contains("mapper.findDueMessages(tableName, LocalMessageStatus.PENDING")
-                .contains("local message insert failed");
+                .contains("local message insert failed")
+                .doesNotContain("mapper.findAll");
         assertThat(repositoryTest)
                 .contains("insertDelegatesAllCompensationColumnsAndRequiresGeneratedKey")
                 .contains("insertFailsWhenMapperDoesNotReturnGeneratedKey");

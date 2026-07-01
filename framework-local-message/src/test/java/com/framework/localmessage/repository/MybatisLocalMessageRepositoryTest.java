@@ -91,7 +91,6 @@ class MybatisLocalMessageRepositoryTest {
         assertThat(mapper.updatedMessage.getUpdateTime()).isNotNull();
 
         assertThat(repository.findById(7L)).containsSame(mapper.message);
-        assertThat(repository.findAll()).containsExactly(mapper.message);
         assertThat(repository.findDueMessages(now, 10)).containsExactly(mapper.message);
         assertThat(mapper.dueStatus).isEqualTo(LocalMessageStatus.PENDING);
         assertThat(mapper.dueNow).isEqualTo(now);
@@ -163,12 +162,6 @@ class MybatisLocalMessageRepositoryTest {
             this.dueStatus = status;
             this.dueNow = now;
             this.dueLimit = limit;
-            return new ArrayList<>(List.of(message));
-        }
-
-        @Override
-        public List<LocalMessage> findAll(String tableName) {
-            this.tableName = tableName;
             return new ArrayList<>(List.of(message));
         }
 

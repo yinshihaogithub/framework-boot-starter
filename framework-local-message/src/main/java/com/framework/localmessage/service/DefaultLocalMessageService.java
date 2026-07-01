@@ -94,11 +94,6 @@ public class DefaultLocalMessageService implements LocalMessageService {
         return repository.findById(id);
     }
 
-    @Override
-    public List<LocalMessage> findAll() {
-        return repository.findAll();
-    }
-
     private void dispatch(LocalMessage message, LocalMessageHandler handler) {
         Long messageId = message.getId();
         LocalMessage processing = copyForUpdate(message);

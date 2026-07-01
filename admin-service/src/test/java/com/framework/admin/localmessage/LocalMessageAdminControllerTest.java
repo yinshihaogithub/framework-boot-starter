@@ -769,10 +769,6 @@ class LocalMessageAdminControllerTest {
                 return mapper.findById(id);
             }
 
-            @Override
-            public List<LocalMessage> findAll() {
-                return mapper.findAll();
-            }
         };
     }
 
@@ -807,10 +803,6 @@ class LocalMessageAdminControllerTest {
 
         public List<LocalMessage> findDueMessages(LocalDateTime now, int limit) {
             return findDueMessages(TABLE_NAME, LocalMessageStatus.PENDING, now, limit);
-        }
-
-        public List<LocalMessage> findAll() {
-            return new ArrayList<>(messages.values());
         }
 
         public boolean delete(Long id) {
@@ -851,11 +843,6 @@ class LocalMessageAdminControllerTest {
                             || !message.getNextRetryTime().isAfter(now))
                     .limit(limit)
                     .toList();
-        }
-
-        @Override
-        public List<LocalMessage> findAll(String tableName) {
-            return findAll();
         }
 
         @Override

@@ -37,7 +37,7 @@ class DefaultLocalMessageServiceTest {
         assertThat(message.getStatus()).isEqualTo(LocalMessageStatus.PENDING);
         assertThat(message.getMaxRetry()).isEqualTo(properties.getMaxRetry());
         assertThat(message.getNextRetryTime()).isNotNull();
-        assertThat(repository.findAll()).containsExactly(message);
+        assertThat(repository.findById(message.getId())).containsSame(message);
     }
 
     @Test
@@ -734,11 +734,6 @@ class DefaultLocalMessageServiceTest {
                             || !message.getNextRetryTime().isAfter(now))
                     .limit(limit)
                     .toList();
-        }
-
-        @Override
-        public List<LocalMessage> findAll() {
-            return new ArrayList<>(messages.values());
         }
 
         @Override

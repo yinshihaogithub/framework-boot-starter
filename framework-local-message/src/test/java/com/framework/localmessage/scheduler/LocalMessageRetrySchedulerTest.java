@@ -4,7 +4,6 @@ import com.framework.localmessage.model.LocalMessage;
 import com.framework.localmessage.service.LocalMessageService;
 import org.junit.jupiter.api.Test;
 
-import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -68,9 +67,5 @@ class LocalMessageRetrySchedulerTest {
             throw new UnsupportedOperationException();
         }
 
-        @Override
-        public List<LocalMessage> findAll() {
-            throw new UnsupportedOperationException();
-        }
     }
 }

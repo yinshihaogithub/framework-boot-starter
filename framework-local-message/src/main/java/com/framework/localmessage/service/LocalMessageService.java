@@ -2,7 +2,6 @@ package com.framework.localmessage.service;
 
 import com.framework.localmessage.model.LocalMessage;
 
-import java.util.List;
 import java.util.Optional;
 
 /**
@@ -28,6 +27,4 @@ public interface LocalMessageService {
     void markFailure(Long id, Exception exception);
 
     Optional<LocalMessage> findById(Long id);
-
-    List<LocalMessage> findAll();
 }

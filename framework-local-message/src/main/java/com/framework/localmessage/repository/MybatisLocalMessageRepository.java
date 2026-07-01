@@ -53,11 +53,6 @@ public class MybatisLocalMessageRepository implements LocalMessageRepository {
     }
 
     @Override
-    public List<LocalMessage> findAll() {
-        return mapper.findAll(tableName);
-    }
-
-    @Override
     public boolean delete(Long id) {
         return mapper.delete(tableName, id) > 0;
     }
