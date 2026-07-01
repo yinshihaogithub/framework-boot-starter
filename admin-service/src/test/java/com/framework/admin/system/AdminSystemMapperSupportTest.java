@@ -148,6 +148,58 @@ class AdminSystemMapperSupportTest {
     }
 
     @Test
+    void listDictTypesUsesPagingKeywordAndStatusThenCountsMatches() {
+        mapper.dictTypes = List.of(new DictType()
+                .setId(4L)
+                .setDictCode("sys_status")
+                .setDictName("系统状态")
+                .setStatus("ENABLED"));
+        mapper.dictTypeCount = 6L;
+
+        List<DictType> types = mapperSupport.listDictTypes(" sys ", " enabled ", 2, 10);
+        long count = mapperSupport.countDictTypes(" sys ", " enabled ");
+
+        assertThat(types).hasSize(1);
+        assertThat(count).isEqualTo(6L);
+        assertThat(mapper.operations).containsExactly(
+                "listDictTypes:%sys%:ENABLED:10:10",
+                "countDictTypes:%sys%:ENABLED");
+    }
+
+    @Test
+    void listDictTypeOptionsUsesKeywordAndBoundedLimit() {
+        mapper.dictTypeOptions = List.of(new DictType()
+                .setId(4L)
+                .setDictCode("sys_status")
+                .setDictName("系统状态"));
+
+        List<DictType> options = mapperSupport.listDictTypeOptions("\u00A0sys\u3000", 500);
+
+        assertThat(options).hasSize(1);
+        assertThat(mapper.operations).containsExactly("listDictTypeOptions:%sys%:200");
+    }
+
+    @Test
+    void listDictItemsUsesPagingFiltersThenCountsMatches() {
+        mapper.dictItems = List.of(new DictItem()
+                .setId(7L)
+                .setDictCode("sys_status")
+                .setItemLabel("启用")
+                .setItemValue("ENABLED")
+                .setStatus("ENABLED"));
+        mapper.dictItemCount = 2L;
+
+        List<DictItem> items = mapperSupport.listDictItems(" sys_status ", " 启 ", " enabled ", 3, 10);
+        long count = mapperSupport.countDictItems(" sys_status ", " 启 ", " enabled ");
+
+        assertThat(items).hasSize(1);
+        assertThat(count).isEqualTo(2L);
+        assertThat(mapper.operations).containsExactly(
+                "listDictItems:sys_status:%启%:ENABLED:20:10",
+                "countDictItems:sys_status:%启%:ENABLED");
+    }
+
+    @Test
     void updateConfigPreservesExistingSensitiveValueWhenMaskedPlaceholderIsSubmitted() {
         ConfigRequest request = new ConfigRequest();
         request.setConfigKey("oauth.client-secret");
@@ -617,6 +669,11 @@ class AdminSystemMapperSupportTest {
         private List<Role> roles = List.of();
         private List<Role> roleOptions = List.of();
         private long roleCount;
+        private List<DictType> dictTypes = List.of();
+        private List<DictType> dictTypeOptions = List.of();
+        private long dictTypeCount;
+        private List<DictItem> dictItems = List.of();
+        private long dictItemCount;
         private List<Dept> allDepts = List.of();
         private List<Menu> allMenus = List.of();
         private AdminSystemModels.AdminUser insertedUser;
@@ -694,6 +751,26 @@ class AdminSystemMapperSupportTest {
                         case "listRoleOptions" -> {
                             operations.add("listRoleOptions:" + args[0] + ":" + args[1]);
                             yield roleOptions;
+                        }
+                        case "listDictTypes" -> {
+                            operations.add("listDictTypes:" + args[0] + ":" + args[1] + ":" + args[2] + ":" + args[3]);
+                            yield dictTypes;
+                        }
+                        case "countDictTypes" -> {
+                            operations.add("countDictTypes:" + args[0] + ":" + args[1]);
+                            yield dictTypeCount;
+                        }
+                        case "listDictTypeOptions" -> {
+                            operations.add("listDictTypeOptions:" + args[0] + ":" + args[1]);
+                            yield dictTypeOptions;
+                        }
+                        case "listDictItems" -> {
+                            operations.add("listDictItems:" + args[0] + ":" + args[1] + ":" + args[2] + ":" + args[3] + ":" + args[4]);
+                            yield dictItems;
+                        }
+                        case "countDictItems" -> {
+                            operations.add("countDictItems:" + args[0] + ":" + args[1] + ":" + args[2]);
+                            yield dictItemCount;
                         }
                         case "listAllDepts" -> {
                             operations.add("listAllDepts");

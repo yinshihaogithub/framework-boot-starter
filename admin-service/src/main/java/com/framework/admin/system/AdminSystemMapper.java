@@ -469,11 +469,52 @@ public interface AdminSystemMapper {
     List<String> listPermissionsByUserId(@Param("userId") Long userId);
 
     @Select("""
+            <script>
             SELECT id, dict_code AS dictCode, dict_name AS dictName, status
             FROM sys_dict_type
+            <where>
+                <if test="keywordLike != null">
+                    AND (dict_code LIKE #{keywordLike} OR dict_name LIKE #{keywordLike})
+                </if>
+                <if test="status != null">AND status = #{status}</if>
+            </where>
             ORDER BY id ASC
+            LIMIT #{offset}, #{pageSize}
+            </script>
             """)
-    List<DictType> listDictTypes();
+    List<DictType> listDictTypes(@Param("keywordLike") String keywordLike,
+                                 @Param("status") String status,
+                                 @Param("offset") int offset,
+                                 @Param("pageSize") int pageSize);
+
+    @Select("""
+            <script>
+            SELECT COUNT(*)
+            FROM sys_dict_type
+            <where>
+                <if test="keywordLike != null">
+                    AND (dict_code LIKE #{keywordLike} OR dict_name LIKE #{keywordLike})
+                </if>
+                <if test="status != null">AND status = #{status}</if>
+            </where>
+            </script>
+            """)
+    long countDictTypes(@Param("keywordLike") String keywordLike, @Param("status") String status);
+
+    @Select("""
+            <script>
+            SELECT id, dict_code AS dictCode, dict_name AS dictName, status
+            FROM sys_dict_type
+            <where>
+                <if test="keywordLike != null">
+                    AND (dict_code LIKE #{keywordLike} OR dict_name LIKE #{keywordLike})
+                </if>
+            </where>
+            ORDER BY id ASC
+            LIMIT #{limit}
+            </script>
+            """)
+    List<DictType> listDictTypeOptions(@Param("keywordLike") String keywordLike, @Param("limit") int limit);
 
     @Insert("""
             INSERT INTO sys_dict_type (dict_code, dict_name, status)
@@ -505,11 +546,37 @@ public interface AdminSystemMapper {
             FROM sys_dict_item
             <where>
                 <if test="dictCode != null">AND dict_code = #{dictCode}</if>
+                <if test="keywordLike != null">
+                    AND (item_label LIKE #{keywordLike} OR item_value LIKE #{keywordLike})
+                </if>
+                <if test="status != null">AND status = #{status}</if>
             </where>
             ORDER BY dict_code ASC, sort_order ASC, id ASC
+            LIMIT #{offset}, #{pageSize}
             </script>
             """)
-    List<DictItem> listDictItems(@Param("dictCode") String dictCode);
+    List<DictItem> listDictItems(@Param("dictCode") String dictCode,
+                                 @Param("keywordLike") String keywordLike,
+                                 @Param("status") String status,
+                                 @Param("offset") int offset,
+                                 @Param("pageSize") int pageSize);
+
+    @Select("""
+            <script>
+            SELECT COUNT(*)
+            FROM sys_dict_item
+            <where>
+                <if test="dictCode != null">AND dict_code = #{dictCode}</if>
+                <if test="keywordLike != null">
+                    AND (item_label LIKE #{keywordLike} OR item_value LIKE #{keywordLike})
+                </if>
+                <if test="status != null">AND status = #{status}</if>
+            </where>
+            </script>
+            """)
+    long countDictItems(@Param("dictCode") String dictCode,
+                        @Param("keywordLike") String keywordLike,
+                        @Param("status") String status);
 
     @Insert("""
             INSERT INTO sys_dict_item (dict_code, item_label, item_value, sort_order, status)

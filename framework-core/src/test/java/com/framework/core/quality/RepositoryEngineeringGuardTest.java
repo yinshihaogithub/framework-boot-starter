@@ -1010,6 +1010,59 @@ class RepositoryEngineeringGuardTest {
     }
 
     @Test
+    void adminSystemDictsArePagedAndTypeOptionsAreBounded() throws Exception {
+        String mapper = read(root.resolve(
+                "admin-service/src/main/java/com/framework/admin/system/AdminSystemMapper.java"));
+        String mapperSupport = read(root.resolve(
+                "admin-service/src/main/java/com/framework/admin/system/AdminSystemMapperSupport.java"));
+        String service = read(root.resolve(
+                "admin-service/src/main/java/com/framework/admin/system/AdminSystemService.java"));
+        String controller = read(root.resolve(
+                "admin-service/src/main/java/com/framework/admin/system/AdminSystemController.java"));
+        String client = read(root.resolve("frontend/admin-web/src/api/client.ts"));
+        String app = read(root.resolve("frontend/admin-web/src/App.vue"));
+
+        assertThat(mapper)
+                .contains("List<DictType> listDictTypes")
+                .contains("long countDictTypes")
+                .contains("List<DictType> listDictTypeOptions")
+                .contains("List<DictItem> listDictItems")
+                .contains("long countDictItems")
+                .contains("LIMIT #{offset}, #{pageSize}")
+                .contains("LIMIT #{limit}");
+        assertThat(mapperSupport)
+                .contains("listDictTypes(String keyword, String status, int pageNum, int pageSize)")
+                .contains("countDictTypes(String keyword, String status)")
+                .contains("listDictTypeOptions(String keyword, int limit)")
+                .contains("listDictItems(String dictCode, String keyword, String status, int pageNum, int pageSize)")
+                .contains("countDictItems(String dictCode, String keyword, String status)");
+        assertThat(service)
+                .contains("PageResult<DictType> dictTypes")
+                .contains("List<DictType> dictTypeOptions")
+                .contains("PageResult<DictItem> dictItems")
+                .contains("mapperSupport.countDictTypes")
+                .contains("mapperSupport.countDictItems");
+        assertThat(controller)
+                .contains("Result<PageResult<DictType>> dictTypes")
+                .contains("@GetMapping(\"/dict-type-options\")")
+                .contains("Result<PageResult<DictItem>> dictItems")
+                .doesNotContain("Result<List<DictType>> dictTypes")
+                .doesNotContain("Result<List<DictItem>> dictItems");
+        assertThat(client)
+                .contains("getData<PageResult<DictType>>('/admin/system/dict-types', params)")
+                .contains("getData<DictType[]>('/admin/system/dict-type-options', params)")
+                .contains("getData<PageResult<DictItem>>('/admin/system/dict-items', params)");
+        assertThat(app)
+                .contains("reactive<PageResult<DictType>>")
+                .contains("reactive<PageResult<DictItem>>")
+                .contains("dictTypeQuery")
+                .contains("dictItemQuery")
+                .contains("dictTypes.records")
+                .contains("dictItems.records")
+                .contains("dictTypeOptions");
+    }
+
+    @Test
     void adminSystemConfigsArePagedAndDashboardUsesPointLookup() throws Exception {
         String mapper = read(root.resolve(
                 "admin-service/src/main/java/com/framework/admin/system/AdminSystemMapper.java"));

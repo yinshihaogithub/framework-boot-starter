@@ -616,11 +616,29 @@ public class AdminSystemService {
         }
     }
 
-    public List<DictType> dictTypes() {
+    public PageResult<DictType> dictTypes(String keyword, String status, int pageNum, int pageSize) {
+        int safePageNum = AdminPageSupport.safePageNum(pageNum);
+        int safePageSize = AdminPageSupport.safePageSize(pageSize);
+        String safeKeyword = text(keyword);
+        String safeStatus = normalizeStatusFilter(status);
+        if (isInvalidStatusFilter(status, safeStatus)) {
+            return PageResult.empty(safePageNum, safePageSize);
+        }
         try {
-            return mapperSupport.listDictTypes();
+            List<DictType> records = mapperSupport.listDictTypes(safeKeyword, safeStatus, safePageNum, safePageSize);
+            return PageResult.of(records, mapperSupport.countDictTypes(safeKeyword, safeStatus), safePageNum, safePageSize);
         } catch (RuntimeException e) {
             log.warn("[系统管理] 字典类型查询失败 error={}", e.getMessage());
+            return PageResult.empty(safePageNum, safePageSize);
+        }
+    }
+
+    public List<DictType> dictTypeOptions(String keyword, int limit) {
+        int safeLimit = AdminPageSupport.safePageSize(limit);
+        try {
+            return mapperSupport.listDictTypeOptions(text(keyword), safeLimit);
+        } catch (RuntimeException e) {
+            log.warn("[系统管理] 字典类型选项查询失败 error={}", e.getMessage());
             return List.of();
         }
     }
@@ -677,12 +695,23 @@ public class AdminSystemService {
         }
     }
 
-    public List<DictItem> dictItems(String dictCode) {
+    public PageResult<DictItem> dictItems(String dictCode, String keyword, String status, int pageNum, int pageSize) {
+        int safePageNum = AdminPageSupport.safePageNum(pageNum);
+        int safePageSize = AdminPageSupport.safePageSize(pageSize);
+        String safeDictCode = text(dictCode);
+        String safeKeyword = text(keyword);
+        String safeStatus = normalizeStatusFilter(status);
+        if (isInvalidStatusFilter(status, safeStatus)) {
+            return PageResult.empty(safePageNum, safePageSize);
+        }
         try {
-            return mapperSupport.listDictItems(dictCode);
+            List<DictItem> records = mapperSupport.listDictItems(
+                    safeDictCode, safeKeyword, safeStatus, safePageNum, safePageSize);
+            long total = mapperSupport.countDictItems(safeDictCode, safeKeyword, safeStatus);
+            return PageResult.of(records, total, safePageNum, safePageSize);
         } catch (RuntimeException e) {
             log.warn("[系统管理] 字典项查询失败 dictCode={}, error={}", dictCode, e.getMessage());
-            return List.of();
+            return PageResult.empty(safePageNum, safePageSize);
         }
     }
 

@@ -122,6 +122,8 @@ class AdminSystemServiceTest {
         PageResult<Tenant> tenants = service.tenants(null, null, 0, 0);
         PageResult<AdminUser> users = service.users(null, null, 0, 0);
         PageResult<Role> roles = service.roles(null, null, 0, 0);
+        PageResult<DictType> dictTypes = service.dictTypes(null, null, 0, 0);
+        PageResult<DictItem> dictItems = service.dictItems("sys_status", null, null, 0, 0);
 
         assertThat(tenants.getPageNum()).isEqualTo(1);
         assertThat(tenants.getPageSize()).isEqualTo(20);
@@ -140,8 +142,15 @@ class AdminSystemServiceTest {
         assertThat(service.roleOptions(null, 0)).isEmpty();
         assertThat(service.roleMenuIds(1L)).isEmpty();
         assertThat(service.menus()).isEmpty();
-        assertThat(service.dictTypes()).isEmpty();
-        assertThat(service.dictItems("sys_status")).isEmpty();
+        assertThat(dictTypes.getPageNum()).isEqualTo(1);
+        assertThat(dictTypes.getPageSize()).isEqualTo(20);
+        assertThat(dictTypes.getRecords()).isEmpty();
+        assertThat(dictTypes.getTotal()).isZero();
+        assertThat(service.dictTypeOptions(null, 0)).isEmpty();
+        assertThat(dictItems.getPageNum()).isEqualTo(1);
+        assertThat(dictItems.getPageSize()).isEqualTo(20);
+        assertThat(dictItems.getRecords()).isEmpty();
+        assertThat(dictItems.getTotal()).isZero();
         PageResult<ConfigItem> configs = service.configs(null, 0, 0);
         assertThat(configs.getPageNum()).isEqualTo(1);
         assertThat(configs.getPageSize()).isEqualTo(20);
@@ -251,6 +260,102 @@ class AdminSystemServiceTest {
         assertThat(options).hasSize(1);
         assertThat(mapperSupport.roleOptionKeyword).isEqualTo("admin");
         assertThat(mapperSupport.roleOptionLimit).isEqualTo(200);
+    }
+
+    @Test
+    void dictTypesReturnsPagedResultAndNormalizesFilters() {
+        mapperSupport.dictTypes = List.of(new DictType()
+                .setId(4L)
+                .setDictCode("sys_status")
+                .setDictName("系统状态")
+                .setStatus("ENABLED"));
+        mapperSupport.dictTypeCount = 5L;
+
+        PageResult<DictType> page = service.dictTypes("\u00A0sys\u3000", "\u3000enabled\u00A0", 2, 500);
+
+        assertThat(page.getRecords()).hasSize(1);
+        assertThat(page.getTotal()).isEqualTo(5L);
+        assertThat(page.getPageNum()).isEqualTo(2);
+        assertThat(page.getPageSize()).isEqualTo(200);
+        assertThat(mapperSupport.listDictTypeKeyword).isEqualTo("sys");
+        assertThat(mapperSupport.listDictTypeStatus).isEqualTo("ENABLED");
+        assertThat(mapperSupport.listDictTypePageNum).isEqualTo(2);
+        assertThat(mapperSupport.listDictTypePageSize).isEqualTo(200);
+        assertThat(mapperSupport.countDictTypeKeyword).isEqualTo("sys");
+        assertThat(mapperSupport.countDictTypeStatus).isEqualTo("ENABLED");
+    }
+
+    @Test
+    void dictTypesReturnEmptyPageForInvalidStatusFilter() {
+        mapperSupport.dictTypes = List.of(new DictType().setId(4L));
+        mapperSupport.dictTypeCount = 1L;
+
+        PageResult<DictType> page = service.dictTypes(" sys ", "LOCKED", 1, 20);
+
+        assertThat(page.getRecords()).isEmpty();
+        assertThat(page.getTotal()).isZero();
+        assertThat(mapperSupport.listDictTypeKeyword).isNull();
+        assertThat(mapperSupport.listDictTypeStatus).isNull();
+        assertThat(mapperSupport.countDictTypeKeyword).isNull();
+        assertThat(mapperSupport.countDictTypeStatus).isNull();
+    }
+
+    @Test
+    void dictTypeOptionsAreTrimmedAndLimitIsBounded() {
+        mapperSupport.dictTypeOptions = List.of(new DictType()
+                .setId(4L)
+                .setDictCode("sys_status")
+                .setDictName("系统状态"));
+
+        List<DictType> options = service.dictTypeOptions("\u00A0sys\u3000", 500);
+
+        assertThat(options).hasSize(1);
+        assertThat(mapperSupport.dictTypeOptionKeyword).isEqualTo("sys");
+        assertThat(mapperSupport.dictTypeOptionLimit).isEqualTo(200);
+    }
+
+    @Test
+    void dictItemsReturnsPagedResultAndNormalizesFilters() {
+        mapperSupport.dictItems = List.of(new DictItem()
+                .setId(7L)
+                .setDictCode("sys_status")
+                .setItemLabel("启用")
+                .setItemValue("ENABLED")
+                .setStatus("ENABLED"));
+        mapperSupport.dictItemCount = 3L;
+
+        PageResult<DictItem> page = service.dictItems(
+                "\u00A0sys_status\u3000", "\u00A0启\u3000", "\u3000enabled\u00A0", 3, 500);
+
+        assertThat(page.getRecords()).hasSize(1);
+        assertThat(page.getTotal()).isEqualTo(3L);
+        assertThat(page.getPageNum()).isEqualTo(3);
+        assertThat(page.getPageSize()).isEqualTo(200);
+        assertThat(mapperSupport.listDictItemDictCode).isEqualTo("sys_status");
+        assertThat(mapperSupport.listDictItemKeyword).isEqualTo("启");
+        assertThat(mapperSupport.listDictItemStatus).isEqualTo("ENABLED");
+        assertThat(mapperSupport.listDictItemPageNum).isEqualTo(3);
+        assertThat(mapperSupport.listDictItemPageSize).isEqualTo(200);
+        assertThat(mapperSupport.countDictItemDictCode).isEqualTo("sys_status");
+        assertThat(mapperSupport.countDictItemKeyword).isEqualTo("启");
+        assertThat(mapperSupport.countDictItemStatus).isEqualTo("ENABLED");
+    }
+
+    @Test
+    void dictItemsReturnEmptyPageForInvalidStatusFilter() {
+        mapperSupport.dictItems = List.of(new DictItem().setId(7L));
+        mapperSupport.dictItemCount = 1L;
+
+        PageResult<DictItem> page = service.dictItems("sys_status", " enabled ", "LOCKED", 1, 20);
+
+        assertThat(page.getRecords()).isEmpty();
+        assertThat(page.getTotal()).isZero();
+        assertThat(mapperSupport.listDictItemDictCode).isNull();
+        assertThat(mapperSupport.listDictItemKeyword).isNull();
+        assertThat(mapperSupport.listDictItemStatus).isNull();
+        assertThat(mapperSupport.countDictItemDictCode).isNull();
+        assertThat(mapperSupport.countDictItemKeyword).isNull();
+        assertThat(mapperSupport.countDictItemStatus).isNull();
     }
 
     @Test
@@ -1101,6 +1206,27 @@ class AdminSystemServiceTest {
         private String countRoleStatus;
         private String roleOptionKeyword;
         private int roleOptionLimit;
+        private List<DictType> dictTypes = List.of();
+        private long dictTypeCount;
+        private List<DictType> dictTypeOptions = List.of();
+        private String listDictTypeKeyword;
+        private String listDictTypeStatus;
+        private int listDictTypePageNum;
+        private int listDictTypePageSize;
+        private String countDictTypeKeyword;
+        private String countDictTypeStatus;
+        private String dictTypeOptionKeyword;
+        private int dictTypeOptionLimit;
+        private List<DictItem> dictItems = List.of();
+        private long dictItemCount;
+        private String listDictItemDictCode;
+        private String listDictItemKeyword;
+        private String listDictItemStatus;
+        private int listDictItemPageNum;
+        private int listDictItemPageSize;
+        private String countDictItemDictCode;
+        private String countDictItemKeyword;
+        private String countDictItemStatus;
         private List<ConfigItem> configs = List.of();
         private long configCount;
         private String listConfigKeyword;
@@ -1433,15 +1559,49 @@ class AdminSystemServiceTest {
         }
 
         @Override
-        public List<DictType> listDictTypes() {
+        public List<DictType> listDictTypes(String keyword, String status, int pageNum, int pageSize) {
             failQueryIfNeeded();
-            return List.of();
+            this.listDictTypeKeyword = keyword;
+            this.listDictTypeStatus = status;
+            this.listDictTypePageNum = pageNum;
+            this.listDictTypePageSize = pageSize;
+            return new ArrayList<>(dictTypes);
         }
 
         @Override
-        public List<DictItem> listDictItems(String dictCode) {
+        public long countDictTypes(String keyword, String status) {
             failQueryIfNeeded();
-            return List.of();
+            this.countDictTypeKeyword = keyword;
+            this.countDictTypeStatus = status;
+            return dictTypeCount;
+        }
+
+        @Override
+        public List<DictType> listDictTypeOptions(String keyword, int limit) {
+            failQueryIfNeeded();
+            this.dictTypeOptionKeyword = keyword;
+            this.dictTypeOptionLimit = limit;
+            return new ArrayList<>(dictTypeOptions);
+        }
+
+        @Override
+        public List<DictItem> listDictItems(String dictCode, String keyword, String status, int pageNum, int pageSize) {
+            failQueryIfNeeded();
+            this.listDictItemDictCode = dictCode;
+            this.listDictItemKeyword = keyword;
+            this.listDictItemStatus = status;
+            this.listDictItemPageNum = pageNum;
+            this.listDictItemPageSize = pageSize;
+            return new ArrayList<>(dictItems);
+        }
+
+        @Override
+        public long countDictItems(String dictCode, String keyword, String status) {
+            failQueryIfNeeded();
+            this.countDictItemDictCode = dictCode;
+            this.countDictItemKeyword = keyword;
+            this.countDictItemStatus = status;
+            return dictItemCount;
         }
 
         @Override

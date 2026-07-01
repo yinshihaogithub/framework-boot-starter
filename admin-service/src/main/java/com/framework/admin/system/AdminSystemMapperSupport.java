@@ -372,8 +372,16 @@ public class AdminSystemMapperSupport {
         return mapper.listPermissionsByUserId(userId);
     }
 
-    public List<DictType> listDictTypes() {
-        return mapper.listDictTypes();
+    public List<DictType> listDictTypes(String keyword, String status, int pageNum, int pageSize) {
+        return mapper.listDictTypes(like(keyword), upperText(status), offset(pageNum, pageSize), pageSize);
+    }
+
+    public long countDictTypes(String keyword, String status) {
+        return mapper.countDictTypes(like(keyword), upperText(status));
+    }
+
+    public List<DictType> listDictTypeOptions(String keyword, int limit) {
+        return mapper.listDictTypeOptions(like(keyword), optionLimit(limit));
     }
 
     public Long createDictType(DictTypeRequest request) {
@@ -404,8 +412,12 @@ public class AdminSystemMapperSupport {
         });
     }
 
-    public List<DictItem> listDictItems(String dictCode) {
-        return mapper.listDictItems(text(dictCode));
+    public List<DictItem> listDictItems(String dictCode, String keyword, String status, int pageNum, int pageSize) {
+        return mapper.listDictItems(text(dictCode), like(keyword), upperText(status), offset(pageNum, pageSize), pageSize);
+    }
+
+    public long countDictItems(String dictCode, String keyword, String status) {
+        return mapper.countDictItems(text(dictCode), like(keyword), upperText(status));
     }
 
     public Long createDictItem(DictItemRequest request) {

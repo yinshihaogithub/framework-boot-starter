@@ -260,8 +260,19 @@ public class AdminSystemController {
     @Operation(summary = "字典类型")
     @GetMapping("/dict-types")
     @RequirePermission("system:dict:view")
-    public Result<List<DictType>> dictTypes() {
-        return Result.success(systemService.dictTypes());
+    public Result<PageResult<DictType>> dictTypes(@RequestParam(required = false) String keyword,
+                                                  @RequestParam(required = false) String status,
+                                                  @RequestParam(defaultValue = "1") int pageNum,
+                                                  @RequestParam(defaultValue = "20") int pageSize) {
+        return Result.success(systemService.dictTypes(keyword, status, pageNum, pageSize));
+    }
+
+    @Operation(summary = "字典类型选项")
+    @GetMapping("/dict-type-options")
+    @RequirePermission("system:dict:view")
+    public Result<List<DictType>> dictTypeOptions(@RequestParam(required = false) String keyword,
+                                                  @RequestParam(defaultValue = "200") int limit) {
+        return Result.success(systemService.dictTypeOptions(keyword, limit));
     }
 
     @Operation(summary = "新增字典类型")
@@ -289,8 +300,12 @@ public class AdminSystemController {
     @Operation(summary = "字典项")
     @GetMapping("/dict-items")
     @RequirePermission("system:dict:view")
-    public Result<List<DictItem>> dictItems(@RequestParam(required = false) String dictCode) {
-        return Result.success(systemService.dictItems(dictCode));
+    public Result<PageResult<DictItem>> dictItems(@RequestParam(required = false) String dictCode,
+                                                  @RequestParam(required = false) String keyword,
+                                                  @RequestParam(required = false) String status,
+                                                  @RequestParam(defaultValue = "1") int pageNum,
+                                                  @RequestParam(defaultValue = "20") int pageSize) {
+        return Result.success(systemService.dictItems(dictCode, keyword, status, pageNum, pageSize));
     }
 
     @Operation(summary = "新增字典项")

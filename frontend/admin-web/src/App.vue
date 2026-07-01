@@ -370,12 +370,18 @@
               <div class="section-head">
                 <span>字典类型</span>
                 <div class="actions">
-                  <el-tag size="small">{{ dictTypes.length }}</el-tag>
+                  <el-input v-model="dictTypeQuery.keyword" clearable placeholder="编码/名称" class="filter" />
+                  <el-select v-model="dictTypeQuery.status" clearable placeholder="状态" class="filter">
+                    <el-option label="启用" value="ENABLED" />
+                    <el-option label="禁用" value="DISABLED" />
+                  </el-select>
+                  <el-button :icon="Search" circle type="primary" @click="loadDictTypes" />
+                  <el-tag size="small">{{ dictTypes.total }}</el-tag>
                   <el-button v-if="can('system:dict:create')" :icon="Plus" circle @click="openCreateDictType" />
                 </div>
               </div>
             </template>
-            <el-table :data="dictTypes" height="520" stripe @row-click="selectDict">
+            <el-table :data="dictTypes.records" height="500" stripe @row-click="selectDict">
               <el-table-column prop="dictCode" label="编码" min-width="150" />
               <el-table-column prop="dictName" label="名称" min-width="150" />
               <el-table-column prop="status" label="状态" width="100" />
@@ -386,36 +392,28 @@
                 </template>
               </el-table-column>
             </el-table>
-          </el-card>
-          <el-card shadow="never">
-            <template #header>
-              <div class="section-head">
-                <span>队列状态</span>
-                <el-tag size="small" type="info">{{ mqQueues.length }}</el-tag>
-              </div>
-            </template>
-            <el-table :data="mqQueues" height="260" stripe>
-              <el-table-column prop="queueName" label="队列" min-width="220" show-overflow-tooltip />
-              <el-table-column prop="messageCount" label="消息数" width="110" />
-              <el-table-column prop="consumerCount" label="消费者" width="110" />
-              <el-table-column prop="state" label="状态" width="130">
-                <template #default="{ row }">
-                  <el-tag :type="row.state === 'RUNNING' ? 'success' : 'info'" size="small">{{ row.state }}</el-tag>
-                </template>
-              </el-table-column>
-            </el-table>
+            <el-pagination v-model:current-page="dictTypeQuery.pageNum" v-model:page-size="dictTypeQuery.pageSize" class="pager" layout="total, sizes, prev, pager, next" :total="dictTypes.total" @change="loadDictTypes" />
           </el-card>
           <el-card shadow="never">
             <template #header>
               <div class="section-head">
                 <span>字典项</span>
                 <div class="actions">
-                  <el-tag size="small">{{ dictItems.length }}</el-tag>
+                  <el-select v-model="dictItemQuery.dictCode" clearable filterable placeholder="字典类型" class="filter" @change="handleDictCodeChange">
+                    <el-option v-for="type in dictTypeOptions" :key="type.id" :label="type.dictName" :value="type.dictCode" />
+                  </el-select>
+                  <el-input v-model="dictItemQuery.keyword" clearable placeholder="标签/值" class="filter" />
+                  <el-select v-model="dictItemQuery.status" clearable placeholder="状态" class="filter">
+                    <el-option label="启用" value="ENABLED" />
+                    <el-option label="禁用" value="DISABLED" />
+                  </el-select>
+                  <el-button :icon="Search" circle type="primary" @click="loadDictItems" />
+                  <el-tag size="small">{{ dictItems.total }}</el-tag>
                   <el-button v-if="can('system:dict:create')" :icon="Plus" circle @click="openCreateDictItem" />
                 </div>
               </div>
             </template>
-            <el-table :data="dictItems" height="520" stripe>
+            <el-table :data="dictItems.records" height="500" stripe>
               <el-table-column prop="itemLabel" label="标签" min-width="140" />
               <el-table-column prop="itemValue" label="值" min-width="140" />
               <el-table-column prop="sortOrder" label="排序" width="90" />
@@ -427,6 +425,7 @@
                 </template>
               </el-table-column>
             </el-table>
+            <el-pagination v-model:current-page="dictItemQuery.pageNum" v-model:page-size="dictItemQuery.pageSize" class="pager" layout="total, sizes, prev, pager, next" :total="dictItems.total" @change="loadDictItems" />
           </el-card>
         </section>
 
@@ -523,6 +522,24 @@
                 {{ provider.provider }} · {{ provider.active ? '当前' : provider.available ? '可用' : '未接入' }}
               </el-tag>
             </div>
+          </el-card>
+          <el-card shadow="never">
+            <template #header>
+              <div class="section-head">
+                <span>队列状态</span>
+                <el-tag size="small" type="info">{{ mqQueues.length }}</el-tag>
+              </div>
+            </template>
+            <el-table :data="mqQueues" height="260" stripe>
+              <el-table-column prop="queueName" label="队列" min-width="220" show-overflow-tooltip />
+              <el-table-column prop="messageCount" label="消息数" width="110" />
+              <el-table-column prop="consumerCount" label="消费者" width="110" />
+              <el-table-column prop="state" label="状态" width="130">
+                <template #default="{ row }">
+                  <el-tag :type="row.state === 'RUNNING' ? 'success' : 'info'" size="small">{{ row.state }}</el-tag>
+                </template>
+              </el-table-column>
+            </el-table>
           </el-card>
           <el-card shadow="never">
             <template #header>
@@ -1237,7 +1254,11 @@
 
   <el-dialog v-model="dictItemDialogVisible" :title="editingDictItemId ? '编辑字典项' : '新增字典项'" width="460px">
     <el-form label-width="88px">
-      <el-form-item label="字典编码"><el-input v-model="dictItemForm.dictCode" /></el-form-item>
+      <el-form-item label="字典编码">
+        <el-select v-model="dictItemForm.dictCode" filterable>
+          <el-option v-for="type in dictTypeOptions" :key="type.id" :label="type.dictName" :value="type.dictCode" />
+        </el-select>
+      </el-form-item>
       <el-form-item label="标签"><el-input v-model="dictItemForm.itemLabel" /></el-form-item>
       <el-form-item label="值"><el-input v-model="dictItemForm.itemValue" /></el-form-item>
       <el-form-item label="排序"><el-input-number v-model="dictItemForm.sortOrder" :min="0" /></el-form-item>
@@ -1557,8 +1578,9 @@ const depts = ref<Dept[]>([])
 const roles = reactive<PageResult<Role>>({ records: [], total: 0, pageNum: 1, pageSize: 20, pages: 0 })
 const roleOptions = ref<Role[]>([])
 const menus = ref<MenuItem[]>([])
-const dictTypes = ref<DictType[]>([])
-const dictItems = ref<DictItem[]>([])
+const dictTypes = reactive<PageResult<DictType>>({ records: [], total: 0, pageNum: 1, pageSize: 20, pages: 0 })
+const dictTypeOptions = ref<DictType[]>([])
+const dictItems = reactive<PageResult<DictItem>>({ records: [], total: 0, pageNum: 1, pageSize: 20, pages: 0 })
 const configs = reactive<PageResult<ConfigItem>>({ records: [], total: 0, pageNum: 1, pageSize: 20, pages: 0 })
 const jvm = ref<Record<string, unknown>>({})
 const detailVisible = ref(false)
@@ -1656,6 +1678,8 @@ const loginLogQuery = reactive<{ username: string; success: boolean | ''; pageNu
 const userQuery = reactive({ keyword: '', status: '', pageNum: 1, pageSize: 20 })
 const tenantQuery = reactive({ keyword: '', status: '', pageNum: 1, pageSize: 20 })
 const roleQuery = reactive({ keyword: '', status: '', pageNum: 1, pageSize: 20 })
+const dictTypeQuery = reactive({ keyword: '', status: '', pageNum: 1, pageSize: 20 })
+const dictItemQuery = reactive({ dictCode: '', keyword: '', status: '', pageNum: 1, pageSize: 20 })
 const configQuery = reactive({ keyword: '', pageNum: 1, pageSize: 20 })
 const deptQuery = reactive({ tenantId: 1 as number | undefined })
 
@@ -1919,9 +1943,40 @@ async function loadMenus() {
 }
 
 async function loadDicts(dictCode?: string) {
-  dictTypes.value = await api.dictTypes()
-  selectedDictCode.value = dictCode || selectedDictCode.value || dictTypes.value[0]?.dictCode || ''
-  dictItems.value = await api.dictItems(selectedDictCode.value)
+  if (dictTypeOptions.value.length === 0) {
+    await loadDictTypeOptions()
+  }
+  await loadDictTypes()
+  const nextCode = dictCode || selectedDictCode.value || dictTypeOptions.value[0]?.dictCode || ''
+  selectedDictCode.value = nextCode
+  dictItemQuery.dictCode = nextCode
+  await loadDictItems()
+}
+
+async function loadDictTypes() {
+  const page = await api.dictTypes(dictTypeQuery)
+  Object.assign(dictTypes, page)
+  if (dictTypes.records.length === 0 && dictTypes.total > 0 && dictTypeQuery.pageNum > 1) {
+    dictTypeQuery.pageNum -= 1
+    await loadDictTypes()
+    return
+  }
+  if (dictTypeOptions.value.length === 0) {
+    await loadDictTypeOptions()
+  }
+}
+
+async function loadDictTypeOptions() {
+  dictTypeOptions.value = await api.dictTypeOptions()
+}
+
+async function loadDictItems() {
+  const page = await api.dictItems(dictItemQuery)
+  Object.assign(dictItems, page)
+  if (dictItems.records.length === 0 && dictItems.total > 0 && dictItemQuery.pageNum > 1) {
+    dictItemQuery.pageNum -= 1
+    await loadDictItems()
+  }
 }
 
 async function loadConfigs() {
@@ -2603,9 +2658,17 @@ async function openTrace(value?: string) {
   await loadTrace()
 }
 
-function selectDict(row: DictType) {
+async function selectDict(row: DictType) {
   selectedDictCode.value = row.dictCode
-  loadDicts(row.dictCode)
+  dictItemQuery.dictCode = row.dictCode
+  dictItemQuery.pageNum = 1
+  await loadDictItems()
+}
+
+async function handleDictCodeChange(value: string) {
+  selectedDictCode.value = value || ''
+  dictItemQuery.pageNum = 1
+  await loadDictItems()
 }
 
 function openCreateDictType() {
@@ -2630,6 +2693,8 @@ async function saveDictType() {
   }
   dictTypeDialogVisible.value = false
   selectedDictCode.value = dictTypeForm.dictCode
+  dictItemQuery.dictCode = dictTypeForm.dictCode
+  await loadDictTypeOptions()
   await loadDicts(dictTypeForm.dictCode)
 }
 
@@ -2638,13 +2703,15 @@ async function deleteDictType(row: DictType) {
   await api.deleteDictType(row.id)
   ElMessage.success('已删除')
   selectedDictCode.value = ''
+  dictItemQuery.dictCode = ''
+  await loadDictTypeOptions()
   await loadDicts()
 }
 
 function openCreateDictItem() {
   editingDictItemId.value = undefined
   Object.assign(dictItemForm, {
-    dictCode: selectedDictCode.value,
+    dictCode: selectedDictCode.value || dictTypeOptions.value[0]?.dictCode || '',
     itemLabel: '',
     itemValue: '',
     sortOrder: 0,
@@ -2675,14 +2742,17 @@ async function saveDictItem() {
   }
   dictItemDialogVisible.value = false
   selectedDictCode.value = dictItemForm.dictCode
-  await loadDicts(dictItemForm.dictCode)
+  dictItemQuery.dictCode = dictItemForm.dictCode
+  await loadDictItems()
 }
 
 async function deleteDictItem(row: DictItem) {
   await confirmDelete(`删除字典项 ${row.itemLabel}？`)
   await api.deleteDictItem(row.id)
   ElMessage.success('已删除')
-  await loadDicts(row.dictCode)
+  selectedDictCode.value = row.dictCode
+  dictItemQuery.dictCode = row.dictCode
+  await loadDictItems()
 }
 
 function openCreateConfig() {
