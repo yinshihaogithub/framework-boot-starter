@@ -341,6 +341,7 @@ public class MqAdminService {
                     .setProvider("NONE")
                     .setDeadLetterEnabled(false)
                     .setRetryAvailable(false)
+                    .setDeadLetterRestoreLimit(0)
                     .setMaxRetry(0)
                     .setRetryFixedDelay(0)
                     .setProviders(providerStatuses(null));
@@ -350,6 +351,7 @@ public class MqAdminService {
                 .setDeadLetterEnabled(properties.getDeadLetter().isEnabled())
                 .setRetryAvailable(available(retrySchedulerProvider) != null)
                 .setDeadLetterQueue(properties.getDeadLetter().getQueue())
+                .setDeadLetterRestoreLimit(properties.getDeadLetter().getRestoreLimit())
                 .setMaxRetry(properties.getMaxRetry())
                 .setRetryFixedDelay(properties.getRetry().getFixedDelay())
                 .setFailedMessageTableName(properties.getFailedMessageTableName())

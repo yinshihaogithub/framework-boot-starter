@@ -703,6 +703,8 @@ class RepositoryEngineeringGuardTest {
                 "framework-mq/src/main/java/com/framework/mq/deadletter/MybatisMqFailedMessageRepository.java"));
         String handler = read(root.resolve(
                 "framework-mq/src/main/java/com/framework/mq/deadletter/DeadLetterHandler.java"));
+        String mqAdminDto = read(root.resolve(
+                "framework-mq/src/main/java/com/framework/mq/deadletter/MqAdminDTO.java"));
         String adminMqService = read(root.resolve(
                 "admin-service/src/main/java/com/framework/admin/mq/MqAdminService.java"));
         String adminMqMapperSupport = read(root.resolve(
@@ -749,11 +751,14 @@ class RepositoryEngineeringGuardTest {
                 .contains("repository.findById(id)")
                 .contains("getRestoreLimit()")
                 .doesNotContain("repository.findAll()");
+        assertThat(mqAdminDto)
+                .contains("deadLetterRestoreLimit");
         assertThat(adminMqService)
                 .contains("ObjectProvider<MqFailedMessageMapper>")
                 .contains("MqAdminMapperSupport.list")
                 .contains("MqAdminMapperSupport.count")
                 .contains("MqAdminMapperSupport.findById")
+                .contains("setDeadLetterRestoreLimit(properties.getDeadLetter().getRestoreLimit())")
                 .doesNotContain("getFailedMessageStore()");
         assertThat(adminMqMapperSupport)
                 .contains("mapper.list(")

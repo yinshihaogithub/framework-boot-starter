@@ -487,6 +487,10 @@
                 <span>重试间隔</span>
                 <strong>{{ mqStats?.runtime?.retryFixedDelay ?? 0 }} ms</strong>
               </div>
+              <div class="runtime-item">
+                <span>启动恢复上限</span>
+                <strong>{{ mqStats?.runtime?.deadLetterRestoreLimit ?? 0 }}</strong>
+              </div>
               <div class="runtime-item table-name">
                 <span>失败消息表</span>
                 <strong>{{ mqStats?.runtime?.failedMessageTableName || '-' }}</strong>

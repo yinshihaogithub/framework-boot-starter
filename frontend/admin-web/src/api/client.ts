@@ -60,6 +60,7 @@ export interface MqRuntimeInfo {
   deadLetterEnabled: boolean
   retryAvailable: boolean
   deadLetterQueue?: string
+  deadLetterRestoreLimit: number
   maxRetry: number
   retryFixedDelay: number
   failedMessageTableName?: string

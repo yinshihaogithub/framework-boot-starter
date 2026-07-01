@@ -160,6 +160,7 @@ class MqAdminControllerTest {
     void returnsRuntimeInfoWithProviderAvailability() {
         MqProperties properties = new MqProperties();
         properties.setProvider(MqProperties.Provider.RABBIT);
+        properties.getDeadLetter().setRestoreLimit(123);
         MqAdminController controller = controller(null, properties, sender(MqProperties.Provider.RABBIT));
 
         Result<MqAdminDTO.MqStats> result = controller.stats();
@@ -168,6 +169,7 @@ class MqAdminControllerTest {
         assertThat(result.getData().getRuntime().getProvider()).isEqualTo("RABBIT");
         assertThat(result.getData().getRuntime().isDeadLetterEnabled()).isTrue();
         assertThat(result.getData().getRuntime().isRetryAvailable()).isFalse();
+        assertThat(result.getData().getRuntime().getDeadLetterRestoreLimit()).isEqualTo(123);
         assertThat(result.getData().getRuntime().getFailedMessageTableName())
                 .isEqualTo("framework_mq_failed_message");
         assertThat(result.getData().getRuntime().getProviders())

@@ -84,6 +84,7 @@ public class MqAdminDTO {
         private boolean deadLetterEnabled;
         private boolean retryAvailable;
         private String deadLetterQueue;
+        private int deadLetterRestoreLimit;
         private int maxRetry;
         private long retryFixedDelay;
         private String failedMessageTableName;
