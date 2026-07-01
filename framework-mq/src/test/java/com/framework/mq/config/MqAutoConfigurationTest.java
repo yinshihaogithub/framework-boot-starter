@@ -1,9 +1,11 @@
 package com.framework.mq.config;
 
 import com.framework.mq.deadletter.DeadLetterHandler;
+import com.framework.mq.deadletter.MqFailedMessage;
 import com.framework.mq.deadletter.MqFailedMessageRepository;
 import com.framework.mq.deadletter.MqRetryScheduler;
 import com.framework.mq.deadletter.MqTableInitializer;
+import com.framework.mq.mapper.MqFailedMessageMapper;
 import com.framework.mq.producer.KafkaMqProducer;
 import com.framework.mq.producer.MqMessageSenderRegistry;
 import com.framework.mq.producer.MqProducer;
@@ -16,15 +18,10 @@ import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.kafka.core.KafkaOperations;
 
-import javax.sql.DataSource;
-import java.io.PrintWriter;
-import java.sql.Connection;
-import java.sql.SQLFeatureNotSupportedException;
 import java.lang.reflect.Proxy;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
-import java.util.logging.Logger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -68,12 +65,13 @@ class MqAutoConfigurationTest {
     }
 
     @Test
-    void autoConfigurationRegistersMysqlRepositoryWhenDataSourceExists() {
+    void autoConfigurationRegistersMysqlRepositoryWhenMapperExists() {
         contextRunner
                 .withPropertyValues("framework.mq.auto-create-table=false")
-                .withBean(DataSource.class, ThrowingDataSource::new)
+                .withBean(MqFailedMessageMapper.class, CapturingMqFailedMessageMapper::new)
                 .run(context -> assertThat(context)
                         .hasSingleBean(MqProperties.class)
+                        .hasSingleBean(MqFailedMessageMapper.class)
                         .hasSingleBean(MqTableInitializer.class)
                         .hasSingleBean(MqFailedMessageRepository.class)
                         .hasSingleBean(DeadLetterHandler.class)
@@ -168,48 +166,42 @@ class MqAutoConfigurationTest {
         return null;
     }
 
-    private static class ThrowingDataSource implements DataSource {
+    private static class CapturingMqFailedMessageMapper implements MqFailedMessageMapper {
+
         @Override
-        public Connection getConnection() {
-            throw new UnsupportedOperationException("test data source should not be used");
+        public void createTableIfNotExists(String tableName) {
         }
 
         @Override
-        public Connection getConnection(String username, String password) {
-            throw new UnsupportedOperationException("test data source should not be used");
+        public int insert(String tableName, MqFailedMessage message) {
+            message.setId(1L);
+            return 1;
         }
 
         @Override
-        public PrintWriter getLogWriter() {
+        public int update(String tableName, MqFailedMessage message) {
+            return 1;
+        }
+
+        @Override
+        public MqFailedMessage findById(String tableName, Long id) {
             return null;
         }
 
         @Override
-        public void setLogWriter(PrintWriter out) {
+        public List<MqFailedMessage> findAll(String tableName) {
+            return List.of();
         }
 
         @Override
-        public void setLoginTimeout(int seconds) {
-        }
-
-        @Override
-        public int getLoginTimeout() {
+        public int deleteById(String tableName, Long id) {
             return 0;
         }
 
         @Override
-        public Logger getParentLogger() throws SQLFeatureNotSupportedException {
-            throw new SQLFeatureNotSupportedException();
-        }
-
-        @Override
-        public <T> T unwrap(Class<T> iface) {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public boolean isWrapperFor(Class<?> iface) {
-            return false;
+        public int deleteProcessed(String tableName, String successStatus,
+                                   String exhaustedStatus, String manualStatus) {
+            return 0;
         }
     }
 

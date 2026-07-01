@@ -1,23 +1,27 @@
 package com.framework.mq.config;
 
 import com.framework.mq.deadletter.DeadLetterHandler;
-import com.framework.mq.deadletter.JdbcMqFailedMessageRepository;
 import com.framework.mq.deadletter.MqDeadLetterListener;
 import com.framework.mq.deadletter.MqFailedMessageRepository;
 import com.framework.mq.deadletter.MqRetryScheduler;
 import com.framework.mq.deadletter.MqTableInitializer;
+import com.framework.mq.deadletter.MybatisMqFailedMessageRepository;
+import com.framework.mq.mapper.MqFailedMessageMapper;
 import com.framework.mq.producer.KafkaMqProducer;
 import com.framework.mq.producer.MqMessageSender;
 import com.framework.mq.producer.MqMessageSenderRegistry;
 import com.framework.mq.producer.MqProducer;
 import com.framework.mq.producer.RocketMqProducer;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.ibatis.session.SqlSessionFactory;
+import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.amqp.rabbit.config.SimpleRabbitListenerContainerFactory;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.amqp.rabbit.core.RabbitAdmin;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
 import org.springframework.amqp.support.converter.MessageConverter;
+import org.springframework.boot.autoconfigure.AutoConfigureAfter;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -26,11 +30,9 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.kafka.core.KafkaOperations;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
-import javax.sql.DataSource;
 import java.util.List;
 
 /**
@@ -44,6 +46,10 @@ import java.util.List;
 @Slf4j
 @Configuration
 @EnableScheduling
+@AutoConfigureAfter(name = {
+        "com.baomidou.mybatisplus.autoconfigure.MybatisPlusAutoConfiguration",
+        "org.mybatis.spring.boot.autoconfigure.MybatisAutoConfiguration"
+})
 @EnableConfigurationProperties(MqProperties.class)
 @ConditionalOnProperty(prefix = "framework.mq", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class MqAutoConfiguration {
@@ -133,24 +139,17 @@ public class MqAutoConfiguration {
     }
 
     @Bean
+    @ConditionalOnBean(MqFailedMessageMapper.class)
     @ConditionalOnMissingBean
-    @ConditionalOnBean(DataSource.class)
-    public JdbcTemplate mqJdbcTemplate(DataSource dataSource) {
-        return new JdbcTemplate(dataSource);
+    public MqTableInitializer mqTableInitializer(MqFailedMessageMapper mapper, MqProperties properties) {
+        return new MqTableInitializer(mapper, properties);
     }
 
     @Bean
-    @ConditionalOnBean(JdbcTemplate.class)
+    @ConditionalOnBean(MqFailedMessageMapper.class)
     @ConditionalOnMissingBean
-    public MqTableInitializer mqTableInitializer(JdbcTemplate jdbcTemplate, MqProperties properties) {
-        return new MqTableInitializer(jdbcTemplate, properties);
-    }
-
-    @Bean
-    @ConditionalOnBean(JdbcTemplate.class)
-    @ConditionalOnMissingBean
-    public MqFailedMessageRepository mqFailedMessageRepository(JdbcTemplate jdbcTemplate, MqProperties properties) {
-        return new JdbcMqFailedMessageRepository(jdbcTemplate, properties.getFailedMessageTableName());
+    public MqFailedMessageRepository mqFailedMessageRepository(MqFailedMessageMapper mapper, MqProperties properties) {
+        return new MybatisMqFailedMessageRepository(mapper, properties.getFailedMessageTableName());
     }
 
     @Bean
@@ -175,5 +174,11 @@ public class MqAutoConfiguration {
     @ConditionalOnProperty(prefix = "framework.mq.dead-letter", name = "enabled", havingValue = "true", matchIfMissing = true)
     public MqDeadLetterListener mqDeadLetterListener(DeadLetterHandler deadLetterHandler) {
         return new MqDeadLetterListener(deadLetterHandler);
+    }
+
+    @Configuration
+    @ConditionalOnBean(SqlSessionFactory.class)
+    @MapperScan("com.framework.mq.mapper")
+    static class MqMapperScanConfiguration {
     }
 }

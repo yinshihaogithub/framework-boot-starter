@@ -618,6 +618,57 @@ class RepositoryEngineeringGuardTest {
     }
 
     @Test
+    void mqDeadLetterPersistenceUsesAnnotationMapperInsteadOfJdbcTemplate() throws Exception {
+        Path mqMain = root.resolve("framework-mq/src/main/java");
+        try (Stream<Path> files = Files.walk(mqMain)) {
+            List<Path> javaFiles = files
+                    .filter(Files::isRegularFile)
+                    .filter(path -> path.toString().endsWith(".java"))
+                    .toList();
+
+            assertThat(javaFiles).isNotEmpty();
+            for (Path javaFile : javaFiles) {
+                String content = read(javaFile);
+                assertThat(content)
+                        .as(javaFile + " must keep MQ failed-message persistence on annotation Mapper style")
+                        .doesNotContain("JdbcTemplate")
+                        .doesNotContain("GeneratedKeyHolder")
+                        .doesNotContain("JdbcMqFailedMessageRepository");
+            }
+        }
+
+        String autoConfiguration = read(root.resolve("framework-mq/src/main/java/com/framework/mq/config/MqAutoConfiguration.java"));
+        String mapper = read(root.resolve("framework-mq/src/main/java/com/framework/mq/mapper/MqFailedMessageMapper.java"));
+        String repository = read(root.resolve(
+                "framework-mq/src/main/java/com/framework/mq/deadletter/MybatisMqFailedMessageRepository.java"));
+        String repositoryTest = read(root.resolve(
+                "framework-mq/src/test/java/com/framework/mq/deadletter/MybatisMqFailedMessageRepositoryTest.java"));
+        String mapperTest = read(root.resolve(
+                "framework-mq/src/test/java/com/framework/mq/mapper/MqFailedMessageMapperTest.java"));
+
+        assertThat(autoConfiguration)
+                .contains("@MapperScan(\"com.framework.mq.mapper\")")
+                .contains("MqFailedMessageMapper")
+                .contains("MybatisMqFailedMessageRepository");
+        assertThat(mapper)
+                .contains("@Mapper")
+                .contains("CREATE TABLE IF NOT EXISTS ${tableName}")
+                .contains("@Options(useGeneratedKeys = true, keyProperty = \"message.id\")")
+                .contains("WHERE status IN (#{successStatus}, #{exhaustedStatus}, #{manualStatus})");
+        assertThat(repository)
+                .contains("mapper.insert(tableName, message)")
+                .contains("mapper.deleteProcessed(tableName")
+                .contains("mq failed message insert failed");
+        assertThat(repositoryTest)
+                .contains("insertDelegatesAllCompensationColumnsAndRequiresGeneratedKey")
+                .contains("insertFailsWhenMapperDoesNotReturnGeneratedKey")
+                .contains("updateFindDeleteAndTerminalCleanupDelegateToMapper");
+        assertThat(mapperTest)
+                .contains("mapperUsesAnnotationSqlAndGeneratedKeys")
+                .contains("defaultAutoCreateDdlMatchesPackagedMysqlScript");
+    }
+
+    @Test
     void mqConsumerRedisIdempotentFailuresDoNotBlockConsumption() throws Exception {
         String wrapperConsumer = read(root.resolve(
                 "framework-mq/src/main/java/com/framework/mq/consumer/AbstractMessageWrapperConsumer.java"));

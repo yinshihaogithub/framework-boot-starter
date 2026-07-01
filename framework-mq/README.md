@@ -12,7 +12,7 @@
 </dependency>
 ```
 
-> 推荐配置 MySQL + Redis，再按业务选择 RabbitMQ / Kafka / RocketMQ。MySQL 保存失败消息和人工补偿记录，Redis 仅用于消费幂等缓存。未提供 Redis 时消费者仍可消费消息，只是不做跨进程幂等缓存；未提供对应 provider Bean 或 `DataSource` 时，相关 Bean 会自动跳过，避免 starter 直接拖垮启动。
+> 推荐配置 MySQL + Redis，再按业务选择 RabbitMQ / Kafka / RocketMQ。MySQL 保存失败消息和人工补偿记录，Redis 仅用于消费幂等缓存。未提供 Redis 时消费者仍可消费消息，只是不做跨进程幂等缓存；未提供对应 provider Bean 或 MyBatis Mapper 运行环境时，相关 Bean 会自动跳过，避免 starter 直接拖垮启动。
 
 ## 配置
 
@@ -52,7 +52,7 @@ RabbitMQ 下 `RabbitTemplate` 已启用 publisher confirm / returns callback 的
 
 MySQL 初始化脚本：`framework-mq/src/main/resources/db/mysql/framework_mq.sql`。工程根目录也提供聚合脚本：`sql/mysql/framework_boot_starter_init.sql`。
 
-失败消息 JDBC repository 和自动建表器会校验 `JdbcTemplate` 和动态表名，表名只允许字母、数字和下划线；字段映射会保留 `messageId`、`traceId`、上游消息 ID、业务 key、消息类型、租户、操作人、来源和人工补偿备注。已处理记录清理只删除 `SUCCESS`、`EXHAUSTED`、`MANUAL` 终态记录，不会误删待补偿消息。
+失败消息 Mapper repository 和自动建表器会校验动态表名，表名只允许字母、数字和下划线；字段映射会保留 `messageId`、`traceId`、上游消息 ID、业务 key、消息类型、租户、操作人、来源和人工补偿备注。已处理记录清理只删除 `SUCCESS`、`EXHAUSTED`、`MANUAL` 终态记录，不会误删待补偿消息。
 
 配置启动期会快速校验：`max-retry` 必须大于 0，`retry.fixed-delay` 必须大于 0，`dead-letter.queue` 在启用死信监听时不能为空，`failed-message-table-name` 只能包含字母、数字和下划线。
 
@@ -85,9 +85,9 @@ MySQL 初始化脚本：`framework-mq/src/main/resources/db/mysql/framework_mq.s
 | 有 `KafkaOperations` | `KafkaMqProducer` |
 | 有 `rocketMQTemplate` | `RocketMqProducer` |
 | 有任意 provider sender | `MqMessageSenderRegistry` |
-| 有 `DataSource` | `MqFailedMessageRepository` / `MqTableInitializer` / `DeadLetterHandler` |
-| 同时有 provider sender + MySQL | 重试调度器 |
-| 同时有 Rabbit + MySQL | Rabbit 死信监听器 |
+| 有 `MqFailedMessageMapper` | `MqFailedMessageRepository` / `MqTableInitializer` / `DeadLetterHandler` |
+| 同时有 provider sender + MQ 失败消息仓储 | 重试调度器 |
+| 同时有 Rabbit + MQ 失败消息仓储 | Rabbit 死信监听器 |
 
 ## 使用示例
 
