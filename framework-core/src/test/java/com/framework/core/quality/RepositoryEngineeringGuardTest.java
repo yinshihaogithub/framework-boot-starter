@@ -264,6 +264,12 @@ class RepositoryEngineeringGuardTest {
         assertThat(root.resolve("sql/mysql/framework_boot_starter_init.sql"))
                 .as("root project must provide an aggregate MySQL initialization script")
                 .exists();
+
+        assertThat(readUnchecked(root.resolve(
+                "framework-log/src/test/java/com/framework/log/mapper/OperationLogMysqlScriptTest.java")))
+                .as("operation log annotation DDL must stay aligned with the packaged MySQL script")
+                .contains("defaultAutoCreateDdlMatchesPackagedMysqlScript")
+                .contains("OperationLogMapper.class.getMethod(\"createTableIfNotExists\")");
     }
 
     @Test
