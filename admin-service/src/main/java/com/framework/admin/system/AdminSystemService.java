@@ -28,6 +28,7 @@ import com.framework.core.result.PageResult;
 import com.framework.core.result.Result;
 import com.framework.core.result.ResultCode;
 import com.framework.auth.service.LoginSecurityService;
+import com.framework.auth.service.PasswordExpireService;
 import com.framework.auth.util.PasswordValidator;
 import com.framework.auth.service.SessionManager;
 import com.framework.crypto.util.PasswordUtils;
@@ -56,21 +57,32 @@ public class AdminSystemService {
     private final ObjectProvider<PermissionCacheService> permissionCacheServiceProvider;
     private final ObjectProvider<SessionManager> sessionManagerProvider;
     private final ObjectProvider<LoginSecurityService> loginSecurityServiceProvider;
+    private final ObjectProvider<PasswordExpireService> passwordExpireServiceProvider;
 
     public AdminSystemService(AdminSystemMapperSupport mapperSupport, AdminAuditService auditService) {
-        this(mapperSupport, auditService, null, null, null);
+        this(mapperSupport, auditService, null, null, null, null);
+    }
+
+    public AdminSystemService(AdminSystemMapperSupport mapperSupport, AdminAuditService auditService,
+                              ObjectProvider<PermissionCacheService> permissionCacheServiceProvider,
+                              ObjectProvider<SessionManager> sessionManagerProvider,
+                              ObjectProvider<LoginSecurityService> loginSecurityServiceProvider) {
+        this(mapperSupport, auditService, permissionCacheServiceProvider, sessionManagerProvider,
+                loginSecurityServiceProvider, null);
     }
 
     @Autowired
     public AdminSystemService(AdminSystemMapperSupport mapperSupport, AdminAuditService auditService,
                               ObjectProvider<PermissionCacheService> permissionCacheServiceProvider,
                               ObjectProvider<SessionManager> sessionManagerProvider,
-                              ObjectProvider<LoginSecurityService> loginSecurityServiceProvider) {
+                              ObjectProvider<LoginSecurityService> loginSecurityServiceProvider,
+                              ObjectProvider<PasswordExpireService> passwordExpireServiceProvider) {
         this.mapperSupport = mapperSupport;
         this.auditService = auditService;
         this.permissionCacheServiceProvider = permissionCacheServiceProvider;
         this.sessionManagerProvider = sessionManagerProvider;
         this.loginSecurityServiceProvider = loginSecurityServiceProvider;
+        this.passwordExpireServiceProvider = passwordExpireServiceProvider;
     }
 
     public PageResult<Tenant> tenants(String keyword, String status, int pageNum, int pageSize) {
@@ -265,6 +277,7 @@ public class AdminSystemService {
                 return Result.fail(ResultCode.NOT_FOUND.getCode(), "角色不存在");
             }
             Long userId = mapperSupport.createUser(request, PasswordUtils.hash(request.getPassword()));
+            recordPasswordChange(userId);
             refreshPermissionCache(userId);
             auditSuccess(servletRequest, "新增用户", "INSERT",
                     "userId", userId, "username", request.getUsername(), "roleIds", request.getRoleIds());
@@ -353,6 +366,7 @@ public class AdminSystemService {
             if (!mapperSupport.resetPassword(id, PasswordUtils.hash(request.getPassword()))) {
                 return resourceNotFound("用户");
             }
+            recordPasswordChange(id);
             forceLogoutUser(id);
             auditSuccess(servletRequest, "重置用户密码", "UPDATE", "userId", id);
             return Result.success("已重置");
@@ -991,6 +1005,20 @@ public class AdminSystemService {
         }
     }
 
+    private void recordPasswordChange(Long userId) {
+        if (userId == null) {
+            return;
+        }
+        try {
+            PasswordExpireService passwordExpireService = passwordExpireService();
+            if (passwordExpireService != null) {
+                passwordExpireService.recordPasswordChange(userId);
+            }
+        } catch (RuntimeException e) {
+            log.warn("[密码策略] 记录密码变更时间失败 userId={}, error={}", userId, e.getMessage());
+        }
+    }
+
     private void forceLogoutUser(Long userId) {
         if (userId == null) {
             return;
@@ -1058,6 +1086,18 @@ public class AdminSystemService {
             return loginSecurityServiceProvider.getIfAvailable();
         } catch (RuntimeException e) {
             log.warn("[登录安全] 获取登录安全服务失败 error={}", e.getMessage());
+            return null;
+        }
+    }
+
+    private PasswordExpireService passwordExpireService() {
+        if (passwordExpireServiceProvider == null) {
+            return null;
+        }
+        try {
+            return passwordExpireServiceProvider.getIfAvailable();
+        } catch (RuntimeException e) {
+            log.warn("[密码策略] 获取密码过期服务失败 error={}", e.getMessage());
             return null;
         }
     }

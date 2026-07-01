@@ -8,6 +8,7 @@ import com.framework.admin.support.AdminTextSupport;
 import com.framework.auth.context.LoginUser;
 import com.framework.auth.context.UserContextHolder;
 import com.framework.auth.service.LoginSecurityService;
+import com.framework.auth.service.PasswordExpireService;
 import com.framework.auth.service.SessionManager;
 import com.framework.auth.util.PasswordValidator;
 import com.framework.core.constant.FrameworkConstants;
@@ -39,22 +40,32 @@ public class AdminAuthService {
     private final AdminSystemMapperSupport systemMapperSupport;
     private final SessionManager sessionManager;
     private final ObjectProvider<LoginSecurityService> loginSecurityServiceProvider;
+    private final ObjectProvider<PasswordExpireService> passwordExpireServiceProvider;
     private final AdminAuditService auditService;
 
     public AdminAuthService(AdminSystemMapperSupport systemMapperSupport,
                             SessionManager sessionManager,
                             ObjectProvider<LoginSecurityService> loginSecurityServiceProvider) {
-        this(systemMapperSupport, sessionManager, loginSecurityServiceProvider, null);
+        this(systemMapperSupport, sessionManager, loginSecurityServiceProvider, null, null);
+    }
+
+    public AdminAuthService(AdminSystemMapperSupport systemMapperSupport,
+                            SessionManager sessionManager,
+                            ObjectProvider<LoginSecurityService> loginSecurityServiceProvider,
+                            AdminAuditService auditService) {
+        this(systemMapperSupport, sessionManager, loginSecurityServiceProvider, auditService, null);
     }
 
     @Autowired
     public AdminAuthService(AdminSystemMapperSupport systemMapperSupport,
                             SessionManager sessionManager,
                             ObjectProvider<LoginSecurityService> loginSecurityServiceProvider,
-                            AdminAuditService auditService) {
+                            AdminAuditService auditService,
+                            ObjectProvider<PasswordExpireService> passwordExpireServiceProvider) {
         this.systemMapperSupport = systemMapperSupport;
         this.sessionManager = sessionManager;
         this.loginSecurityServiceProvider = loginSecurityServiceProvider;
+        this.passwordExpireServiceProvider = passwordExpireServiceProvider;
         this.auditService = auditService;
     }
 
@@ -164,6 +175,7 @@ public class AdminAuthService {
                     PasswordUtils.hash(request.getNewPassword()), DEFAULT_PASSWORD_CHANGED_CONFIG_KEY, "true")) {
                 return Result.fail(ResultCode.UNAUTHORIZED);
             }
+            recordPasswordChange(user.getId());
             forceLogoutAll(user.getId());
             auditChangePassword(servletRequest, user);
             return Result.success("密码已修改，请重新登录");
@@ -228,6 +240,20 @@ public class AdminAuthService {
             sessionManager.forceLogoutAll(userId);
         } catch (RuntimeException e) {
             log.warn("[后台认证] 修改密码后强制下线失败 userId={}, error={}", userId, e.getMessage());
+        }
+    }
+
+    private void recordPasswordChange(Long userId) {
+        if (passwordExpireServiceProvider == null) {
+            return;
+        }
+        try {
+            PasswordExpireService passwordExpireService = passwordExpireServiceProvider.getIfAvailable();
+            if (passwordExpireService != null) {
+                passwordExpireService.recordPasswordChange(userId);
+            }
+        } catch (RuntimeException e) {
+            log.warn("[后台认证] 密码变更时间记录失败 userId={}, error={}", userId, e.getMessage());
         }
     }
 

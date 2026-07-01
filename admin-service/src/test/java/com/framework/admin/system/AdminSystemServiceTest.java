@@ -24,6 +24,7 @@ import com.framework.admin.system.AdminSystemModels.UserUpdateRequest;
 import com.framework.auth.context.LoginUser;
 import com.framework.auth.context.UserContextHolder;
 import com.framework.auth.service.LoginSecurityService;
+import com.framework.auth.service.PasswordExpireService;
 import com.framework.auth.service.SessionManager;
 import com.framework.core.result.PageResult;
 import com.framework.core.result.Result;
@@ -400,6 +401,40 @@ class AdminSystemServiceTest {
     }
 
     @Test
+    void createUserRecordsPasswordChangeWhenPolicyIsAvailable() {
+        FakePasswordExpireService passwordExpireService = new FakePasswordExpireService();
+        AdminSystemService serviceWithPasswordPolicy = new AdminSystemService(
+                mapperSupport, auditService, null, null, null, provider(passwordExpireService));
+        UserCreateRequest request = new UserCreateRequest();
+        request.setUsername("alice");
+        request.setPassword("Pass@123");
+        mapperSupport.nextUserId = 9L;
+
+        Result<Long> result = serviceWithPasswordPolicy.createUser(request, null);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(passwordExpireService.recordedUserIds).containsExactly(9L);
+    }
+
+    @Test
+    void createUserSucceedsWhenPasswordChangeRecordFails() {
+        FakePasswordExpireService passwordExpireService = new FakePasswordExpireService();
+        passwordExpireService.recordFailure = new RuntimeException("redis down");
+        AdminSystemService serviceWithPasswordPolicy = new AdminSystemService(
+                mapperSupport, auditService, null, null, null, provider(passwordExpireService));
+        UserCreateRequest request = new UserCreateRequest();
+        request.setUsername("alice");
+        request.setPassword("Pass@123");
+        mapperSupport.nextUserId = 9L;
+
+        Result<Long> result = serviceWithPasswordPolicy.createUser(request, null);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getData()).isEqualTo(9L);
+        assertThat(auditService.actions).containsExactly("新增用户");
+    }
+
+    @Test
     void writeAuditRecordsCurrentOperator() {
         UserContextHolder.set(new LoginUser().setUserId(7L).setUsername("alice"));
         UserCreateRequest request = new UserCreateRequest();
@@ -635,6 +670,31 @@ class AdminSystemServiceTest {
         assertThat(result.getCode()).isEqualTo(ResultCode.PARAM_ERROR.getCode());
         assertThat(result.getMessage()).isEqualTo("密码必须包含小写字母");
         assertThat(mapperSupport.resetPasswordUserId).isNull();
+    }
+
+    @Test
+    void resetPasswordRecordsPasswordChangeWhenPolicyIsAvailable() {
+        FakePasswordExpireService passwordExpireService = new FakePasswordExpireService();
+        AdminSystemService serviceWithPasswordPolicy = new AdminSystemService(
+                mapperSupport, auditService, null, null, null, provider(passwordExpireService));
+
+        Result<String> result = serviceWithPasswordPolicy.resetPassword(9L, resetPasswordRequest(), null);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(passwordExpireService.recordedUserIds).containsExactly(9L);
+    }
+
+    @Test
+    void resetPasswordSucceedsWhenPasswordChangeRecordFails() {
+        FakePasswordExpireService passwordExpireService = new FakePasswordExpireService();
+        passwordExpireService.recordFailure = new RuntimeException("redis down");
+        AdminSystemService serviceWithPasswordPolicy = new AdminSystemService(
+                mapperSupport, auditService, null, null, null, provider(passwordExpireService));
+
+        Result<String> result = serviceWithPasswordPolicy.resetPassword(9L, resetPasswordRequest(), null);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(auditService.actions).containsExactly("重置用户密码");
     }
 
     @Test
@@ -1753,6 +1813,23 @@ class AdminSystemServiceTest {
         @Override
         public void forceLogoutAll() {
             forceLogoutAllCount++;
+        }
+    }
+
+    private static class FakePasswordExpireService extends PasswordExpireService {
+        private final List<Long> recordedUserIds = new ArrayList<>();
+        private RuntimeException recordFailure;
+
+        private FakePasswordExpireService() {
+            super(new org.springframework.data.redis.core.StringRedisTemplate(), 1);
+        }
+
+        @Override
+        public void recordPasswordChange(Long userId) {
+            if (recordFailure != null) {
+                throw recordFailure;
+            }
+            recordedUserIds.add(userId);
         }
     }
 

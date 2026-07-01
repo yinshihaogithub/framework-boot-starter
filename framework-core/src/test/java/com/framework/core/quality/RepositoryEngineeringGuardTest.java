@@ -1655,6 +1655,8 @@ class RepositoryEngineeringGuardTest {
                 "admin-service/src/main/java/com/framework/admin/auth/AdminAuthController.java"));
         String service = read(root.resolve(
                 "admin-service/src/main/java/com/framework/admin/auth/AdminAuthService.java"));
+        String systemService = read(root.resolve(
+                "admin-service/src/main/java/com/framework/admin/system/AdminSystemService.java"));
         String repository = read(root.resolve(
                 "admin-service/src/main/java/com/framework/admin/system/AdminSystemMapperSupport.java"));
         String mapper = read(root.resolve(
@@ -1674,9 +1676,18 @@ class RepositoryEngineeringGuardTest {
                 .contains("新密码不能与原密码相同")
                 .contains("DEFAULT_PASSWORD_CHANGED_CONFIG_KEY = \"admin.default.password.changed\"")
                 .contains("resetPasswordAndUpdateConfigValue(user.getId()")
+                .contains("ObjectProvider<PasswordExpireService>")
+                .contains("recordPasswordChange(user.getId())")
+                .contains("passwordExpireService.recordPasswordChange(userId)")
                 .contains("forceLogoutAll(user.getId())")
                 .contains("sessionManager.forceLogoutAll(userId)")
                 .contains("密码已修改，请重新登录");
+        assertThat(systemService)
+                .as("admin user password create/reset must keep password expiration update time aligned")
+                .contains("ObjectProvider<PasswordExpireService>")
+                .contains("recordPasswordChange(userId)")
+                .contains("recordPasswordChange(id)")
+                .contains("passwordExpireService.recordPasswordChange(userId)");
         assertThat(repository)
                 .contains("public boolean resetPasswordAndUpdateConfigValue(Long userId, String passwordHash")
                 .contains("public boolean updateConfigValue(String configKey, String configValue)");

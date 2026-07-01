@@ -7,6 +7,7 @@ import com.framework.admin.system.AdminSystemMapperSupport;
 import com.framework.auth.context.LoginUser;
 import com.framework.auth.context.UserContextHolder;
 import com.framework.auth.service.LoginSecurityService;
+import com.framework.auth.service.PasswordExpireService;
 import com.framework.auth.service.SessionManager;
 import com.framework.core.constant.FrameworkConstants;
 import com.framework.core.exception.AuthException;
@@ -362,6 +363,39 @@ class AdminAuthServiceTest {
     }
 
     @Test
+    void changePasswordRecordsPasswordChangeWhenPolicyIsAvailable() {
+        mapperSupport.user = enabledUser();
+        FakePasswordExpireService passwordExpireService = new FakePasswordExpireService();
+        AdminAuthService serviceWithPasswordPolicy = new AdminAuthService(
+                mapperSupport, sessionManager, provider((LoginSecurityService) null), null,
+                provider(passwordExpireService));
+        UserContextHolder.set(new LoginUser().setUserId(1L));
+        AdminAuthController.ChangePasswordRequest request = changePasswordRequest("Admin@123", "NewAdmin@123");
+
+        Result<String> result = serviceWithPasswordPolicy.changePassword(request, null);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(passwordExpireService.recordedUserIds).containsExactly(1L);
+    }
+
+    @Test
+    void changePasswordSucceedsWhenPasswordChangeRecordFails() {
+        mapperSupport.user = enabledUser();
+        FakePasswordExpireService passwordExpireService = new FakePasswordExpireService();
+        passwordExpireService.recordFailure = new RuntimeException("redis down");
+        AdminAuthService serviceWithPasswordPolicy = new AdminAuthService(
+                mapperSupport, sessionManager, provider((LoginSecurityService) null), null,
+                provider(passwordExpireService));
+        UserContextHolder.set(new LoginUser().setUserId(1L));
+        AdminAuthController.ChangePasswordRequest request = changePasswordRequest("Admin@123", "NewAdmin@123");
+
+        Result<String> result = serviceWithPasswordPolicy.changePassword(request, null);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(sessionManager.forceLogoutAllUserId).isEqualTo(1L);
+    }
+
+    @Test
     void changePasswordAuditsCurrentUserAsOperator() {
         mapperSupport.user = enabledUser().setUsername("alice");
         RecordingAuditService auditService = new RecordingAuditService();
@@ -694,6 +728,23 @@ class AdminAuthServiceTest {
                 throw forceLogoutFailure;
             }
             this.forceLogoutAllUserId = userId;
+        }
+    }
+
+    private static class FakePasswordExpireService extends PasswordExpireService {
+        private final List<Long> recordedUserIds = new ArrayList<>();
+        private RuntimeException recordFailure;
+
+        private FakePasswordExpireService() {
+            super(new org.springframework.data.redis.core.StringRedisTemplate(), 1);
+        }
+
+        @Override
+        public void recordPasswordChange(Long userId) {
+            if (recordFailure != null) {
+                throw recordFailure;
+            }
+            recordedUserIds.add(userId);
         }
     }
 
