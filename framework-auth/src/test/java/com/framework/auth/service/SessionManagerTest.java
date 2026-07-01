@@ -207,6 +207,21 @@ class SessionManagerTest {
     }
 
     @Test
+    void hasOnlineSessionUsesDirectSessionKeyWithoutScanning() {
+        sessionManager.createSession(1L, "alice", "tenant-a", "web",
+                new String[]{"ADMIN"}, new String[]{"user:view"});
+        sessionManager.createSession(2L, "bob", "tenant-b", "mobile",
+                new String[]{"USER"}, new String[]{"profile:view"});
+        redis.scanCalls = 0;
+
+        assertThat(sessionManager.hasOnlineSession(1L, "\u00A0web\u3000")).isTrue();
+        assertThat(sessionManager.hasOnlineSession(1L, "mobile")).isFalse();
+        assertThat(sessionManager.hasOnlineSession(2L, " ")).isFalse();
+        assertThat(sessionManager.hasOnlineSession(null, "web")).isFalse();
+        assertThat(redis.scanCalls).isZero();
+    }
+
+    @Test
     void redisFailureDuringCreateSessionFailsClosedWithAuthException() {
         SessionManager manager = new SessionManager(new ThrowingRedisTemplate(), jwtUtils, 3600);
 
@@ -224,6 +239,7 @@ class SessionManagerTest {
         assertThat(manager.listOnlineSessionsPage(1, 20).records()).isEmpty();
         assertThat(manager.listOnlineSessionsPage(1, 20).total()).isZero();
         assertThat(manager.getOnlineUserCount()).isZero();
+        assertThat(manager.hasOnlineSession(1L, "web")).isFalse();
         assertThatCode(() -> manager.forceLogout(1L, "web")).doesNotThrowAnyException();
         assertThatCode(() -> manager.forceLogoutAll(1L)).doesNotThrowAnyException();
         assertThatCode(manager::forceLogoutAll).doesNotThrowAnyException();
@@ -259,6 +275,7 @@ class SessionManagerTest {
         private final Map<String, String> values = new ConcurrentHashMap<>();
         private final Map<String, Map<Object, Object>> hashes = new ConcurrentHashMap<>();
         private final Map<String, Long> ttlSeconds = new ConcurrentHashMap<>();
+        private int scanCalls;
 
         @Override
         public Boolean hasKey(String key) {
@@ -304,6 +321,7 @@ class SessionManagerTest {
 
         @Override
         public Cursor<String> scan(ScanOptions options) {
+            scanCalls++;
             String pattern = options == null ? "*" : options.getPattern();
             List<String> keys = new ArrayList<>();
             values.keySet().stream()

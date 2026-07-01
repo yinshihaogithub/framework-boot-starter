@@ -952,13 +952,16 @@ class RepositoryEngineeringGuardTest {
         assertThat(sessionManager)
                 .contains("OnlineSessionPage")
                 .contains("listOnlineSessionsPage")
+                .contains("boolean hasOnlineSession")
                 .contains("PriorityQueue<OnlineSession>")
                 .contains("keepNewestSession");
         assertThat(service)
                 .contains("PageResult<SessionManager.OnlineSession> listSessions")
                 .contains("AdminPageSupport.safePageNum")
                 .contains("sessionManager.listOnlineSessionsPage")
-                .doesNotContain("return sessionManager.listOnlineSessions()");
+                .contains("sessionManager.hasOnlineSession")
+                .doesNotContain("return sessionManager.listOnlineSessions()")
+                .doesNotContain("listOnlineSessions().stream()");
         assertThat(controller)
                 .contains("Result<PageResult<SessionManager.OnlineSession>>")
                 .contains("@RequestParam(defaultValue = \"20\") int pageSize")

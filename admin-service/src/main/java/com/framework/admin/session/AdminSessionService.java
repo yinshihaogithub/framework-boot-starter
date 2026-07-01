@@ -12,8 +12,6 @@ import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-import java.util.List;
-
 /**
  * Admin-side online session management.
  */
@@ -54,8 +52,7 @@ public class AdminSessionService {
         }
         boolean exists;
         try {
-            exists = sessionManager.listOnlineSessions().stream()
-                    .anyMatch(session -> userId.equals(session.userId()) && safeDeviceId.equals(session.deviceId()));
+            exists = sessionManager.hasOnlineSession(userId, safeDeviceId);
         } catch (RuntimeException e) {
             log.warn("[在线会话] 强制下线前查询会话失败 userId={}, deviceId={}, error={}",
                     userId, safeDeviceId, e.getMessage());

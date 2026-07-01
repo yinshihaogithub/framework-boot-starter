@@ -125,7 +125,7 @@ class AdminSessionServiceTest {
 
     @Test
     void kickSessionRejectsInvalidUserIdBeforeSessionLookup() {
-        sessionManager.listFailure = new RuntimeException("redis down");
+        sessionManager.lookupFailure = new RuntimeException("redis down");
 
         AdminSessionService.ActionResult<String> result = sessionService.kickSession(0L, "web", null);
 
@@ -133,11 +133,12 @@ class AdminSessionServiceTest {
         assertThat(result.code()).isEqualTo(ResultCode.PARAM_ERROR.getCode());
         assertThat(result.message()).isEqualTo("用户ID必须大于0");
         assertThat(sessionManager.kicked).isEmpty();
+        assertThat(sessionManager.hasOnlineSessionCalls).isZero();
     }
 
     @Test
     void kickSessionRejectsBlankDeviceIdBeforeSessionLookup() {
-        sessionManager.listFailure = new RuntimeException("redis down");
+        sessionManager.lookupFailure = new RuntimeException("redis down");
 
         AdminSessionService.ActionResult<String> result = sessionService.kickSession(2L, "\u00A0\u3000", null);
 
@@ -145,6 +146,7 @@ class AdminSessionServiceTest {
         assertThat(result.code()).isEqualTo(ResultCode.PARAM_ERROR.getCode());
         assertThat(result.message()).isEqualTo("设备不能为空");
         assertThat(sessionManager.kicked).isEmpty();
+        assertThat(sessionManager.hasOnlineSessionCalls).isZero();
     }
 
     @Test
@@ -159,8 +161,8 @@ class AdminSessionServiceTest {
     }
 
     @Test
-    void kickSessionReturnsServiceErrorWhenListFails() {
-        sessionManager.listFailure = new RuntimeException("redis down");
+    void kickSessionReturnsServiceErrorWhenLookupFails() {
+        sessionManager.lookupFailure = new RuntimeException("redis down");
 
         AdminSessionService.ActionResult<String> result = sessionService.kickSession(2L, "web", null);
 
@@ -169,6 +171,20 @@ class AdminSessionServiceTest {
         assertThat(result.message()).isEqualTo("会话查询失败");
         assertThat(sessionManager.kicked).isEmpty();
         assertThat(auditService.successActions).isEmpty();
+    }
+
+    @Test
+    void kickSessionUsesDirectSessionLookupInsteadOfListingAllSessions() {
+        sessionManager.sessions = List.of(
+                new SessionManager.OnlineSession(2L, "bob", "1", "web", 100L, 3600L),
+                new SessionManager.OnlineSession(3L, "carol", "1", "mobile", 90L, 3600L));
+
+        AdminSessionService.ActionResult<String> result = sessionService.kickSession(2L, "web", null);
+
+        assertThat(result.success()).isTrue();
+        assertThat(sessionManager.hasOnlineSessionCalls).isEqualTo(1);
+        assertThat(sessionManager.listOnlineSessionsCalls).isZero();
+        assertThat(sessionManager.kicked).containsExactly("2:web");
     }
 
     @Test
@@ -189,7 +205,10 @@ class AdminSessionServiceTest {
 
         private List<OnlineSession> sessions = List.of();
         private final List<String> kicked = new ArrayList<>();
+        private int listOnlineSessionsCalls;
+        private int hasOnlineSessionCalls;
         private RuntimeException listFailure;
+        private RuntimeException lookupFailure;
         private RuntimeException forceLogoutFailure;
 
         private FakeSessionManager() {
@@ -198,10 +217,21 @@ class AdminSessionServiceTest {
 
         @Override
         public List<OnlineSession> listOnlineSessions() {
+            listOnlineSessionsCalls++;
             if (listFailure != null) {
                 throw listFailure;
             }
             return sessions;
+        }
+
+        @Override
+        public boolean hasOnlineSession(Long userId, String deviceId) {
+            hasOnlineSessionCalls++;
+            if (lookupFailure != null) {
+                throw lookupFailure;
+            }
+            return sessions.stream()
+                    .anyMatch(session -> userId.equals(session.userId()) && deviceId.equals(session.deviceId()));
         }
 
         @Override

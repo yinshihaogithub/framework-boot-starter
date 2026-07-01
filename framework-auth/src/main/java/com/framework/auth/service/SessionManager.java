@@ -228,6 +228,17 @@ public class SessionManager {
     }
 
     /**
+     * 查询指定用户设备会话是否在线，避免管理端强制下线前扫描全部会话。
+     */
+    public boolean hasOnlineSession(Long userId, String deviceId) {
+        if (userId == null || userId <= 0 || !AuthTextSupport.hasText(deviceId)) {
+            return false;
+        }
+        String safeDeviceId = AuthTextSupport.trimBoundarySpace(deviceId);
+        return isValidOnlineSession(readOnlineSession(buildSessionKey(userId, safeDeviceId)));
+    }
+
+    /**
      * 分页获取在线会话，扫描时只保留当前页所需的最新窗口，避免管理端全量加载后排序。
      */
     public OnlineSessionPage listOnlineSessionsPage(int pageNum, int pageSize) {
