@@ -616,7 +616,7 @@ export const api = {
   deleteLocalMessage: (id: number) => deleteData<string>(`/admin/local-messages/${id}`),
   logs: (params: Record<string, unknown>) => getData<PageResult<OperationLog>>('/admin/logs', params),
   loginLogs: (params: Record<string, unknown>) => getData<PageResult<LoginLog>>('/admin/logs/login', params),
-  sessions: () => getData<OnlineSession[]>('/admin/sessions'),
+  sessions: (params: Record<string, unknown>) => getData<PageResult<OnlineSession>>('/admin/sessions', params),
   kickSession: (userId: number, deviceId: string) =>
     deleteData<string>(`/admin/sessions/${userId}/${encodeURIComponent(deviceId)}`),
   traceLogs: (traceId: string) => getData<PageResult<OperationLog>>(`/admin/logs/traces/${traceId}`),

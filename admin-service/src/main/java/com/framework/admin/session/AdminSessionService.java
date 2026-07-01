@@ -1,10 +1,12 @@
 package com.framework.admin.session;
 
 import com.framework.admin.audit.AdminAuditService;
+import com.framework.admin.support.AdminPageSupport;
 import com.framework.admin.support.AdminTextSupport;
 import com.framework.auth.context.LoginUser;
 import com.framework.auth.context.UserContextHolder;
 import com.framework.auth.service.SessionManager;
+import com.framework.core.result.PageResult;
 import com.framework.core.result.ResultCode;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
@@ -27,12 +29,15 @@ public class AdminSessionService {
         this.auditService = auditService;
     }
 
-    public List<SessionManager.OnlineSession> listSessions() {
+    public PageResult<SessionManager.OnlineSession> listSessions(int pageNum, int pageSize) {
+        int safePageNum = AdminPageSupport.safePageNum(pageNum);
+        int safePageSize = AdminPageSupport.safePageSize(pageSize);
         try {
-            return sessionManager.listOnlineSessions();
+            SessionManager.OnlineSessionPage page = sessionManager.listOnlineSessionsPage(safePageNum, safePageSize);
+            return PageResult.of(page.records(), page.total(), safePageNum, safePageSize);
         } catch (RuntimeException e) {
             log.warn("[在线会话] 会话列表查询失败 error={}", e.getMessage());
-            return List.of();
+            return PageResult.empty(safePageNum, safePageSize);
         }
     }
 

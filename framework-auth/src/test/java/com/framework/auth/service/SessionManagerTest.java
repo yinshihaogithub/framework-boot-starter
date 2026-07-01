@@ -155,6 +155,7 @@ class SessionManagerTest {
                 new String[]{"USER"}, new String[]{"profile:view"});
 
         List<SessionManager.OnlineSession> sessions = sessionManager.listOnlineSessions();
+        SessionManager.OnlineSessionPage page = sessionManager.listOnlineSessionsPage(1, 1);
 
         assertThat(sessionManager.getOnlineUserCount()).isEqualTo(2);
         assertThat(sessions)
@@ -167,6 +168,42 @@ class SessionManagerTest {
                         org.assertj.core.groups.Tuple.tuple(2L, "bob", "tenant-b", "mobile", 3600L),
                         org.assertj.core.groups.Tuple.tuple(1L, "alice", "tenant-a", "web", 3600L));
         assertThat(sessions.get(0).loginTime()).isGreaterThanOrEqualTo(sessions.get(1).loginTime());
+        assertThat(page.total()).isEqualTo(2);
+        assertThat(page.pageNum()).isEqualTo(1);
+        assertThat(page.pageSize()).isEqualTo(1);
+        assertThat(page.records())
+                .extracting(SessionManager.OnlineSession::userId,
+                        SessionManager.OnlineSession::username,
+                        SessionManager.OnlineSession::tenantId,
+                        SessionManager.OnlineSession::deviceId)
+                .containsExactly(org.assertj.core.groups.Tuple.tuple(2L, "bob", "tenant-b", "mobile"));
+    }
+
+    @Test
+    void listOnlineSessionsPageUsesSafePagingAndKeepsNewestOrder() throws Exception {
+        sessionManager.createSession(1L, "alice", "tenant-a", "web",
+                new String[]{"ADMIN"}, new String[]{"user:view"});
+        Thread.sleep(2L);
+        sessionManager.createSession(2L, "bob", "tenant-b", "mobile",
+                new String[]{"USER"}, new String[]{"profile:view"});
+        Thread.sleep(2L);
+        sessionManager.createSession(3L, "carol", "tenant-c", "pad",
+                new String[]{"USER"}, new String[]{"profile:view"});
+
+        SessionManager.OnlineSessionPage secondPage = sessionManager.listOnlineSessionsPage(2, 1);
+        SessionManager.OnlineSessionPage safePage = sessionManager.listOnlineSessionsPage(0, 5000);
+
+        assertThat(secondPage.total()).isEqualTo(3);
+        assertThat(secondPage.pageNum()).isEqualTo(2);
+        assertThat(secondPage.pageSize()).isEqualTo(1);
+        assertThat(secondPage.records())
+                .extracting(SessionManager.OnlineSession::userId)
+                .containsExactly(2L);
+        assertThat(safePage.pageNum()).isEqualTo(1);
+        assertThat(safePage.pageSize()).isEqualTo(1000);
+        assertThat(safePage.records())
+                .extracting(SessionManager.OnlineSession::userId)
+                .containsExactly(3L, 2L, 1L);
     }
 
     @Test
@@ -184,6 +221,8 @@ class SessionManagerTest {
         SessionManager manager = new SessionManager(new ThrowingRedisTemplate(), jwtUtils, 3600);
 
         assertThat(manager.listOnlineSessions()).isEmpty();
+        assertThat(manager.listOnlineSessionsPage(1, 20).records()).isEmpty();
+        assertThat(manager.listOnlineSessionsPage(1, 20).total()).isZero();
         assertThat(manager.getOnlineUserCount()).isZero();
         assertThatCode(() -> manager.forceLogout(1L, "web")).doesNotThrowAnyException();
         assertThatCode(() -> manager.forceLogoutAll(1L)).doesNotThrowAnyException();

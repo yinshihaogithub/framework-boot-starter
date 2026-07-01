@@ -1003,12 +1003,12 @@
               <div class="section-head">
                 <span>在线会话</span>
                 <div class="actions">
-                  <el-tag size="small">{{ onlineSessions.length }}</el-tag>
+                  <el-tag size="small">{{ onlineSessions.total }}</el-tag>
                   <el-button :icon="Refresh" circle @click="loadSessions" />
                 </div>
               </div>
             </template>
-            <el-table :data="onlineSessions" height="500" stripe>
+            <el-table :data="onlineSessions.records" height="500" stripe>
               <el-table-column prop="username" label="用户名" min-width="140" />
               <el-table-column prop="userId" label="用户ID" width="100" />
               <el-table-column prop="tenantId" label="租户" width="110" />
@@ -1041,6 +1041,7 @@
                 </template>
               </el-table-column>
             </el-table>
+            <el-pagination v-model:current-page="onlineSessions.pageNum" v-model:page-size="onlineSessions.pageSize" class="pager" layout="total, sizes, prev, pager, next" :total="onlineSessions.total" @change="loadSessions" />
           </el-card>
         </section>
 
@@ -1529,7 +1530,7 @@ const fileStats = ref<Record<string, number>>({})
 const fileRecords = reactive<PageResult<FileRecord>>({ records: [], total: 0, pageNum: 1, pageSize: 20, pages: 0 })
 const logs = reactive<PageResult<OperationLog>>({ records: [], total: 0, pageNum: 1, pageSize: 20, pages: 0 })
 const loginLogs = reactive<PageResult<LoginLog>>({ records: [], total: 0, pageNum: 1, pageSize: 20, pages: 0 })
-const onlineSessions = ref<OnlineSession[]>([])
+const onlineSessions = reactive<PageResult<OnlineSession>>({ records: [], total: 0, pageNum: 1, pageSize: 20, pages: 0 })
 const traceDetail = ref<TraceDetail>()
 const health = ref<HealthStatus>()
 const users = reactive<PageResult<AdminUser>>({ records: [], total: 0, pageNum: 1, pageSize: 20, pages: 0 })
@@ -1945,7 +1946,8 @@ async function loadLoginLogs() {
 }
 
 async function loadSessions() {
-  onlineSessions.value = await api.sessions()
+  const page = await api.sessions({ pageNum: onlineSessions.pageNum, pageSize: onlineSessions.pageSize })
+  Object.assign(onlineSessions, page)
 }
 
 async function loadTrace() {

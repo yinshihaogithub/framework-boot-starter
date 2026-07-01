@@ -1,6 +1,7 @@
 package com.framework.admin.session;
 
 import com.framework.auth.service.SessionManager;
+import com.framework.core.result.PageResult;
 import com.framework.core.result.Result;
 import com.framework.security.annotation.RequirePermission;
 import io.swagger.v3.oas.annotations.Operation;
@@ -10,9 +11,8 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-
-import java.util.List;
 
 /**
  * Online session management endpoints.
@@ -31,8 +31,10 @@ public class AdminSessionController {
 
     @Operation(summary = "在线会话列表")
     @GetMapping
-    public Result<List<SessionManager.OnlineSession>> listSessions() {
-        return Result.success(sessionService.listSessions());
+    public Result<PageResult<SessionManager.OnlineSession>> listSessions(
+            @RequestParam(defaultValue = "1") int pageNum,
+            @RequestParam(defaultValue = "20") int pageSize) {
+        return Result.success(sessionService.listSessions(pageNum, pageSize));
     }
 
     @Operation(summary = "强制下线会话")

@@ -4,6 +4,7 @@ import com.framework.admin.audit.AdminAuditService;
 import com.framework.auth.context.LoginUser;
 import com.framework.auth.context.UserContextHolder;
 import com.framework.auth.service.SessionManager;
+import com.framework.core.result.PageResult;
 import com.framework.core.result.ResultCode;
 import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.AfterEach;
@@ -33,14 +34,24 @@ class AdminSessionServiceTest {
                 new SessionManager.OnlineSession(1L, "admin", "1", "admin-web", 100L, 3600L));
         sessionManager.sessions = sessions;
 
-        assertThat(sessionService.listSessions()).containsExactlyElementsOf(sessions);
+        PageResult<SessionManager.OnlineSession> page = sessionService.listSessions(1, 20);
+
+        assertThat(page.getRecords()).containsExactlyElementsOf(sessions);
+        assertThat(page.getTotal()).isEqualTo(1);
+        assertThat(page.getPageNum()).isEqualTo(1);
+        assertThat(page.getPageSize()).isEqualTo(20);
     }
 
     @Test
     void listSessionsReturnsEmptyWhenSessionManagerFails() {
         sessionManager.listFailure = new RuntimeException("redis down");
 
-        assertThat(sessionService.listSessions()).isEmpty();
+        PageResult<SessionManager.OnlineSession> page = sessionService.listSessions(-1, 500);
+
+        assertThat(page.getRecords()).isEmpty();
+        assertThat(page.getTotal()).isZero();
+        assertThat(page.getPageNum()).isEqualTo(1);
+        assertThat(page.getPageSize()).isEqualTo(200);
     }
 
     @Test
@@ -191,6 +202,17 @@ class AdminSessionServiceTest {
                 throw listFailure;
             }
             return sessions;
+        }
+
+        @Override
+        public OnlineSessionPage listOnlineSessionsPage(int pageNum, int pageSize) {
+            if (listFailure != null) {
+                throw listFailure;
+            }
+            int offset = Math.max(0, (pageNum - 1) * pageSize);
+            int from = Math.min(offset, sessions.size());
+            int to = Math.min(from + pageSize, sessions.size());
+            return new OnlineSessionPage(sessions.subList(from, to), sessions.size(), pageNum, pageSize);
         }
 
         @Override

@@ -17,6 +17,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.PriorityQueue;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -32,6 +33,9 @@ public class SessionManager {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final int SESSION_FIELD_MAX_LENGTH = 128;
+    private static final int DEFAULT_SESSION_PAGE_NUM = 1;
+    private static final int DEFAULT_SESSION_PAGE_SIZE = 20;
+    private static final int MAX_SESSION_PAGE_SIZE = 1000;
 
     private final StringRedisTemplate redis;
     private final JwtUtils jwtUtils;
@@ -209,7 +213,7 @@ public class SessionManager {
      * 使用 SCAN 遍历 session keys
      */
     public long getOnlineUserCount() {
-        return listOnlineSessions().size();
+        return listOnlineSessionsPage(1, 1).total();
     }
 
     /**
@@ -218,9 +222,51 @@ public class SessionManager {
     public List<OnlineSession> listOnlineSessions() {
         return scanKeys(FrameworkConstants.SESSION_PREFIX + "*").stream()
                 .map(this::readOnlineSession)
-                .filter(session -> session.userId() != null && AuthTextSupport.hasText(session.deviceId()))
+                .filter(SessionManager::isValidOnlineSession)
                 .sorted(Comparator.comparingLong(OnlineSession::loginTime).reversed())
                 .toList();
+    }
+
+    /**
+     * 分页获取在线会话，扫描时只保留当前页所需的最新窗口，避免管理端全量加载后排序。
+     */
+    public OnlineSessionPage listOnlineSessionsPage(int pageNum, int pageSize) {
+        int safePageNum = safePageNum(pageNum);
+        int safePageSize = safePageSize(pageSize);
+        long offset = (long) (safePageNum - 1) * safePageSize;
+        long keepSize = Math.min(offset + safePageSize, Integer.MAX_VALUE);
+        PriorityQueue<OnlineSession> newestWindow = new PriorityQueue<>(SessionManager::compareOldestFirst);
+        long total = 0L;
+        String pattern = FrameworkConstants.SESSION_PREFIX + "*";
+
+        try {
+            Cursor<String> cursor = scan(pattern);
+            if (cursor == null) {
+                return new OnlineSessionPage(List.of(), 0L, safePageNum, safePageSize);
+            }
+            try {
+                while (cursor.hasNext()) {
+                    OnlineSession session = readOnlineSession(cursor.next());
+                    if (!isValidOnlineSession(session)) {
+                        continue;
+                    }
+                    total++;
+                    keepNewestSession(newestWindow, session, keepSize);
+                }
+            } finally {
+                closeCursor(cursor, pattern);
+            }
+        } catch (Exception e) {
+            log.warn("[会话管理] 分页扫描会话失败 pattern={} error={}", pattern, e.getMessage());
+            return new OnlineSessionPage(List.of(), 0L, safePageNum, safePageSize);
+        }
+
+        List<OnlineSession> records = newestWindow.stream()
+                .sorted(SessionManager::compareNewestFirst)
+                .skip(offset)
+                .limit(safePageSize)
+                .toList();
+        return new OnlineSessionPage(records, total, safePageNum, safePageSize);
     }
 
     /**
@@ -323,10 +369,7 @@ public class SessionManager {
     private List<String> scanKeys(String pattern) {
         List<String> keys = new ArrayList<>();
         try {
-            Cursor<String> cursor = redis.scan(ScanOptions.scanOptions()
-                    .match(pattern)
-                    .count(1000)
-                    .build());
+            Cursor<String> cursor = scan(pattern);
             if (cursor == null) {
                 return keys;
             }
@@ -336,15 +379,26 @@ public class SessionManager {
                 }
                 return keys;
             } finally {
-                try {
-                    cursor.close();
-                } catch (Exception e) {
-                    log.warn("[会话管理] 关闭扫描游标失败 pattern={} error={}", pattern, e.getMessage());
-                }
+                closeCursor(cursor, pattern);
             }
         } catch (Exception e) {
             log.warn("[会话管理] 扫描会话失败 pattern={} error={}", pattern, e.getMessage());
             return List.of();
+        }
+    }
+
+    private Cursor<String> scan(String pattern) {
+        return redis.scan(ScanOptions.scanOptions()
+                .match(pattern)
+                .count(1000)
+                .build());
+    }
+
+    private void closeCursor(Cursor<String> cursor, String pattern) {
+        try {
+            cursor.close();
+        } catch (Exception e) {
+            log.warn("[会话管理] 关闭扫描游标失败 pattern={} error={}", pattern, e.getMessage());
         }
     }
 
@@ -434,7 +488,69 @@ public class SessionManager {
         return parsed == null ? defaultValue : parsed;
     }
 
+    private static int safePageNum(int pageNum) {
+        return pageNum <= 0 ? DEFAULT_SESSION_PAGE_NUM : pageNum;
+    }
+
+    private static int safePageSize(int pageSize) {
+        if (pageSize <= 0) {
+            return DEFAULT_SESSION_PAGE_SIZE;
+        }
+        return Math.min(pageSize, MAX_SESSION_PAGE_SIZE);
+    }
+
+    private static boolean isValidOnlineSession(OnlineSession session) {
+        return session.userId() != null && AuthTextSupport.hasText(session.deviceId());
+    }
+
+    private static void keepNewestSession(PriorityQueue<OnlineSession> sessions,
+                                          OnlineSession candidate,
+                                          long keepSize) {
+        if (keepSize <= 0) {
+            return;
+        }
+        if (sessions.size() < keepSize) {
+            sessions.offer(candidate);
+            return;
+        }
+        OnlineSession oldest = sessions.peek();
+        if (oldest != null && compareNewestFirst(candidate, oldest) < 0) {
+            sessions.poll();
+            sessions.offer(candidate);
+        }
+    }
+
+    private static int compareNewestFirst(OnlineSession left, OnlineSession right) {
+        int byLoginTime = Long.compare(right.loginTime(), left.loginTime());
+        if (byLoginTime != 0) {
+            return byLoginTime;
+        }
+        int byUserId = Long.compare(nullSafe(right.userId()), nullSafe(left.userId()));
+        if (byUserId != 0) {
+            return byUserId;
+        }
+        return nullSafe(right.deviceId()).compareTo(nullSafe(left.deviceId()));
+    }
+
+    private static int compareOldestFirst(OnlineSession left, OnlineSession right) {
+        return compareNewestFirst(right, left);
+    }
+
+    private static long nullSafe(Long value) {
+        return value == null ? Long.MIN_VALUE : value;
+    }
+
+    private static String nullSafe(String value) {
+        return value == null ? "" : value;
+    }
+
     public record OnlineSession(Long userId, String username, String tenantId, String deviceId,
                                 long loginTime, long ttlSeconds) {
+    }
+
+    public record OnlineSessionPage(List<OnlineSession> records,
+                                    long total,
+                                    int pageNum,
+                                    int pageSize) {
     }
 }

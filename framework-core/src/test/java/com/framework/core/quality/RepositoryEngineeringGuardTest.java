@@ -884,6 +884,40 @@ class RepositoryEngineeringGuardTest {
     }
 
     @Test
+    void adminOnlineSessionsArePagedFromRedisScanToFrontend() throws Exception {
+        String sessionManager = read(root.resolve(
+                "framework-auth/src/main/java/com/framework/auth/service/SessionManager.java"));
+        String service = read(root.resolve(
+                "admin-service/src/main/java/com/framework/admin/session/AdminSessionService.java"));
+        String controller = read(root.resolve(
+                "admin-service/src/main/java/com/framework/admin/session/AdminSessionController.java"));
+        String client = read(root.resolve("frontend/admin-web/src/api/client.ts"));
+        String app = read(root.resolve("frontend/admin-web/src/App.vue"));
+
+        assertThat(sessionManager)
+                .contains("OnlineSessionPage")
+                .contains("listOnlineSessionsPage")
+                .contains("PriorityQueue<OnlineSession>")
+                .contains("keepNewestSession");
+        assertThat(service)
+                .contains("PageResult<SessionManager.OnlineSession> listSessions")
+                .contains("AdminPageSupport.safePageNum")
+                .contains("sessionManager.listOnlineSessionsPage")
+                .doesNotContain("return sessionManager.listOnlineSessions()");
+        assertThat(controller)
+                .contains("Result<PageResult<SessionManager.OnlineSession>>")
+                .contains("@RequestParam(defaultValue = \"20\") int pageSize")
+                .doesNotContain("Result<List<SessionManager.OnlineSession>>");
+        assertThat(client)
+                .contains("getData<PageResult<OnlineSession>>('/admin/sessions', params)");
+        assertThat(app)
+                .contains("reactive<PageResult<OnlineSession>>")
+                .contains("onlineSessions.records")
+                .contains("onlineSessions.total")
+                .contains("v-model:current-page=\"onlineSessions.pageNum\"");
+    }
+
+    @Test
     void smsCodeServiceRedisFailuresFailClosedBeforeSendingSms() throws Exception {
         String smsCodeService = read(root.resolve(
                 "framework-auth/src/main/java/com/framework/auth/service/SmsCodeService.java"));
@@ -1155,14 +1189,17 @@ class RepositoryEngineeringGuardTest {
 
         assertThat(sessionManager)
                 .contains("public List<OnlineSession> listOnlineSessions()")
+                .contains("public OnlineSessionPage listOnlineSessionsPage")
                 .contains("redis.getExpire(sessionKey, TimeUnit.SECONDS)")
                 .contains("public record OnlineSession");
         assertThat(controller)
                 .contains("@RequestMapping(\"/admin/sessions\")")
+                .contains("Result<PageResult<SessionManager.OnlineSession>>")
                 .contains("@RequirePermission(\"session:view\")")
                 .contains("@RequirePermission(\"session:kick\")")
                 .contains("@DeleteMapping(\"/{userId}/{deviceId}\")");
         assertThat(service)
+                .contains("PageResult<SessionManager.OnlineSession> listSessions")
                 .contains("String safeDeviceId = text(deviceId)")
                 .contains("sessionManager.forceLogout(userId, safeDeviceId)")
                 .contains("auditService.success")
@@ -1170,11 +1207,12 @@ class RepositoryEngineeringGuardTest {
                 .contains("不能强制下线当前会话");
         assertThat(client)
                 .contains("export interface OnlineSession")
-                .contains("sessions: () => getData<OnlineSession[]>('/admin/sessions')")
+                .contains("sessions: (params: Record<string, unknown>) => getData<PageResult<OnlineSession>>('/admin/sessions', params)")
                 .contains("kickSession:");
         assertThat(app)
                 .contains("activeView === 'sessions'")
                 .contains("Sessions: 'sessions'")
+                .contains("onlineSessions.records")
                 .contains("session:kick")
                 .contains("loadSessions");
         assertThat(adminServiceScript)
