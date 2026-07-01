@@ -1,6 +1,6 @@
 package com.framework.admin.auth;
 
-import com.framework.admin.system.AdminSystemRepository;
+import com.framework.admin.system.AdminSystemMapperSupport;
 import com.framework.auth.context.LoginUser;
 import com.framework.auth.service.LoginUserValidator;
 import org.springframework.stereotype.Component;
@@ -11,9 +11,9 @@ import org.springframework.stereotype.Component;
 @Component
 public class AdminLoginUserValidator implements LoginUserValidator {
 
-    private final AdminSystemRepository repository;
+    private final AdminSystemMapperSupport repository;
 
-    public AdminLoginUserValidator(AdminSystemRepository repository) {
+    public AdminLoginUserValidator(AdminSystemMapperSupport repository) {
         this.repository = repository;
     }
 

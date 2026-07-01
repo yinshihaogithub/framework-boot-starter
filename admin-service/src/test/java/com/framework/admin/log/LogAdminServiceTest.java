@@ -1,7 +1,7 @@
 package com.framework.admin.log;
 
 import com.framework.admin.system.AdminSystemModels.LoginLog;
-import com.framework.admin.system.AdminSystemRepository;
+import com.framework.admin.system.AdminSystemMapperSupport;
 import com.framework.admin.support.AdminPageSupport;
 import com.framework.core.result.PageResult;
 import com.framework.log.entity.OperationLogEntity;
@@ -20,7 +20,7 @@ class LogAdminServiceTest {
 
     @Test
     void returnsZeroStatsWhenMapperIsMissing() {
-        LogAdminService service = new LogAdminService(provider(null), systemRepository(List.of()));
+        LogAdminService service = new LogAdminService(provider(null), systemMapperSupport(List.of()));
 
         Map<String, Long> stats = service.stats();
 
@@ -33,7 +33,7 @@ class LogAdminServiceTest {
 
     @Test
     void returnsZeroStatsAndEmptyPageWhenMapperProviderFails() {
-        LogAdminService service = new LogAdminService(failingProvider(), systemRepository(List.of()));
+        LogAdminService service = new LogAdminService(failingProvider(), systemMapperSupport(List.of()));
 
         Map<String, Long> stats = service.stats();
         PageResult<OperationLogEntity> page = service.list(null, null, null, null, null, 0, 0);
@@ -52,7 +52,7 @@ class LogAdminServiceTest {
     void listsOperationLogsWithSafePaging() {
         LogAdminService service = new LogAdminService(provider(mapper(List.of(
                 operationLog(1L, "system", "OPERATION", true, "trace-a"),
-                operationLog(2L, "system", "API", false, "trace-b")))), systemRepository(List.of()));
+                operationLog(2L, "system", "API", false, "trace-b")))), systemMapperSupport(List.of()));
 
         PageResult<OperationLogEntity> page = service.list("system", null, null, null, null, -1, 500);
 
@@ -66,7 +66,7 @@ class LogAdminServiceTest {
     void normalizesOperationLogFiltersBeforeQuerying() {
         LogAdminService service = new LogAdminService(provider(mapper(List.of(
                 operationLog(1L, "system", "OPERATION", true, "trace-a"),
-                operationLog(2L, "mq", "API", false, "trace-b")))), systemRepository(List.of()));
+                operationLog(2L, "mq", "API", false, "trace-b")))), systemMapperSupport(List.of()));
 
         PageResult<OperationLogEntity> page = service.list(
                 "\u00A0system\u3000", "\u3000operation\u00A0", null, true, "\u00A0trace-a\u3000", 1, 20);
@@ -79,7 +79,7 @@ class LogAdminServiceTest {
     void listsExceptionLogsWithNormalizedFilter() {
         LogAdminService service = new LogAdminService(provider(mapper(List.of(
                 operationLog(1L, "system", "OPERATION", true, "trace-a"),
-                operationLog(2L, "web", "EXCEPTION", false, "trace-b")))), systemRepository(List.of()));
+                operationLog(2L, "web", "EXCEPTION", false, "trace-b")))), systemMapperSupport(List.of()));
 
         PageResult<OperationLogEntity> page = service.list(
                 null, "\u00A0exception\u3000", null, false, null, 1, 20);
@@ -90,7 +90,7 @@ class LogAdminServiceTest {
 
     @Test
     void returnsEmptyPageForUnsupportedLogTypeFilter() {
-        LogAdminService service = new LogAdminService(provider(failingMapper()), systemRepository(List.of()));
+        LogAdminService service = new LogAdminService(provider(failingMapper()), systemMapperSupport(List.of()));
 
         PageResult<OperationLogEntity> page = service.list(null, "AUDIT", null, null, null, 1, 20);
 
@@ -102,7 +102,7 @@ class LogAdminServiceTest {
 
     @Test
     void returnsEmptyPageForUnsafeTraceIdFilter() {
-        LogAdminService service = new LogAdminService(provider(failingMapper()), systemRepository(List.of()));
+        LogAdminService service = new LogAdminService(provider(failingMapper()), systemMapperSupport(List.of()));
 
         PageResult<OperationLogEntity> page = service.list(null, null, null, null, "bad\ntrace", 1, 20);
 
@@ -115,7 +115,7 @@ class LogAdminServiceTest {
     @Test
     void clampsHugePageNumberBeforeQueryingOperationLogs() {
         LogAdminService service = new LogAdminService(provider(mapper(List.of(
-                operationLog(1L, "system", "OPERATION", true, "trace-a")))), systemRepository(List.of()));
+                operationLog(1L, "system", "OPERATION", true, "trace-a")))), systemMapperSupport(List.of()));
 
         PageResult<OperationLogEntity> page = service.list("system", null, null, null, null,
                 Integer.MAX_VALUE, Integer.MAX_VALUE);
@@ -126,7 +126,7 @@ class LogAdminServiceTest {
 
     @Test
     void returnsEmptyPageWhenOperationLogQueryFails() {
-        LogAdminService service = new LogAdminService(provider(failingMapper()), systemRepository(List.of()));
+        LogAdminService service = new LogAdminService(provider(failingMapper()), systemMapperSupport(List.of()));
 
         PageResult<OperationLogEntity> page = service.list(null, null, null, null, null, -1, 500);
 
@@ -140,7 +140,7 @@ class LogAdminServiceTest {
     void traceFiltersOperationLogsByTraceId() {
         LogAdminService service = new LogAdminService(provider(mapper(List.of(
                 operationLog(1L, "system", "OPERATION", true, "trace-a"),
-                operationLog(2L, "mq", "API", false, "trace-b")))), systemRepository(List.of()));
+                operationLog(2L, "mq", "API", false, "trace-b")))), systemMapperSupport(List.of()));
 
         PageResult<OperationLogEntity> page = service.trace("trace-b", 1, 20);
 
@@ -149,8 +149,8 @@ class LogAdminServiceTest {
     }
 
     @Test
-    void loginLogsUseSystemRepositoryWithSafePaging() {
-        LogAdminService service = new LogAdminService(provider(null), systemRepository(List.of(
+    void loginLogsUseSystemMapperSupportWithSafePaging() {
+        LogAdminService service = new LogAdminService(provider(null), systemMapperSupport(List.of(
                 new LoginLog().setId(1L).setUsername("admin").setSuccess(true))));
 
         PageResult<LoginLog> page = service.loginLogs("admin", true, 0, 0);
@@ -163,7 +163,7 @@ class LogAdminServiceTest {
 
     @Test
     void loginLogsTrimUsernameBeforeQuerying() {
-        LogAdminService service = new LogAdminService(provider(null), systemRepository(List.of(
+        LogAdminService service = new LogAdminService(provider(null), systemMapperSupport(List.of(
                 new LoginLog().setId(1L).setUsername("admin").setSuccess(true),
                 new LoginLog().setId(2L).setUsername("ops").setSuccess(true))));
 
@@ -174,8 +174,8 @@ class LogAdminServiceTest {
     }
 
     @Test
-    void loginLogsReturnEmptyPageWhenSystemRepositoryFails() {
-        LogAdminService service = new LogAdminService(provider(null), failingSystemRepository());
+    void loginLogsReturnEmptyPageWhenSystemMapperSupportFails() {
+        LogAdminService service = new LogAdminService(provider(null), failingSystemMapperSupport());
 
         PageResult<LoginLog> page = service.loginLogs("admin", true, 0, 0);
 
@@ -257,8 +257,8 @@ class LogAdminServiceTest {
         };
     }
 
-    private static AdminSystemRepository systemRepository(List<LoginLog> loginLogs) {
-        return new AdminSystemRepository(null) {
+    private static AdminSystemMapperSupport systemMapperSupport(List<LoginLog> loginLogs) {
+        return new AdminSystemMapperSupport(null) {
             @Override
             public List<LoginLog> listLoginLogs(String username, Boolean success, int pageNum, int pageSize) {
                 return loginLogs.stream()
@@ -274,8 +274,8 @@ class LogAdminServiceTest {
         };
     }
 
-    private static AdminSystemRepository failingSystemRepository() {
-        return new AdminSystemRepository(null) {
+    private static AdminSystemMapperSupport failingSystemMapperSupport() {
+        return new AdminSystemMapperSupport(null) {
             @Override
             public List<LoginLog> listLoginLogs(String username, Boolean success, int pageNum, int pageSize) {
                 throw new IllegalStateException("login log table unavailable");

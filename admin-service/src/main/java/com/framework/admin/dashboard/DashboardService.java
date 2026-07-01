@@ -4,7 +4,7 @@ import com.framework.admin.excel.ExcelAdminMapper;
 import com.framework.admin.file.FileAdminMapper;
 import com.framework.admin.notify.NotifyAdminMapper;
 import com.framework.admin.system.AdminSystemModels.ConfigItem;
-import com.framework.admin.system.AdminSystemRepository;
+import com.framework.admin.system.AdminSystemMapperSupport;
 import com.framework.localmessage.model.LocalMessageStatus;
 import com.framework.localmessage.service.LocalMessageService;
 import com.framework.log.mapper.OperationLogMapper;
@@ -30,7 +30,7 @@ public class DashboardService {
     private final ObjectProvider<NotifyAdminMapper> notifyAdminMapperProvider;
     private final ObjectProvider<ExcelAdminMapper> excelAdminMapperProvider;
     private final ObjectProvider<FileAdminMapper> fileAdminMapperProvider;
-    private final ObjectProvider<AdminSystemRepository> adminSystemRepositoryProvider;
+    private final ObjectProvider<AdminSystemMapperSupport> adminSystemMapperSupportProvider;
 
     public DashboardService(ObjectProvider<DeadLetterHandler> deadLetterHandlerProvider,
                             ObjectProvider<LocalMessageService> localMessageServiceProvider,
@@ -38,14 +38,14 @@ public class DashboardService {
                             ObjectProvider<NotifyAdminMapper> notifyAdminMapperProvider,
                             ObjectProvider<ExcelAdminMapper> excelAdminMapperProvider,
                             ObjectProvider<FileAdminMapper> fileAdminMapperProvider,
-                            ObjectProvider<AdminSystemRepository> adminSystemRepositoryProvider) {
+                            ObjectProvider<AdminSystemMapperSupport> adminSystemMapperSupportProvider) {
         this.deadLetterHandlerProvider = deadLetterHandlerProvider;
         this.localMessageServiceProvider = localMessageServiceProvider;
         this.operationLogMapperProvider = operationLogMapperProvider;
         this.notifyAdminMapperProvider = notifyAdminMapperProvider;
         this.excelAdminMapperProvider = excelAdminMapperProvider;
         this.fileAdminMapperProvider = fileAdminMapperProvider;
-        this.adminSystemRepositoryProvider = adminSystemRepositoryProvider;
+        this.adminSystemMapperSupportProvider = adminSystemMapperSupportProvider;
     }
 
     public DashboardController.DashboardSummary summary() {
@@ -212,12 +212,12 @@ public class DashboardService {
     }
 
     private DashboardController.SecurityStatus securityStatus() {
-        AdminSystemRepository repository = available(adminSystemRepositoryProvider);
-        if (repository == null) {
+        AdminSystemMapperSupport mapperSupport = available(adminSystemMapperSupportProvider);
+        if (mapperSupport == null) {
             return new DashboardController.SecurityStatus(true);
         }
         try {
-            boolean changed = repository.listConfigs().stream()
+            boolean changed = mapperSupport.listConfigs().stream()
                     .filter(config -> "admin.default.password.changed".equals(config.getConfigKey()))
                     .map(ConfigItem::getConfigValue)
                     .findFirst()

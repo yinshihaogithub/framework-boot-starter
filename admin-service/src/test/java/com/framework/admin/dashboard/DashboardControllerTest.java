@@ -4,7 +4,7 @@ import com.framework.admin.excel.ExcelAdminMapper;
 import com.framework.admin.file.FileAdminMapper;
 import com.framework.admin.notify.NotifyAdminMapper;
 import com.framework.admin.system.AdminSystemModels.ConfigItem;
-import com.framework.admin.system.AdminSystemRepository;
+import com.framework.admin.system.AdminSystemMapperSupport;
 import com.framework.core.result.Result;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
@@ -56,7 +56,7 @@ class DashboardControllerTest {
                 provider(new FakeNotifyMapper()),
                 provider(new FakeExcelMapper()),
                 provider(new FakeFileMapper()),
-                provider(new FakeSystemRepository(false)));
+                provider(new FakeSystemMapperSupport(false)));
         DashboardController controller = new DashboardController(service);
 
         Result<DashboardController.DashboardSummary> result = controller.summary();
@@ -84,7 +84,7 @@ class DashboardControllerTest {
                 provider(null),
                 provider(null),
                 provider(null),
-                provider(new FakeSystemRepository(true)));
+                provider(new FakeSystemMapperSupport(true)));
         DashboardController controller = new DashboardController(service);
 
         Result<DashboardController.DashboardSummary> result = controller.summary();
@@ -270,10 +270,10 @@ class DashboardControllerTest {
         }
     }
 
-    private static class FakeSystemRepository extends AdminSystemRepository {
+    private static class FakeSystemMapperSupport extends AdminSystemMapperSupport {
         private final boolean defaultPasswordChanged;
 
-        private FakeSystemRepository(boolean defaultPasswordChanged) {
+        private FakeSystemMapperSupport(boolean defaultPasswordChanged) {
             super(null);
             this.defaultPasswordChanged = defaultPasswordChanged;
         }

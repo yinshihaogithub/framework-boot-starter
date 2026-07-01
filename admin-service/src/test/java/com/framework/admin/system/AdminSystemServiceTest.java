@@ -45,9 +45,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class AdminSystemServiceTest {
 
-    private final FakeRepository repository = new FakeRepository();
+    private final FakeMapperSupport mapperSupport = new FakeMapperSupport();
     private final FakeAuditService auditService = new FakeAuditService();
-    private final AdminSystemService service = new AdminSystemService(repository, auditService);
+    private final AdminSystemService service = new AdminSystemService(mapperSupport, auditService);
 
     @AfterEach
     void tearDown() {
@@ -56,11 +56,11 @@ class AdminSystemServiceTest {
 
     @Test
     void usersSanitizesPagingAndPasswordHash() {
-        repository.users = List.of(new AdminUser()
+        mapperSupport.users = List.of(new AdminUser()
                 .setId(2L)
                 .setUsername("alice")
                 .setPasswordHash("secret"));
-        repository.userCount = 1;
+        mapperSupport.userCount = 1;
 
         PageResult<AdminUser> page = service.users("\u00A0alice\u3000", "\u3000enabled\u00A0", -1, 500);
 
@@ -68,30 +68,30 @@ class AdminSystemServiceTest {
         assertThat(page.getPageSize()).isEqualTo(200);
         assertThat(page.getRecords()).hasSize(1);
         assertThat(page.getRecords().get(0).getPasswordHash()).isNull();
-        assertThat(repository.listUserKeyword).isEqualTo("alice");
-        assertThat(repository.listUserStatus).isEqualTo("ENABLED");
-        assertThat(repository.countUserKeyword).isEqualTo("alice");
-        assertThat(repository.countUserStatus).isEqualTo("ENABLED");
-        assertThat(repository.listUserPageNum).isEqualTo(1);
-        assertThat(repository.listUserPageSize).isEqualTo(200);
+        assertThat(mapperSupport.listUserKeyword).isEqualTo("alice");
+        assertThat(mapperSupport.listUserStatus).isEqualTo("ENABLED");
+        assertThat(mapperSupport.countUserKeyword).isEqualTo("alice");
+        assertThat(mapperSupport.countUserStatus).isEqualTo("ENABLED");
+        assertThat(mapperSupport.listUserPageNum).isEqualTo(1);
+        assertThat(mapperSupport.listUserPageSize).isEqualTo(200);
     }
 
     @Test
     void usersReturnEmptyPageForInvalidStatusFilter() {
-        repository.users = List.of(new AdminUser()
+        mapperSupport.users = List.of(new AdminUser()
                 .setId(2L)
                 .setUsername("alice")
                 .setPasswordHash("secret"));
-        repository.userCount = 1;
+        mapperSupport.userCount = 1;
 
         PageResult<AdminUser> page = service.users(" alice ", "LOCKED", 1, 20);
 
         assertThat(page.getTotal()).isZero();
         assertThat(page.getRecords()).isEmpty();
-        assertThat(repository.listUserKeyword).isNull();
-        assertThat(repository.listUserStatus).isNull();
-        assertThat(repository.countUserKeyword).isNull();
-        assertThat(repository.countUserStatus).isNull();
+        assertThat(mapperSupport.listUserKeyword).isNull();
+        assertThat(mapperSupport.listUserStatus).isNull();
+        assertThat(mapperSupport.countUserKeyword).isNull();
+        assertThat(mapperSupport.countUserStatus).isNull();
     }
 
     @Test
@@ -99,12 +99,12 @@ class AdminSystemServiceTest {
         FakeLoginSecurityService loginSecurityService = new FakeLoginSecurityService();
         loginSecurityService.status = new LoginSecurityService.LoginSecurityStatus(2L, true, 18L);
         AdminSystemService serviceWithLoginSecurity = new AdminSystemService(
-                repository, auditService, null, null, provider(loginSecurityService));
-        repository.users = List.of(new AdminUser()
+                mapperSupport, auditService, null, null, provider(loginSecurityService));
+        mapperSupport.users = List.of(new AdminUser()
                 .setId(2L)
                 .setUsername("alice")
                 .setPasswordHash("secret"));
-        repository.userCount = 1;
+        mapperSupport.userCount = 1;
 
         PageResult<AdminUser> page = serviceWithLoginSecurity.users(null, null, 1, 20);
 
@@ -116,8 +116,8 @@ class AdminSystemServiceTest {
     }
 
     @Test
-    void queryEndpointsFallBackWhenRepositoryFails() {
-        repository.queryFailure = new RuntimeException("database down");
+    void queryEndpointsFallBackWhenMapperSupportFails() {
+        mapperSupport.queryFailure = new RuntimeException("database down");
 
         PageResult<AdminUser> users = service.users(null, null, 0, 0);
 
@@ -141,15 +141,15 @@ class AdminSystemServiceTest {
         request.setUsername("alice");
         request.setPassword("Pass@123");
         request.setRoleIds(List.of(1L));
-        repository.nextUserId = 9L;
+        mapperSupport.nextUserId = 9L;
 
         Result<Long> result = service.createUser(request, null);
 
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getData()).isEqualTo(9L);
-        assertThat(repository.createdUser).isSameAs(request);
-        assertThat(repository.createdPasswordHash).isNotEqualTo("Pass@123");
-        assertThat(PasswordUtils.verify("Pass@123", repository.createdPasswordHash)).isTrue();
+        assertThat(mapperSupport.createdUser).isSameAs(request);
+        assertThat(mapperSupport.createdPasswordHash).isNotEqualTo("Pass@123");
+        assertThat(PasswordUtils.verify("Pass@123", mapperSupport.createdPasswordHash)).isTrue();
         assertThat(auditService.actions).containsExactly("新增用户");
         assertThat(auditService.params).containsEntry("operator", "admin");
     }
@@ -160,7 +160,7 @@ class AdminSystemServiceTest {
         UserCreateRequest request = new UserCreateRequest();
         request.setUsername("alice");
         request.setPassword("Pass@123");
-        repository.nextUserId = 9L;
+        mapperSupport.nextUserId = 9L;
 
         Result<Long> result = service.createUser(request, null);
 
@@ -171,15 +171,15 @@ class AdminSystemServiceTest {
 
     @Test
     void writeOperationsSucceedWhenAuditFails() {
-        AdminSystemService serviceWithAuditFailure = new AdminSystemService(repository, new ThrowingAuditService());
+        AdminSystemService serviceWithAuditFailure = new AdminSystemService(mapperSupport, new ThrowingAuditService());
         UserCreateRequest userCreate = new UserCreateRequest();
         userCreate.setUsername("alice");
         userCreate.setPassword("Pass@123");
-        repository.userById = new AdminUser()
+        mapperSupport.userById = new AdminUser()
                 .setId(9L)
                 .setUsername("alice");
         AdminSystemService serviceWithLoginSecurity = new AdminSystemService(
-                repository, new ThrowingAuditService(), null, null, provider(new FakeLoginSecurityService()));
+                mapperSupport, new ThrowingAuditService(), null, null, provider(new FakeLoginSecurityService()));
 
         List<Result<?>> results = List.of(
                 serviceWithAuditFailure.createTenant(tenantRequest(), null),
@@ -213,10 +213,10 @@ class AdminSystemServiceTest {
         );
 
         assertThat(results).allMatch(Result::isSuccess);
-        assertThat(repository.createdUser).isSameAs(userCreate);
-        assertThat(repository.deletedTenantId).isEqualTo(9L);
-        assertThat(repository.updatedRoleId).isEqualTo(9L);
-        assertThat(repository.updatedMenuId).isEqualTo(9L);
+        assertThat(mapperSupport.createdUser).isSameAs(userCreate);
+        assertThat(mapperSupport.deletedTenantId).isEqualTo(9L);
+        assertThat(mapperSupport.updatedRoleId).isEqualTo(9L);
+        assertThat(mapperSupport.updatedMenuId).isEqualTo(9L);
     }
 
     @Test
@@ -229,11 +229,11 @@ class AdminSystemServiceTest {
 
         assertThat(result.getCode()).isEqualTo(ResultCode.PARAM_ERROR.getCode());
         assertThat(result.getMessage()).isEqualTo("密码必须包含大写字母");
-        assertThat(repository.createdUser).isNull();
+        assertThat(mapperSupport.createdUser).isNull();
     }
 
     @Test
-    void createUserRejectsInvalidRoleIdsBeforeRepositoryWrite() {
+    void createUserRejectsInvalidRoleIdsBeforeMapperSupportWrite() {
         UserCreateRequest request = new UserCreateRequest();
         request.setUsername("alice");
         request.setPassword("Pass@123");
@@ -243,8 +243,8 @@ class AdminSystemServiceTest {
 
         assertThat(result.getCode()).isEqualTo(ResultCode.PARAM_ERROR.getCode());
         assertThat(result.getMessage()).isEqualTo("角色ID必须大于0");
-        assertThat(repository.createdUser).isNull();
-        assertThat(repository.checkedRoleIds).isEmpty();
+        assertThat(mapperSupport.createdUser).isNull();
+        assertThat(mapperSupport.checkedRoleIds).isEmpty();
     }
 
     @Test
@@ -253,14 +253,14 @@ class AdminSystemServiceTest {
         request.setUsername("alice");
         request.setPassword("Pass@123");
         request.setRoleIds(List.of(2L, 2L, 3L));
-        repository.rolesExist = false;
+        mapperSupport.rolesExist = false;
 
         Result<Long> result = service.createUser(request, null);
 
         assertNotFound(result, "角色不存在");
         assertThat(request.getRoleIds()).containsExactly(2L, 3L);
-        assertThat(repository.checkedRoleIds).containsExactly(2L, 3L);
-        assertThat(repository.createdUser).isNull();
+        assertThat(mapperSupport.checkedRoleIds).containsExactly(2L, 3L);
+        assertThat(mapperSupport.createdUser).isNull();
     }
 
     @Test
@@ -268,7 +268,7 @@ class AdminSystemServiceTest {
         FakePermissionCacheService permissionCacheService = new FakePermissionCacheService();
         FakeSessionManager sessionManager = new FakeSessionManager();
         AdminSystemService serviceWithSecurity = new AdminSystemService(
-                repository, auditService, provider(permissionCacheService), provider(sessionManager), null);
+                mapperSupport, auditService, provider(permissionCacheService), provider(sessionManager), null);
         UserUpdateRequest request = new UserUpdateRequest();
         request.setNickname("Alice");
         request.setStatus("ENABLED");
@@ -277,15 +277,15 @@ class AdminSystemServiceTest {
         Result<String> result = serviceWithSecurity.updateUser(9L, request, null);
 
         assertThat(result.isSuccess()).isTrue();
-        assertThat(repository.updatedUserId).isEqualTo(9L);
-        assertThat(repository.updatedUser).isSameAs(request);
+        assertThat(mapperSupport.updatedUserId).isEqualTo(9L);
+        assertThat(mapperSupport.updatedUser).isSameAs(request);
         assertThat(permissionCacheService.refreshedUserIds).containsExactly(9L);
         assertThat(sessionManager.forceLogoutUserIds).containsExactly(9L);
         assertThat(auditService.actions).containsExactly("更新用户");
     }
 
     @Test
-    void updateUserDeduplicatesRoleIdsBeforeRepositoryWrite() {
+    void updateUserDeduplicatesRoleIdsBeforeMapperSupportWrite() {
         UserUpdateRequest request = new UserUpdateRequest();
         request.setNickname("Alice");
         request.setStatus("ENABLED");
@@ -294,8 +294,8 @@ class AdminSystemServiceTest {
         Result<String> result = service.updateUser(9L, request, null);
 
         assertThat(result.isSuccess()).isTrue();
-        assertThat(repository.checkedRoleIds).containsExactly(2L, 3L);
-        assertThat(repository.updatedUser.getRoleIds()).containsExactly(2L, 3L);
+        assertThat(mapperSupport.checkedRoleIds).containsExactly(2L, 3L);
+        assertThat(mapperSupport.updatedUser.getRoleIds()).containsExactly(2L, 3L);
     }
 
     @Test
@@ -304,19 +304,19 @@ class AdminSystemServiceTest {
         request.setNickname("Alice");
         request.setStatus("ENABLED");
         request.setRoleIds(List.of(2L));
-        repository.rolesExist = false;
+        mapperSupport.rolesExist = false;
 
         Result<String> result = service.updateUser(9L, request, null);
 
         assertNotFound(result, "角色不存在");
-        assertThat(repository.checkedRoleIds).containsExactly(2L);
-        assertThat(repository.updatedUserId).isNull();
+        assertThat(mapperSupport.checkedRoleIds).containsExactly(2L);
+        assertThat(mapperSupport.updatedUserId).isNull();
     }
 
     @Test
     void updateUserContinuesWhenOptionalSecurityProvidersFail() {
         AdminSystemService serviceWithFailingProviders = new AdminSystemService(
-                repository, auditService, failingProvider(), failingProvider(), null);
+                mapperSupport, auditService, failingProvider(), failingProvider(), null);
         UserUpdateRequest request = new UserUpdateRequest();
         request.setNickname("Alice");
         request.setStatus("ENABLED");
@@ -324,7 +324,7 @@ class AdminSystemServiceTest {
         Result<String> result = serviceWithFailingProviders.updateUser(9L, request, null);
 
         assertThat(result.isSuccess()).isTrue();
-        assertThat(repository.updatedUserId).isEqualTo(9L);
+        assertThat(mapperSupport.updatedUserId).isEqualTo(9L);
         assertThat(auditService.actions).containsExactly("更新用户");
     }
 
@@ -337,7 +337,7 @@ class AdminSystemServiceTest {
 
         assertThat(result.getCode()).isEqualTo(ResultCode.PARAM_ERROR.getCode());
         assertThat(result.getMessage()).isEqualTo("内置管理员不能禁用");
-        assertThat(repository.updatedUserId).isNull();
+        assertThat(mapperSupport.updatedUserId).isNull();
     }
 
     @Test
@@ -349,24 +349,24 @@ class AdminSystemServiceTest {
 
         assertThat(result.getCode()).isEqualTo(ResultCode.PARAM_ERROR.getCode());
         assertThat(result.getMessage()).isEqualTo("内置管理员不能禁用");
-        assertThat(repository.updatedUserStatusId).isNull();
+        assertThat(mapperSupport.updatedUserStatusId).isNull();
     }
 
     @Test
-    void updateUserStatusNormalizesBoundarySpaceBeforeRepositoryWrite() {
+    void updateUserStatusNormalizesBoundarySpaceBeforeMapperSupportWrite() {
         UserStatusRequest request = new UserStatusRequest();
         request.setStatus("\u00A0enabled\u3000");
 
         Result<String> result = service.updateUserStatus(9L, request, null);
 
         assertThat(result.isSuccess()).isTrue();
-        assertThat(repository.updatedUserStatusId).isEqualTo(9L);
-        assertThat(repository.updatedUserStatus).isEqualTo("ENABLED");
+        assertThat(mapperSupport.updatedUserStatusId).isEqualTo(9L);
+        assertThat(mapperSupport.updatedUserStatus).isEqualTo("ENABLED");
     }
 
     @Test
-    void userIdOperationsRejectInvalidIdBeforeRepositoryLookup() {
-        repository.commandFailure = new RuntimeException("database down");
+    void userIdOperationsRejectInvalidIdBeforeMapperSupportLookup() {
+        mapperSupport.commandFailure = new RuntimeException("database down");
 
         assertInvalidUserId(service.updateUser(0L, userUpdateRequest(), null));
         assertInvalidUserId(service.updateUserStatus(0L, userStatusRequest(), null));
@@ -374,10 +374,10 @@ class AdminSystemServiceTest {
         assertInvalidUserId(service.deleteUser(0L, null));
         assertInvalidUserId(service.unlockUser(0L, null));
 
-        assertThat(repository.updatedUserId).isNull();
-        assertThat(repository.updatedUserStatusId).isNull();
-        assertThat(repository.resetPasswordUserId).isNull();
-        assertThat(repository.deletedUserId).isNull();
+        assertThat(mapperSupport.updatedUserId).isNull();
+        assertThat(mapperSupport.updatedUserStatusId).isNull();
+        assertThat(mapperSupport.resetPasswordUserId).isNull();
+        assertThat(mapperSupport.deletedUserId).isNull();
     }
 
     @Test
@@ -389,15 +389,15 @@ class AdminSystemServiceTest {
 
         assertThat(result.getCode()).isEqualTo(ResultCode.PARAM_ERROR.getCode());
         assertThat(result.getMessage()).isEqualTo("密码必须包含小写字母");
-        assertThat(repository.resetPasswordUserId).isNull();
+        assertThat(mapperSupport.resetPasswordUserId).isNull();
     }
 
     @Test
     void unlockUserClearsLoginSecurityAndWritesAudit() {
         FakeLoginSecurityService loginSecurityService = new FakeLoginSecurityService();
         AdminSystemService serviceWithLoginSecurity = new AdminSystemService(
-                repository, auditService, null, null, provider(loginSecurityService));
-        repository.userById = new AdminUser()
+                mapperSupport, auditService, null, null, provider(loginSecurityService));
+        mapperSupport.userById = new AdminUser()
                 .setId(9L)
                 .setUsername("alice");
 
@@ -412,8 +412,8 @@ class AdminSystemServiceTest {
     @Test
     void unlockUserReportsUnavailableWhenLoginSecurityProviderFails() {
         AdminSystemService serviceWithFailingLoginSecurity = new AdminSystemService(
-                repository, auditService, null, null, failingProvider());
-        repository.userById = new AdminUser()
+                mapperSupport, auditService, null, null, failingProvider());
+        mapperSupport.userById = new AdminUser()
                 .setId(9L)
                 .setUsername("alice");
 
@@ -427,36 +427,36 @@ class AdminSystemServiceTest {
     @Test
     void deleteTenantRejectsDefaultAndTenantWithUsers() {
         Result<String> defaultTenant = service.deleteTenant(1L, null);
-        repository.tenantUserCount = 2;
+        mapperSupport.tenantUserCount = 2;
         Result<String> occupiedTenant = service.deleteTenant(8L, null);
 
         assertThat(defaultTenant.getCode()).isEqualTo(ResultCode.PARAM_ERROR.getCode());
         assertThat(defaultTenant.getMessage()).isEqualTo("默认租户不能删除");
         assertThat(occupiedTenant.getCode()).isEqualTo(ResultCode.PARAM_ERROR.getCode());
         assertThat(occupiedTenant.getMessage()).isEqualTo("租户下存在用户，不能删除");
-        assertThat(repository.deletedTenantId).isNull();
+        assertThat(mapperSupport.deletedTenantId).isNull();
     }
 
     @Test
-    void tenantIdOperationsRejectInvalidIdBeforeRepositoryLookup() {
-        repository.commandFailure = new RuntimeException("database down");
+    void tenantIdOperationsRejectInvalidIdBeforeMapperSupportLookup() {
+        mapperSupport.commandFailure = new RuntimeException("database down");
 
         assertInvalidResourceId(service.updateTenant(0L, tenantRequest(), null), "租户ID必须大于0");
         assertInvalidResourceId(service.deleteTenant(0L, null), "租户ID必须大于0");
 
-        assertThat(repository.updatedTenantId).isNull();
-        assertThat(repository.deletedTenantId).isNull();
+        assertThat(mapperSupport.updatedTenantId).isNull();
+        assertThat(mapperSupport.deletedTenantId).isNull();
     }
 
     @Test
-    void deptIdOperationsRejectInvalidIdBeforeRepositoryLookup() {
-        repository.commandFailure = new RuntimeException("database down");
+    void deptIdOperationsRejectInvalidIdBeforeMapperSupportLookup() {
+        mapperSupport.commandFailure = new RuntimeException("database down");
 
         assertInvalidResourceId(service.updateDept(0L, deptRequest(), null), "部门ID必须大于0");
         assertInvalidResourceId(service.deleteDept(0L, null), "部门ID必须大于0");
 
-        assertThat(repository.updatedDeptId).isNull();
-        assertThat(repository.deletedDeptId).isNull();
+        assertThat(mapperSupport.updatedDeptId).isNull();
+        assertThat(mapperSupport.deletedDeptId).isNull();
     }
 
     @Test
@@ -470,7 +470,7 @@ class AdminSystemServiceTest {
 
         assertThat(result.getCode()).isEqualTo(ResultCode.PARAM_ERROR.getCode());
         assertThat(result.getMessage()).isEqualTo("状态只能是 ENABLED 或 DISABLED");
-        assertThat(repository.createdRole).isNull();
+        assertThat(mapperSupport.createdRole).isNull();
     }
 
     @Test
@@ -478,9 +478,9 @@ class AdminSystemServiceTest {
         FakePermissionCacheService permissionCacheService = new FakePermissionCacheService();
         FakeSessionManager sessionManager = new FakeSessionManager();
         AdminSystemService serviceWithSecurity = new AdminSystemService(
-                repository, auditService, provider(permissionCacheService), provider(sessionManager), null);
-        repository.affectedUserIdsByRole = new ArrayList<>(List.of(2L, 2L, 3L));
-        repository.affectedUserIdsByRole.add(null);
+                mapperSupport, auditService, provider(permissionCacheService), provider(sessionManager), null);
+        mapperSupport.affectedUserIdsByRole = new ArrayList<>(List.of(2L, 2L, 3L));
+        mapperSupport.affectedUserIdsByRole.add(null);
         RoleRequest request = new RoleRequest();
         request.setRoleCode("OPS");
         request.setRoleName("运维");
@@ -489,8 +489,8 @@ class AdminSystemServiceTest {
         Result<String> result = serviceWithSecurity.updateRole(7L, request, null);
 
         assertThat(result.isSuccess()).isTrue();
-        assertThat(repository.updatedRoleId).isEqualTo(7L);
-        assertThat(repository.updatedRole).isSameAs(request);
+        assertThat(mapperSupport.updatedRoleId).isEqualTo(7L);
+        assertThat(mapperSupport.updatedRole).isSameAs(request);
         assertThat(permissionCacheService.batchRefreshedUserIds).containsExactly(2L, 3L);
         assertThat(sessionManager.forceLogoutUserIds).containsExactly(2L, 3L);
         assertThat(auditService.actions).containsExactly("更新角色");
@@ -507,22 +507,22 @@ class AdminSystemServiceTest {
 
         assertThat(result.getCode()).isEqualTo(ResultCode.PARAM_ERROR.getCode());
         assertThat(result.getMessage()).isEqualTo("内置超级管理员角色不能禁用");
-        assertThat(repository.updatedRoleId).isNull();
+        assertThat(mapperSupport.updatedRoleId).isNull();
     }
 
     @Test
-    void roleIdOperationsRejectInvalidIdBeforeRepositoryLookup() {
-        repository.commandFailure = new RuntimeException("database down");
-        repository.queryFailure = new RuntimeException("database down");
+    void roleIdOperationsRejectInvalidIdBeforeMapperSupportLookup() {
+        mapperSupport.commandFailure = new RuntimeException("database down");
+        mapperSupport.queryFailure = new RuntimeException("database down");
 
         assertInvalidResourceId(service.updateRole(0L, roleRequest(), null), "角色ID必须大于0");
         assertInvalidResourceId(service.deleteRole(0L, null), "角色ID必须大于0");
         assertThat(service.roleMenuIds(0L)).isEmpty();
         assertInvalidResourceId(service.updateRoleMenus(0L, roleMenuRequest(), null), "角色ID必须大于0");
 
-        assertThat(repository.updatedRoleId).isNull();
-        assertThat(repository.deletedRoleId).isNull();
-        assertThat(repository.replacedRoleMenuRoleId).isNull();
+        assertThat(mapperSupport.updatedRoleId).isNull();
+        assertThat(mapperSupport.deletedRoleId).isNull();
+        assertThat(mapperSupport.replacedRoleMenuRoleId).isNull();
     }
 
     @Test
@@ -530,14 +530,14 @@ class AdminSystemServiceTest {
         FakePermissionCacheService permissionCacheService = new FakePermissionCacheService();
         FakeSessionManager sessionManager = new FakeSessionManager();
         AdminSystemService serviceWithSecurity = new AdminSystemService(
-                repository, auditService, provider(permissionCacheService), provider(sessionManager), null);
-        repository.affectedUserIdsByRole = List.of(5L, 6L);
+                mapperSupport, auditService, provider(permissionCacheService), provider(sessionManager), null);
+        mapperSupport.affectedUserIdsByRole = List.of(5L, 6L);
 
         Result<String> result = serviceWithSecurity.updateRoleMenus(8L, null, null);
 
         assertThat(result.isSuccess()).isTrue();
-        assertThat(repository.replacedRoleMenuRoleId).isEqualTo(8L);
-        assertThat(repository.replacedRoleMenuIds).isEmpty();
+        assertThat(mapperSupport.replacedRoleMenuRoleId).isEqualTo(8L);
+        assertThat(mapperSupport.replacedRoleMenuIds).isEmpty();
         assertThat(permissionCacheService.batchRefreshedUserIds).containsExactly(5L, 6L);
         assertThat(sessionManager.forceLogoutUserIds).containsExactly(5L, 6L);
         assertThat(auditService.actions).containsExactly("角色菜单授权");
@@ -548,21 +548,21 @@ class AdminSystemServiceTest {
         FakePermissionCacheService permissionCacheService = new FakePermissionCacheService();
         FakeSessionManager sessionManager = new FakeSessionManager();
         AdminSystemService serviceWithSecurity = new AdminSystemService(
-                repository, auditService, provider(permissionCacheService), provider(sessionManager), null);
-        repository.affectedUserIdsByRole = List.of(5L);
-        repository.replaceRoleMenusAffected = false;
+                mapperSupport, auditService, provider(permissionCacheService), provider(sessionManager), null);
+        mapperSupport.affectedUserIdsByRole = List.of(5L);
+        mapperSupport.replaceRoleMenusAffected = false;
 
         Result<String> result = serviceWithSecurity.updateRoleMenus(8L, roleMenuRequest(), null);
 
         assertNotFound(result, "角色不存在");
-        assertThat(repository.replacedRoleMenuRoleId).isEqualTo(8L);
+        assertThat(mapperSupport.replacedRoleMenuRoleId).isEqualTo(8L);
         assertThat(permissionCacheService.batchRefreshedUserIds).isEmpty();
         assertThat(sessionManager.forceLogoutUserIds).isEmpty();
         assertThat(auditService.actions).isEmpty();
     }
 
     @Test
-    void updateRoleMenusRejectsInvalidMenuIdsBeforeRepositoryWrite() {
+    void updateRoleMenusRejectsInvalidMenuIdsBeforeMapperSupportWrite() {
         RoleMenuRequest request = roleMenuRequest();
         request.setMenuIds(List.of(1L, -1L));
 
@@ -570,21 +570,21 @@ class AdminSystemServiceTest {
 
         assertThat(result.getCode()).isEqualTo(ResultCode.PARAM_ERROR.getCode());
         assertThat(result.getMessage()).isEqualTo("菜单ID必须大于0");
-        assertThat(repository.checkedMenuIds).isEmpty();
-        assertThat(repository.replacedRoleMenuRoleId).isNull();
+        assertThat(mapperSupport.checkedMenuIds).isEmpty();
+        assertThat(mapperSupport.replacedRoleMenuRoleId).isNull();
     }
 
     @Test
     void updateRoleMenusReturnsNotFoundWhenMenuIdsDoNotExist() {
         RoleMenuRequest request = roleMenuRequest();
         request.setMenuIds(List.of(11L, 11L, 12L));
-        repository.menusExist = false;
+        mapperSupport.menusExist = false;
 
         Result<String> result = service.updateRoleMenus(8L, request, null);
 
         assertNotFound(result, "菜单不存在");
-        assertThat(repository.checkedMenuIds).containsExactly(11L, 12L);
-        assertThat(repository.replacedRoleMenuRoleId).isNull();
+        assertThat(mapperSupport.checkedMenuIds).containsExactly(11L, 12L);
+        assertThat(mapperSupport.replacedRoleMenuRoleId).isNull();
         assertThat(auditService.actions).isEmpty();
     }
 
@@ -612,29 +612,29 @@ class AdminSystemServiceTest {
     void createMenuReturnsNotFoundWhenParentMenuDoesNotExist() {
         MenuRequest request = menuRequest();
         request.setParentId(99L);
-        repository.menusExist = false;
+        mapperSupport.menusExist = false;
 
         Result<Long> result = service.createMenu(request, null);
 
         assertNotFound(result, "上级菜单不存在");
-        assertThat(repository.checkedMenuIds).containsExactly(99L);
-        assertThat(repository.createdMenu).isNull();
+        assertThat(mapperSupport.checkedMenuIds).containsExactly(99L);
+        assertThat(mapperSupport.createdMenu).isNull();
     }
 
     @Test
-    void updateMenuRejectsDescendantParentBeforeRepositoryWrite() {
+    void updateMenuRejectsDescendantParentBeforeMapperSupportWrite() {
         MenuRequest request = menuRequest();
         request.setParentId(12L);
-        repository.menuDescendant = true;
+        mapperSupport.menuDescendant = true;
 
         Result<String> result = service.updateMenu(11L, request, null);
 
         assertThat(result.getCode()).isEqualTo(ResultCode.PARAM_ERROR.getCode());
         assertThat(result.getMessage()).isEqualTo("上级菜单不能选择自己的下级");
-        assertThat(repository.checkedMenuIds).containsExactly(12L);
-        assertThat(repository.checkedMenuId).isEqualTo(11L);
-        assertThat(repository.checkedDescendantMenuId).isEqualTo(12L);
-        assertThat(repository.updatedMenuId).isNull();
+        assertThat(mapperSupport.checkedMenuIds).containsExactly(12L);
+        assertThat(mapperSupport.checkedMenuId).isEqualTo(11L);
+        assertThat(mapperSupport.checkedDescendantMenuId).isEqualTo(12L);
+        assertThat(mapperSupport.updatedMenuId).isNull();
     }
 
     @Test
@@ -642,7 +642,7 @@ class AdminSystemServiceTest {
         FakePermissionCacheService permissionCacheService = new FakePermissionCacheService();
         FakeSessionManager sessionManager = new FakeSessionManager();
         AdminSystemService serviceWithSecurity = new AdminSystemService(
-                repository, auditService, provider(permissionCacheService), provider(sessionManager), null);
+                mapperSupport, auditService, provider(permissionCacheService), provider(sessionManager), null);
         MenuRequest request = new MenuRequest();
         request.setMenuType("MENU");
         request.setMenuName("通知中心");
@@ -652,7 +652,7 @@ class AdminSystemServiceTest {
 
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getData()).isEqualTo(12L);
-        assertThat(repository.createdMenu).isSameAs(request);
+        assertThat(mapperSupport.createdMenu).isSameAs(request);
         assertThat(permissionCacheService.clearAllCount).isEqualTo(1);
         assertThat(sessionManager.forceLogoutAllCount).isEqualTo(1);
         assertThat(auditService.actions).containsExactly("新增菜单");
@@ -663,7 +663,7 @@ class AdminSystemServiceTest {
         FakePermissionCacheService permissionCacheService = new FakePermissionCacheService();
         FakeSessionManager sessionManager = new FakeSessionManager();
         AdminSystemService serviceWithSecurity = new AdminSystemService(
-                repository, auditService, provider(permissionCacheService), provider(sessionManager), null);
+                mapperSupport, auditService, provider(permissionCacheService), provider(sessionManager), null);
         MenuRequest request = new MenuRequest();
         request.setMenuType("MENU");
         request.setMenuName("日志中心");
@@ -672,55 +672,55 @@ class AdminSystemServiceTest {
         Result<String> result = serviceWithSecurity.updateMenu(11L, request, null);
 
         assertThat(result.isSuccess()).isTrue();
-        assertThat(repository.updatedMenuId).isEqualTo(11L);
-        assertThat(repository.updatedMenu).isSameAs(request);
+        assertThat(mapperSupport.updatedMenuId).isEqualTo(11L);
+        assertThat(mapperSupport.updatedMenu).isSameAs(request);
         assertThat(permissionCacheService.clearAllCount).isEqualTo(1);
         assertThat(sessionManager.forceLogoutAllCount).isEqualTo(1);
         assertThat(auditService.actions).containsExactly("更新菜单");
     }
 
     @Test
-    void menuIdOperationsRejectInvalidIdBeforeRepositoryLookup() {
-        repository.commandFailure = new RuntimeException("database down");
+    void menuIdOperationsRejectInvalidIdBeforeMapperSupportLookup() {
+        mapperSupport.commandFailure = new RuntimeException("database down");
 
         assertInvalidResourceId(service.updateMenu(0L, menuRequest(), null), "菜单ID必须大于0");
         assertInvalidResourceId(service.deleteMenu(0L, null), "菜单ID必须大于0");
 
-        assertThat(repository.updatedMenuId).isNull();
-        assertThat(repository.deletedMenuId).isNull();
+        assertThat(mapperSupport.updatedMenuId).isNull();
+        assertThat(mapperSupport.deletedMenuId).isNull();
     }
 
     @Test
-    void dictTypeIdOperationsRejectInvalidIdBeforeRepositoryLookup() {
-        repository.commandFailure = new RuntimeException("database down");
+    void dictTypeIdOperationsRejectInvalidIdBeforeMapperSupportLookup() {
+        mapperSupport.commandFailure = new RuntimeException("database down");
 
         assertInvalidResourceId(service.updateDictType(0L, dictTypeRequest(), null), "字典类型ID必须大于0");
         assertInvalidResourceId(service.deleteDictType(0L, null), "字典类型ID必须大于0");
 
-        assertThat(repository.updatedDictTypeId).isNull();
-        assertThat(repository.deletedDictTypeId).isNull();
+        assertThat(mapperSupport.updatedDictTypeId).isNull();
+        assertThat(mapperSupport.deletedDictTypeId).isNull();
     }
 
     @Test
-    void dictItemIdOperationsRejectInvalidIdBeforeRepositoryLookup() {
-        repository.commandFailure = new RuntimeException("database down");
+    void dictItemIdOperationsRejectInvalidIdBeforeMapperSupportLookup() {
+        mapperSupport.commandFailure = new RuntimeException("database down");
 
         assertInvalidResourceId(service.updateDictItem(0L, dictItemRequest(), null), "字典项ID必须大于0");
         assertInvalidResourceId(service.deleteDictItem(0L, null), "字典项ID必须大于0");
 
-        assertThat(repository.updatedDictItemId).isNull();
-        assertThat(repository.deletedDictItemId).isNull();
+        assertThat(mapperSupport.updatedDictItemId).isNull();
+        assertThat(mapperSupport.deletedDictItemId).isNull();
     }
 
     @Test
-    void configIdOperationsRejectInvalidIdBeforeRepositoryLookup() {
-        repository.commandFailure = new RuntimeException("database down");
+    void configIdOperationsRejectInvalidIdBeforeMapperSupportLookup() {
+        mapperSupport.commandFailure = new RuntimeException("database down");
 
         assertInvalidResourceId(service.updateConfig(0L, configRequest(), null), "系统参数ID必须大于0");
         assertInvalidResourceId(service.deleteConfig(0L, null), "系统参数ID必须大于0");
 
-        assertThat(repository.updatedConfigId).isNull();
-        assertThat(repository.deletedConfigId).isNull();
+        assertThat(mapperSupport.updatedConfigId).isNull();
+        assertThat(mapperSupport.deletedConfigId).isNull();
     }
 
     @Test
@@ -736,8 +736,8 @@ class AdminSystemServiceTest {
     }
 
     @Test
-    void writeEndpointsReturnServiceErrorWhenRepositoryFails() {
-        repository.commandFailure = new RuntimeException("database down");
+    void writeEndpointsReturnServiceErrorWhenMapperSupportFails() {
+        mapperSupport.commandFailure = new RuntimeException("database down");
         UserCreateRequest userCreate = new UserCreateRequest();
         userCreate.setUsername("alice");
         userCreate.setPassword("Pass@123");
@@ -773,8 +773,8 @@ class AdminSystemServiceTest {
     }
 
     @Test
-    void unlockUserReturnsServiceErrorWhenRepositoryFails() {
-        repository.commandFailure = new RuntimeException("database down");
+    void unlockUserReturnsServiceErrorWhenMapperSupportFails() {
+        mapperSupport.commandFailure = new RuntimeException("database down");
 
         Result<String> result = service.unlockUser(9L, null);
 
@@ -783,25 +783,25 @@ class AdminSystemServiceTest {
     }
 
     @Test
-    void updateAndDeleteEndpointsReturnNotFoundWhenRepositoryAffectsNoRows() {
-        repository.updateTenantAffected = false;
-        repository.deleteTenantAffected = false;
-        repository.updateDeptAffected = false;
-        repository.deleteDeptAffected = false;
-        repository.updateUserAffected = false;
-        repository.updateUserStatusAffected = false;
-        repository.resetPasswordAffected = false;
-        repository.deleteUserAffected = false;
-        repository.updateRoleAffected = false;
-        repository.deleteRoleAffected = false;
-        repository.updateMenuAffected = false;
-        repository.deleteMenuAffected = false;
-        repository.updateDictTypeAffected = false;
-        repository.deleteDictTypeAffected = false;
-        repository.updateDictItemAffected = false;
-        repository.deleteDictItemAffected = false;
-        repository.updateConfigAffected = false;
-        repository.deleteConfigAffected = false;
+    void updateAndDeleteEndpointsReturnNotFoundWhenMapperSupportAffectsNoRows() {
+        mapperSupport.updateTenantAffected = false;
+        mapperSupport.deleteTenantAffected = false;
+        mapperSupport.updateDeptAffected = false;
+        mapperSupport.deleteDeptAffected = false;
+        mapperSupport.updateUserAffected = false;
+        mapperSupport.updateUserStatusAffected = false;
+        mapperSupport.resetPasswordAffected = false;
+        mapperSupport.deleteUserAffected = false;
+        mapperSupport.updateRoleAffected = false;
+        mapperSupport.deleteRoleAffected = false;
+        mapperSupport.updateMenuAffected = false;
+        mapperSupport.deleteMenuAffected = false;
+        mapperSupport.updateDictTypeAffected = false;
+        mapperSupport.deleteDictTypeAffected = false;
+        mapperSupport.updateDictItemAffected = false;
+        mapperSupport.deleteDictItemAffected = false;
+        mapperSupport.updateConfigAffected = false;
+        mapperSupport.deleteConfigAffected = false;
 
         assertNotFound(service.updateTenant(9L, tenantRequest(), null), "租户不存在");
         assertNotFound(service.deleteTenant(9L, null), "租户不存在");
@@ -930,7 +930,7 @@ class AdminSystemServiceTest {
         return request;
     }
 
-    private static class FakeRepository extends AdminSystemRepository {
+    private static class FakeMapperSupport extends AdminSystemMapperSupport {
         private List<AdminUser> users = List.of();
         private long userCount;
         private int listUserPageNum;
@@ -1001,7 +1001,7 @@ class AdminSystemServiceTest {
         private RuntimeException queryFailure;
         private RuntimeException commandFailure;
 
-        private FakeRepository() {
+        private FakeMapperSupport() {
             super(null);
         }
 

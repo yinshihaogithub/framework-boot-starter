@@ -524,7 +524,7 @@ class RepositoryEngineeringGuardTest {
             }
         }
 
-        assertThat(read(root.resolve("admin-service/src/main/java/com/framework/admin/system/AdminSystemRepository.java")))
+        assertThat(read(root.resolve("admin-service/src/main/java/com/framework/admin/system/AdminSystemMapperSupport.java")))
                 .as("multi-table admin writes must keep an explicit local transaction boundary")
                 .contains("TransactionTemplate")
                 .contains("inTransaction(");
@@ -1195,10 +1195,11 @@ class RepositoryEngineeringGuardTest {
                 .contains("ObjectProvider<NotifyAdminMapper>")
                 .contains("ObjectProvider<ExcelAdminMapper>")
                 .contains("ObjectProvider<FileAdminMapper>")
-                .contains("ObjectProvider<AdminSystemRepository>")
+                .contains("ObjectProvider<AdminSystemMapperSupport>")
                 .doesNotContain("NotifyAdminRepository")
                 .doesNotContain("ExcelAdminRepository")
                 .doesNotContain("FileAdminRepository")
+                .doesNotContain("AdminSystemRepository")
                 .contains("admin.default.password.changed")
                 .contains("notifyMetrics()")
                 .contains("excelMetrics()")
@@ -1225,7 +1226,7 @@ class RepositoryEngineeringGuardTest {
         String service = read(root.resolve(
                 "admin-service/src/main/java/com/framework/admin/auth/AdminAuthService.java"));
         String repository = read(root.resolve(
-                "admin-service/src/main/java/com/framework/admin/system/AdminSystemRepository.java"));
+                "admin-service/src/main/java/com/framework/admin/system/AdminSystemMapperSupport.java"));
         String mapper = read(root.resolve(
                 "admin-service/src/main/java/com/framework/admin/system/AdminSystemMapper.java"));
         String client = read(root.resolve("frontend/admin-web/src/api/client.ts"));
@@ -1270,11 +1271,11 @@ class RepositoryEngineeringGuardTest {
     @Test
     void adminSystemConfigMasksSensitiveValuesEndToEnd() throws Exception {
         String repository = read(root.resolve(
-                "admin-service/src/main/java/com/framework/admin/system/AdminSystemRepository.java"));
+                "admin-service/src/main/java/com/framework/admin/system/AdminSystemMapperSupport.java"));
         String mapper = read(root.resolve(
                 "admin-service/src/main/java/com/framework/admin/system/AdminSystemMapper.java"));
         String repositoryTest = read(root.resolve(
-                "admin-service/src/test/java/com/framework/admin/system/AdminSystemRepositoryTest.java"));
+                "admin-service/src/test/java/com/framework/admin/system/AdminSystemMapperSupportTest.java"));
         String app = read(root.resolve("frontend/admin-web/src/App.vue"));
 
         assertThat(repository)
@@ -1322,7 +1323,7 @@ class RepositoryEngineeringGuardTest {
     @Test
     void adminPermissionChangingOperationsInvalidatePermissionCache() throws Exception {
         String service = read(root.resolve("admin-service/src/main/java/com/framework/admin/system/AdminSystemService.java"));
-        String repository = read(root.resolve("admin-service/src/main/java/com/framework/admin/system/AdminSystemRepository.java"));
+        String mapperSupport = read(root.resolve("admin-service/src/main/java/com/framework/admin/system/AdminSystemMapperSupport.java"));
         String mapper = read(root.resolve("admin-service/src/main/java/com/framework/admin/system/AdminSystemMapper.java"));
         String sessionManager = read(root.resolve("framework-auth/src/main/java/com/framework/auth/service/SessionManager.java"));
 
@@ -1332,7 +1333,7 @@ class RepositoryEngineeringGuardTest {
                 .contains("SessionManager")
                 .contains("refreshPermissionCache(userId)")
                 .contains("refreshPermissionCache(id)")
-                .contains("repository.listUserIdsByRoleId(id)")
+                .contains("mapperSupport.listUserIdsByRoleId(id)")
                 .contains("refreshPermissionCache(affectedUserIds)")
                 .contains("clearPermissionCache()")
                 .contains("cacheService.refreshBatch")
@@ -1340,7 +1341,7 @@ class RepositoryEngineeringGuardTest {
                 .contains("forceLogoutUser(id)")
                 .contains("forceLogoutUsers(affectedUserIds)")
                 .contains("forceLogoutAllUsers()");
-        assertThat(repository)
+        assertThat(mapperSupport)
                 .as("role-level permission changes need the affected users")
                 .contains("listUserIdsByRoleId");
         assertThat(mapper)

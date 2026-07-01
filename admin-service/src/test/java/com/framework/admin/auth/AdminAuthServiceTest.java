@@ -3,7 +3,7 @@ package com.framework.admin.auth;
 import com.framework.admin.audit.AdminAuditService;
 import com.framework.admin.system.AdminSystemModels.AdminUser;
 import com.framework.admin.system.AdminSystemModels.Menu;
-import com.framework.admin.system.AdminSystemRepository;
+import com.framework.admin.system.AdminSystemMapperSupport;
 import com.framework.auth.context.LoginUser;
 import com.framework.auth.context.UserContextHolder;
 import com.framework.auth.service.LoginSecurityService;
@@ -29,9 +29,9 @@ import static org.assertj.core.api.Assertions.tuple;
 
 class AdminAuthServiceTest {
 
-    private final FakeRepository repository = new FakeRepository();
+    private final FakeMapperSupport mapperSupport = new FakeMapperSupport();
     private final FakeSessionManager sessionManager = new FakeSessionManager();
-    private final AdminAuthService service = new AdminAuthService(repository, sessionManager, provider((LoginSecurityService) null));
+    private final AdminAuthService service = new AdminAuthService(mapperSupport, sessionManager, provider((LoginSecurityService) null));
 
     @AfterEach
     void tearDown() {
@@ -47,11 +47,11 @@ class AdminAuthServiceTest {
         Result<AdminAuthController.LoginResponse> result = service.login(request, "127.0.0.1");
 
         assertThat(result.getCode()).isEqualTo(ResultCode.PARAM_ERROR.getCode());
-        assertThat(repository.loginLogs).isEmpty();
+        assertThat(mapperSupport.loginLogs).isEmpty();
     }
 
     @Test
-    void loginRejectsTooLongUsernameBeforeQueryingRepository() {
+    void loginRejectsTooLongUsernameBeforeQueryingMapperSupport() {
         AdminAuthController.LoginRequest request = new AdminAuthController.LoginRequest();
         request.setUsername("a".repeat(65));
         request.setPassword("Admin@123");
@@ -60,8 +60,8 @@ class AdminAuthServiceTest {
 
         assertThat(result.getCode()).isEqualTo(ResultCode.PARAM_ERROR.getCode());
         assertThat(result.getMessage()).isEqualTo("用户名长度不能超过64个字符");
-        assertThat(repository.findByUsernameCalls).isZero();
-        assertThat(repository.loginLogs).isEmpty();
+        assertThat(mapperSupport.findByUsernameCalls).isZero();
+        assertThat(mapperSupport.loginLogs).isEmpty();
     }
 
     @Test
@@ -75,14 +75,14 @@ class AdminAuthServiceTest {
 
         assertThat(result.getCode()).isEqualTo(ResultCode.PARAM_ERROR.getCode());
         assertThat(result.getMessage()).isEqualTo("设备标识长度不能超过64个字符");
-        assertThat(repository.findByUsernameCalls).isZero();
+        assertThat(mapperSupport.findByUsernameCalls).isZero();
         assertThat(sessionManager.createdDeviceId).isNull();
     }
 
     @Test
     void loginCreatesSessionAndWritesSuccessLog() {
-        repository.user = enabledUser();
-        repository.menus = List.of(menu(1L, "dashboard"));
+        mapperSupport.user = enabledUser();
+        mapperSupport.menus = List.of(menu(1L, "dashboard"));
         AdminAuthController.LoginRequest request = new AdminAuthController.LoginRequest();
         request.setUsername("\u00A0admin\u3000");
         request.setPassword("Admin@123");
@@ -94,8 +94,8 @@ class AdminAuthServiceTest {
         assertThat(result.getData().getUser().getUsername()).isEqualTo("admin");
         assertThat(result.getData().getMenus()).hasSize(1);
         assertThat(sessionManager.createdDeviceId).isEqualTo("admin-web");
-        assertThat(repository.lastLoginUserId).isEqualTo(1L);
-        assertThat(repository.loginLogs)
+        assertThat(mapperSupport.lastLoginUserId).isEqualTo(1L);
+        assertThat(mapperSupport.loginLogs)
                 .extracting(LoginLogRecord::username, LoginLogRecord::userId, LoginLogRecord::clientIp,
                         LoginLogRecord::success, LoginLogRecord::message)
                 .containsExactly(tuple("admin", 1L, "10.0.0.8", true, "登录成功"));
@@ -103,7 +103,7 @@ class AdminAuthServiceTest {
 
     @Test
     void loginTrimsDeviceIdAndTruncatesClientIpForLoginLog() {
-        repository.user = enabledUser();
+        mapperSupport.user = enabledUser();
         AdminAuthController.LoginRequest request = new AdminAuthController.LoginRequest();
         request.setUsername("admin");
         request.setPassword("Admin@123");
@@ -114,17 +114,17 @@ class AdminAuthServiceTest {
 
         assertThat(result.isSuccess()).isTrue();
         assertThat(sessionManager.createdDeviceId).isEqualTo("ios");
-        assertThat(repository.loginLogs)
+        assertThat(mapperSupport.loginLogs)
                 .extracting(LoginLogRecord::clientIp)
                 .containsExactly("1".repeat(64));
     }
 
     @Test
     void loginAllowsUserWithoutRolePermissionOrMenuRows() {
-        repository.user = enabledUser()
+        mapperSupport.user = enabledUser()
                 .setRoles(null)
                 .setPermissions(null);
-        repository.menus = null;
+        mapperSupport.menus = null;
         AdminAuthController.LoginRequest request = new AdminAuthController.LoginRequest();
         request.setUsername("admin");
         request.setPassword("Admin@123");
@@ -141,7 +141,7 @@ class AdminAuthServiceTest {
 
     @Test
     void loginRejectsDisabledUser() {
-        repository.user = enabledUser().setStatus("DISABLED");
+        mapperSupport.user = enabledUser().setStatus("DISABLED");
         AdminAuthController.LoginRequest request = new AdminAuthController.LoginRequest();
         request.setUsername("admin");
         request.setPassword("Admin@123");
@@ -150,8 +150,8 @@ class AdminAuthServiceTest {
 
         assertThat(result.getCode()).isEqualTo(ResultCode.LOGIN_FAIL.getCode());
         assertThat(sessionManager.createdDeviceId).isNull();
-        assertThat(repository.lastLoginUserId).isNull();
-        assertThat(repository.loginLogs)
+        assertThat(mapperSupport.lastLoginUserId).isNull();
+        assertThat(mapperSupport.loginLogs)
                 .extracting(LoginLogRecord::username, LoginLogRecord::userId, LoginLogRecord::clientIp,
                         LoginLogRecord::success, LoginLogRecord::message)
                 .containsExactly(tuple("admin", 1L, "10.0.0.8", false, "账号或密码错误"));
@@ -161,7 +161,7 @@ class AdminAuthServiceTest {
     void loginPreservesAccountLockedCodeFromLoginSecurity() {
         FakeLoginSecurityService loginSecurityService = new FakeLoginSecurityService();
         loginSecurityService.lockedMessage = "账号已被锁定，请 10 分钟后再试";
-        AdminAuthService lockedService = new AdminAuthService(repository, sessionManager, provider(loginSecurityService));
+        AdminAuthService lockedService = new AdminAuthService(mapperSupport, sessionManager, provider(loginSecurityService));
         AdminAuthController.LoginRequest request = new AdminAuthController.LoginRequest();
         request.setUsername("admin");
         request.setPassword("Admin@123");
@@ -171,7 +171,7 @@ class AdminAuthServiceTest {
         assertThat(result.getCode()).isEqualTo(ResultCode.ACCOUNT_LOCKED.getCode());
         assertThat(result.getMessage()).isEqualTo("账号已被锁定，请 10 分钟后再试");
         assertThat(sessionManager.createdDeviceId).isNull();
-        assertThat(repository.loginLogs)
+        assertThat(mapperSupport.loginLogs)
                 .extracting(LoginLogRecord::username, LoginLogRecord::userId, LoginLogRecord::clientIp,
                         LoginLogRecord::success, LoginLogRecord::message)
                 .containsExactly(tuple("admin", null, "10.0.0.8", false, "账号已被锁定，请 10 分钟后再试"));
@@ -179,9 +179,9 @@ class AdminAuthServiceTest {
 
     @Test
     void loginContinuesWhenLoginSecurityProviderFails() {
-        repository.user = enabledUser();
+        mapperSupport.user = enabledUser();
         AdminAuthService serviceWithFailingProvider = new AdminAuthService(
-                repository, sessionManager, failingProvider());
+                mapperSupport, sessionManager, failingProvider());
         AdminAuthController.LoginRequest request = new AdminAuthController.LoginRequest();
         request.setUsername("admin");
         request.setPassword("Admin@123");
@@ -190,15 +190,15 @@ class AdminAuthServiceTest {
 
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getData().getAccessToken()).isEqualTo("access-token");
-        assertThat(repository.loginLogs)
+        assertThat(mapperSupport.loginLogs)
                 .extracting(LoginLogRecord::username, LoginLogRecord::success, LoginLogRecord::message)
                 .containsExactly(tuple("admin", true, "登录成功"));
     }
 
     @Test
     void loginContinuesWhenLoginLogWriteFails() {
-        repository.user = enabledUser();
-        repository.loginLogFailure = new RuntimeException("database down");
+        mapperSupport.user = enabledUser();
+        mapperSupport.loginLogFailure = new RuntimeException("database down");
         AdminAuthController.LoginRequest request = new AdminAuthController.LoginRequest();
         request.setUsername("admin");
         request.setPassword("Admin@123");
@@ -207,13 +207,13 @@ class AdminAuthServiceTest {
 
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getData().getAccessToken()).isEqualTo("access-token");
-        assertThat(repository.lastLoginUserId).isEqualTo(1L);
-        assertThat(repository.loginLogs).isEmpty();
+        assertThat(mapperSupport.lastLoginUserId).isEqualTo(1L);
+        assertThat(mapperSupport.loginLogs).isEmpty();
     }
 
     @Test
-    void loginReturnsServiceErrorWhenRepositoryFails() {
-        repository.findByUsernameFailure = new RuntimeException("database down");
+    void loginReturnsServiceErrorWhenMapperSupportFails() {
+        mapperSupport.findByUsernameFailure = new RuntimeException("database down");
         AdminAuthController.LoginRequest request = new AdminAuthController.LoginRequest();
         request.setUsername("admin");
         request.setPassword("Admin@123");
@@ -223,14 +223,14 @@ class AdminAuthServiceTest {
         assertThat(result.getCode()).isEqualTo(ResultCode.SERVICE_ERROR.getCode());
         assertThat(result.getMessage()).isEqualTo("登录服务暂不可用");
         assertThat(sessionManager.createdDeviceId).isNull();
-        assertThat(repository.loginLogs)
+        assertThat(mapperSupport.loginLogs)
                 .extracting(LoginLogRecord::username, LoginLogRecord::success, LoginLogRecord::message)
                 .containsExactly(tuple("admin", false, "登录服务暂不可用"));
     }
 
     @Test
     void loginReturnsServiceErrorWhenSessionCreateFails() {
-        repository.user = enabledUser();
+        mapperSupport.user = enabledUser();
         sessionManager.createSessionFailure = new RuntimeException("redis down");
         AdminAuthController.LoginRequest request = new AdminAuthController.LoginRequest();
         request.setUsername("admin");
@@ -240,13 +240,13 @@ class AdminAuthServiceTest {
 
         assertThat(result.getCode()).isEqualTo(ResultCode.SERVICE_ERROR.getCode());
         assertThat(result.getMessage()).isEqualTo("登录服务暂不可用");
-        assertThat(repository.lastLoginUserId).isNull();
+        assertThat(mapperSupport.lastLoginUserId).isNull();
     }
 
     @Test
     void loginDoesNotCreateSessionWhenMenuQueryFails() {
-        repository.user = enabledUser();
-        repository.menusFailure = new RuntimeException("database down");
+        mapperSupport.user = enabledUser();
+        mapperSupport.menusFailure = new RuntimeException("database down");
         AdminAuthController.LoginRequest request = new AdminAuthController.LoginRequest();
         request.setUsername("admin");
         request.setPassword("Admin@123");
@@ -256,16 +256,16 @@ class AdminAuthServiceTest {
         assertThat(result.getCode()).isEqualTo(ResultCode.SERVICE_ERROR.getCode());
         assertThat(result.getMessage()).isEqualTo("登录服务暂不可用");
         assertThat(sessionManager.createdDeviceId).isNull();
-        assertThat(repository.lastLoginUserId).isNull();
-        assertThat(repository.loginLogs)
+        assertThat(mapperSupport.lastLoginUserId).isNull();
+        assertThat(mapperSupport.loginLogs)
                 .extracting(LoginLogRecord::username, LoginLogRecord::success, LoginLogRecord::message)
                 .containsExactly(tuple("admin", false, "登录服务暂不可用"));
     }
 
     @Test
     void loginContinuesWhenLastLoginUpdateFails() {
-        repository.user = enabledUser();
-        repository.lastLoginFailure = new RuntimeException("database down");
+        mapperSupport.user = enabledUser();
+        mapperSupport.lastLoginFailure = new RuntimeException("database down");
         AdminAuthController.LoginRequest request = new AdminAuthController.LoginRequest();
         request.setUsername("admin");
         request.setPassword("Admin@123");
@@ -274,15 +274,15 @@ class AdminAuthServiceTest {
 
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getData().getAccessToken()).isEqualTo("access-token");
-        assertThat(repository.loginLogs)
+        assertThat(mapperSupport.loginLogs)
                 .extracting(LoginLogRecord::username, LoginLogRecord::success, LoginLogRecord::message)
                 .containsExactly(tuple("admin", true, "登录成功"));
     }
 
     @Test
     void meReturnsCurrentUserMenus() {
-        repository.user = enabledUser();
-        repository.menus = List.of(menu(1L, "dashboard"));
+        mapperSupport.user = enabledUser();
+        mapperSupport.menus = List.of(menu(1L, "dashboard"));
         UserContextHolder.set(new LoginUser().setUserId(1L));
 
         Result<AdminAuthController.CurrentUser> result = service.me();
@@ -293,8 +293,8 @@ class AdminAuthServiceTest {
     }
 
     @Test
-    void meReturnsServiceErrorWhenRepositoryFails() {
-        repository.findByIdFailure = new RuntimeException("database down");
+    void meReturnsServiceErrorWhenMapperSupportFails() {
+        mapperSupport.findByIdFailure = new RuntimeException("database down");
         UserContextHolder.set(new LoginUser().setUserId(1L));
 
         Result<AdminAuthController.CurrentUser> result = service.me();
@@ -323,14 +323,14 @@ class AdminAuthServiceTest {
 
     @Test
     void changePasswordRejectsWrongOldPassword() {
-        repository.user = enabledUser();
+        mapperSupport.user = enabledUser();
         UserContextHolder.set(new LoginUser().setUserId(1L));
         AdminAuthController.ChangePasswordRequest request = changePasswordRequest("wrong", "NewAdmin@123");
 
         Result<String> result = service.changePassword(request, null);
 
         assertThat(result.getCode()).isEqualTo(ResultCode.LOGIN_FAIL.getCode());
-        assertThat(repository.resetPasswordUserId).isNull();
+        assertThat(mapperSupport.resetPasswordUserId).isNull();
         assertThat(sessionManager.forceLogoutAllUserId).isNull();
     }
 
@@ -342,31 +342,31 @@ class AdminAuthServiceTest {
         Result<String> result = service.changePassword(request, null);
 
         assertThat(result.getCode()).isEqualTo(ResultCode.PARAM_ERROR.getCode());
-        assertThat(repository.resetPasswordUserId).isNull();
+        assertThat(mapperSupport.resetPasswordUserId).isNull();
     }
 
     @Test
     void changePasswordUpdatesPasswordMarksDefaultPasswordChangedAndLogsOutSessions() {
-        repository.user = enabledUser();
+        mapperSupport.user = enabledUser();
         UserContextHolder.set(new LoginUser().setUserId(1L));
         AdminAuthController.ChangePasswordRequest request = changePasswordRequest("Admin@123", "NewAdmin@123");
 
         Result<String> result = service.changePassword(request, null);
 
         assertThat(result.isSuccess()).isTrue();
-        assertThat(repository.resetPasswordUserId).isEqualTo(1L);
-        assertThat(PasswordUtils.verify("NewAdmin@123", repository.resetPasswordHash)).isTrue();
-        assertThat(repository.configUpdates)
+        assertThat(mapperSupport.resetPasswordUserId).isEqualTo(1L);
+        assertThat(PasswordUtils.verify("NewAdmin@123", mapperSupport.resetPasswordHash)).isTrue();
+        assertThat(mapperSupport.configUpdates)
                 .containsExactly(new ConfigUpdate("admin.default.password.changed", "true"));
         assertThat(sessionManager.forceLogoutAllUserId).isEqualTo(1L);
     }
 
     @Test
     void changePasswordAuditsCurrentUserAsOperator() {
-        repository.user = enabledUser().setUsername("alice");
+        mapperSupport.user = enabledUser().setUsername("alice");
         RecordingAuditService auditService = new RecordingAuditService();
         AdminAuthService auditableService = new AdminAuthService(
-                repository, sessionManager, provider((LoginSecurityService) null), auditService);
+                mapperSupport, sessionManager, provider((LoginSecurityService) null), auditService);
         UserContextHolder.set(new LoginUser().setUserId(1L).setUsername("alice"));
         AdminAuthController.ChangePasswordRequest request = changePasswordRequest("Admin@123", "NewAdmin@123");
 
@@ -381,8 +381,8 @@ class AdminAuthServiceTest {
     }
 
     @Test
-    void changePasswordReturnsServiceErrorWhenRepositoryFails() {
-        repository.findByIdFailure = new RuntimeException("database down");
+    void changePasswordReturnsServiceErrorWhenMapperSupportFails() {
+        mapperSupport.findByIdFailure = new RuntimeException("database down");
         UserContextHolder.set(new LoginUser().setUserId(1L));
         AdminAuthController.ChangePasswordRequest request = changePasswordRequest("Admin@123", "NewAdmin@123");
 
@@ -390,13 +390,13 @@ class AdminAuthServiceTest {
 
         assertThat(result.getCode()).isEqualTo(ResultCode.SERVICE_ERROR.getCode());
         assertThat(result.getMessage()).isEqualTo("密码修改失败");
-        assertThat(repository.resetPasswordUserId).isNull();
+        assertThat(mapperSupport.resetPasswordUserId).isNull();
     }
 
     @Test
     void changePasswordReturnsServiceErrorWhenResetPasswordFails() {
-        repository.user = enabledUser();
-        repository.resetPasswordFailure = new RuntimeException("database down");
+        mapperSupport.user = enabledUser();
+        mapperSupport.resetPasswordFailure = new RuntimeException("database down");
         UserContextHolder.set(new LoginUser().setUserId(1L));
         AdminAuthController.ChangePasswordRequest request = changePasswordRequest("Admin@123", "NewAdmin@123");
 
@@ -404,28 +404,28 @@ class AdminAuthServiceTest {
 
         assertThat(result.getCode()).isEqualTo(ResultCode.SERVICE_ERROR.getCode());
         assertThat(result.getMessage()).isEqualTo("密码修改失败");
-        assertThat(repository.configUpdates).isEmpty();
+        assertThat(mapperSupport.configUpdates).isEmpty();
         assertThat(sessionManager.forceLogoutAllUserId).isNull();
     }
 
     @Test
     void changePasswordReturnsUnauthorizedWhenPasswordRowIsMissing() {
-        repository.user = enabledUser();
-        repository.resetPasswordResult = false;
+        mapperSupport.user = enabledUser();
+        mapperSupport.resetPasswordResult = false;
         UserContextHolder.set(new LoginUser().setUserId(1L));
         AdminAuthController.ChangePasswordRequest request = changePasswordRequest("Admin@123", "NewAdmin@123");
 
         Result<String> result = service.changePassword(request, null);
 
         assertThat(result.getCode()).isEqualTo(ResultCode.UNAUTHORIZED.getCode());
-        assertThat(repository.configUpdates).isEmpty();
+        assertThat(mapperSupport.configUpdates).isEmpty();
         assertThat(sessionManager.forceLogoutAllUserId).isNull();
     }
 
     @Test
     void changePasswordReturnsServiceErrorWhenConfigUpdateFails() {
-        repository.user = enabledUser();
-        repository.configUpdateFailure = new RuntimeException("database down");
+        mapperSupport.user = enabledUser();
+        mapperSupport.configUpdateFailure = new RuntimeException("database down");
         UserContextHolder.set(new LoginUser().setUserId(1L));
         AdminAuthController.ChangePasswordRequest request = changePasswordRequest("Admin@123", "NewAdmin@123");
 
@@ -433,14 +433,14 @@ class AdminAuthServiceTest {
 
         assertThat(result.getCode()).isEqualTo(ResultCode.SERVICE_ERROR.getCode());
         assertThat(result.getMessage()).isEqualTo("密码修改失败");
-        assertThat(repository.resetPasswordUserId).isEqualTo(1L);
+        assertThat(mapperSupport.resetPasswordUserId).isEqualTo(1L);
         assertThat(sessionManager.forceLogoutAllUserId).isNull();
     }
 
     @Test
     void changePasswordReturnsServiceErrorWhenConfigUpdateMissesRow() {
-        repository.user = enabledUser();
-        repository.configUpdateResult = false;
+        mapperSupport.user = enabledUser();
+        mapperSupport.configUpdateResult = false;
         UserContextHolder.set(new LoginUser().setUserId(1L));
         AdminAuthController.ChangePasswordRequest request = changePasswordRequest("Admin@123", "NewAdmin@123");
 
@@ -448,14 +448,14 @@ class AdminAuthServiceTest {
 
         assertThat(result.getCode()).isEqualTo(ResultCode.SERVICE_ERROR.getCode());
         assertThat(result.getMessage()).isEqualTo("密码修改失败");
-        assertThat(repository.resetPasswordUserId).isEqualTo(1L);
-        assertThat(repository.configUpdates).isEmpty();
+        assertThat(mapperSupport.resetPasswordUserId).isEqualTo(1L);
+        assertThat(mapperSupport.configUpdates).isEmpty();
         assertThat(sessionManager.forceLogoutAllUserId).isNull();
     }
 
     @Test
     void changePasswordSucceedsWhenForceLogoutFails() {
-        repository.user = enabledUser();
+        mapperSupport.user = enabledUser();
         sessionManager.forceLogoutFailure = new RuntimeException("redis down");
         UserContextHolder.set(new LoginUser().setUserId(1L));
         AdminAuthController.ChangePasswordRequest request = changePasswordRequest("Admin@123", "NewAdmin@123");
@@ -463,8 +463,8 @@ class AdminAuthServiceTest {
         Result<String> result = service.changePassword(request, null);
 
         assertThat(result.isSuccess()).isTrue();
-        assertThat(repository.resetPasswordUserId).isEqualTo(1L);
-        assertThat(repository.configUpdates)
+        assertThat(mapperSupport.resetPasswordUserId).isEqualTo(1L);
+        assertThat(mapperSupport.configUpdates)
                 .containsExactly(new ConfigUpdate("admin.default.password.changed", "true"));
     }
 
@@ -557,7 +557,7 @@ class AdminAuthServiceTest {
         };
     }
 
-    private static class FakeRepository extends AdminSystemRepository {
+    private static class FakeMapperSupport extends AdminSystemMapperSupport {
         private AdminUser user;
         private List<Menu> menus = List.of();
         private int findByUsernameCalls;
@@ -576,7 +576,7 @@ class AdminAuthServiceTest {
         private boolean resetPasswordResult = true;
         private boolean configUpdateResult = true;
 
-        private FakeRepository() {
+        private FakeMapperSupport() {
             super(null);
         }
 

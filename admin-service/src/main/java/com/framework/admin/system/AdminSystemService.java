@@ -51,22 +51,22 @@ public class AdminSystemService {
     private static final long BUILT_IN_ADMIN_ID = 1L;
     private static final long BUILT_IN_SUPER_ADMIN_ROLE_ID = 1L;
 
-    private final AdminSystemRepository repository;
+    private final AdminSystemMapperSupport mapperSupport;
     private final AdminAuditService auditService;
     private final ObjectProvider<PermissionCacheService> permissionCacheServiceProvider;
     private final ObjectProvider<SessionManager> sessionManagerProvider;
     private final ObjectProvider<LoginSecurityService> loginSecurityServiceProvider;
 
-    public AdminSystemService(AdminSystemRepository repository, AdminAuditService auditService) {
-        this(repository, auditService, null, null, null);
+    public AdminSystemService(AdminSystemMapperSupport mapperSupport, AdminAuditService auditService) {
+        this(mapperSupport, auditService, null, null, null);
     }
 
     @Autowired
-    public AdminSystemService(AdminSystemRepository repository, AdminAuditService auditService,
+    public AdminSystemService(AdminSystemMapperSupport mapperSupport, AdminAuditService auditService,
                               ObjectProvider<PermissionCacheService> permissionCacheServiceProvider,
                               ObjectProvider<SessionManager> sessionManagerProvider,
                               ObjectProvider<LoginSecurityService> loginSecurityServiceProvider) {
-        this.repository = repository;
+        this.mapperSupport = mapperSupport;
         this.auditService = auditService;
         this.permissionCacheServiceProvider = permissionCacheServiceProvider;
         this.sessionManagerProvider = sessionManagerProvider;
@@ -75,7 +75,7 @@ public class AdminSystemService {
 
     public List<Tenant> tenants() {
         try {
-            return repository.listTenants();
+            return mapperSupport.listTenants();
         } catch (RuntimeException e) {
             log.warn("[系统管理] 租户列表查询失败 error={}", e.getMessage());
             return List.of();
@@ -88,7 +88,7 @@ public class AdminSystemService {
             return Result.fail(validation.getCode(), validation.getMessage());
         }
         try {
-            Long tenantId = repository.createTenant(request);
+            Long tenantId = mapperSupport.createTenant(request);
             auditSuccess(servletRequest, "新增租户", "INSERT",
                     "tenantId", tenantId, "tenantCode", request.getTenantCode());
             return Result.success(tenantId);
@@ -107,7 +107,7 @@ public class AdminSystemService {
             return validation;
         }
         try {
-            if (!repository.updateTenant(id, request)) {
+            if (!mapperSupport.updateTenant(id, request)) {
                 return resourceNotFound("租户");
             }
             auditSuccess(servletRequest, "更新租户", "UPDATE",
@@ -127,10 +127,10 @@ public class AdminSystemService {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), "默认租户不能删除");
         }
         try {
-            if (repository.countUsersByTenant(id) > 0) {
+            if (mapperSupport.countUsersByTenant(id) > 0) {
                 return Result.fail(ResultCode.PARAM_ERROR.getCode(), "租户下存在用户，不能删除");
             }
-            if (!repository.deleteTenant(id)) {
+            if (!mapperSupport.deleteTenant(id)) {
                 return resourceNotFound("租户");
             }
             auditSuccess(servletRequest, "删除租户", "DELETE", "tenantId", id);
@@ -142,7 +142,7 @@ public class AdminSystemService {
 
     public List<Dept> depts(Long tenantId) {
         try {
-            return repository.listDeptTree(tenantId);
+            return mapperSupport.listDeptTree(tenantId);
         } catch (RuntimeException e) {
             log.warn("[系统管理] 部门树查询失败 tenantId={}, error={}", tenantId, e.getMessage());
             return List.of();
@@ -155,7 +155,7 @@ public class AdminSystemService {
             return Result.fail(validation.getCode(), validation.getMessage());
         }
         try {
-            Long deptId = repository.createDept(request);
+            Long deptId = mapperSupport.createDept(request);
             auditSuccess(servletRequest, "新增部门", "INSERT",
                     "deptId", deptId, "tenantId", request.getTenantId(), "deptName", request.getDeptName());
             return Result.success(deptId);
@@ -177,7 +177,7 @@ public class AdminSystemService {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), "上级部门不能选择自己");
         }
         try {
-            if (!repository.updateDept(id, request)) {
+            if (!mapperSupport.updateDept(id, request)) {
                 return resourceNotFound("部门");
             }
             auditSuccess(servletRequest, "更新部门", "UPDATE",
@@ -198,7 +198,7 @@ public class AdminSystemService {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), "总部部门不能删除");
         }
         try {
-            if (!repository.deleteDept(id)) {
+            if (!mapperSupport.deleteDept(id)) {
                 return resourceNotFound("部门");
             }
             auditSuccess(servletRequest, "删除部门", "DELETE", "deptId", id);
@@ -217,12 +217,12 @@ public class AdminSystemService {
             return PageResult.empty(safePageNum, safePageSize);
         }
         try {
-            List<AdminUser> records = repository.listUsers(safeKeyword, safeStatus, safePageNum, safePageSize);
+            List<AdminUser> records = mapperSupport.listUsers(safeKeyword, safeStatus, safePageNum, safePageSize);
             records.forEach(user -> {
                 enrichLoginSecurity(user);
                 user.setPasswordHash(null);
             });
-            return PageResult.of(records, repository.countUsers(safeKeyword, safeStatus), safePageNum, safePageSize);
+            return PageResult.of(records, mapperSupport.countUsers(safeKeyword, safeStatus), safePageNum, safePageSize);
         } catch (RuntimeException e) {
             log.warn("[系统管理] 用户列表查询失败 error={}", e.getMessage());
             return PageResult.empty(safePageNum, safePageSize);
@@ -243,10 +243,10 @@ public class AdminSystemService {
         }
         request.setRoleIds(distinctIds(request.getRoleIds()));
         try {
-            if (!request.getRoleIds().isEmpty() && !repository.allRolesExist(request.getRoleIds())) {
+            if (!request.getRoleIds().isEmpty() && !mapperSupport.allRolesExist(request.getRoleIds())) {
                 return Result.fail(ResultCode.NOT_FOUND.getCode(), "角色不存在");
             }
-            Long userId = repository.createUser(request, PasswordUtils.hash(request.getPassword()));
+            Long userId = mapperSupport.createUser(request, PasswordUtils.hash(request.getPassword()));
             refreshPermissionCache(userId);
             auditSuccess(servletRequest, "新增用户", "INSERT",
                     "userId", userId, "username", request.getUsername(), "roleIds", request.getRoleIds());
@@ -276,10 +276,10 @@ public class AdminSystemService {
         }
         request.setRoleIds(distinctIds(request.getRoleIds()));
         try {
-            if (!request.getRoleIds().isEmpty() && !repository.allRolesExist(request.getRoleIds())) {
+            if (!request.getRoleIds().isEmpty() && !mapperSupport.allRolesExist(request.getRoleIds())) {
                 return resourceNotFound("角色");
             }
-            if (!repository.updateUser(id, request)) {
+            if (!mapperSupport.updateUser(id, request)) {
                 return resourceNotFound("用户");
             }
             refreshPermissionCache(id);
@@ -307,7 +307,7 @@ public class AdminSystemService {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), "内置管理员不能禁用");
         }
         try {
-            if (!repository.updateUserStatus(id, status)) {
+            if (!mapperSupport.updateUserStatus(id, status)) {
                 return resourceNotFound("用户");
             }
             refreshPermissionCache(id);
@@ -332,7 +332,7 @@ public class AdminSystemService {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), passwordError);
         }
         try {
-            if (!repository.resetPassword(id, PasswordUtils.hash(request.getPassword()))) {
+            if (!mapperSupport.resetPassword(id, PasswordUtils.hash(request.getPassword()))) {
                 return resourceNotFound("用户");
             }
             forceLogoutUser(id);
@@ -352,7 +352,7 @@ public class AdminSystemService {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), "内置管理员不能删除");
         }
         try {
-            if (!repository.deleteUser(id)) {
+            if (!mapperSupport.deleteUser(id)) {
                 return resourceNotFound("用户");
             }
             refreshPermissionCache(id);
@@ -371,7 +371,7 @@ public class AdminSystemService {
         }
         AdminUser user;
         try {
-            user = repository.findUserById(id).orElse(null);
+            user = mapperSupport.findUserById(id).orElse(null);
         } catch (RuntimeException e) {
             return serviceError("解锁用户", "用户解锁失败", e);
         }
@@ -394,7 +394,7 @@ public class AdminSystemService {
 
     public List<Role> roles() {
         try {
-            return repository.listRoles();
+            return mapperSupport.listRoles();
         } catch (RuntimeException e) {
             log.warn("[系统管理] 角色列表查询失败 error={}", e.getMessage());
             return List.of();
@@ -407,7 +407,7 @@ public class AdminSystemService {
             return Result.fail(validation.getCode(), validation.getMessage());
         }
         try {
-            Long roleId = repository.createRole(request);
+            Long roleId = mapperSupport.createRole(request);
             auditSuccess(servletRequest, "新增角色", "INSERT",
                     "roleId", roleId, "roleCode", request.getRoleCode());
             return Result.success(roleId);
@@ -429,8 +429,8 @@ public class AdminSystemService {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), "内置超级管理员角色不能禁用");
         }
         try {
-            List<Long> affectedUserIds = repository.listUserIdsByRoleId(id);
-            if (!repository.updateRole(id, request)) {
+            List<Long> affectedUserIds = mapperSupport.listUserIdsByRoleId(id);
+            if (!mapperSupport.updateRole(id, request)) {
                 return resourceNotFound("角色");
             }
             refreshPermissionCache(affectedUserIds);
@@ -452,8 +452,8 @@ public class AdminSystemService {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), "内置超级管理员角色不能删除");
         }
         try {
-            List<Long> affectedUserIds = repository.listUserIdsByRoleId(id);
-            if (!repository.deleteRole(id)) {
+            List<Long> affectedUserIds = mapperSupport.listUserIdsByRoleId(id);
+            if (!mapperSupport.deleteRole(id)) {
                 return resourceNotFound("角色");
             }
             refreshPermissionCache(affectedUserIds);
@@ -470,7 +470,7 @@ public class AdminSystemService {
             return List.of();
         }
         try {
-            return repository.listMenuIdsByRoleId(id);
+            return mapperSupport.listMenuIdsByRoleId(id);
         } catch (RuntimeException e) {
             log.warn("[系统管理] 角色菜单ID查询失败 roleId={}, error={}", id, e.getMessage());
             return List.of();
@@ -488,11 +488,11 @@ public class AdminSystemService {
             return menuIdValidation;
         }
         try {
-            if (!menuIds.isEmpty() && !repository.allMenusExist(menuIds)) {
+            if (!menuIds.isEmpty() && !mapperSupport.allMenusExist(menuIds)) {
                 return resourceNotFound("菜单");
             }
-            List<Long> affectedUserIds = repository.listUserIdsByRoleId(id);
-            if (!repository.replaceRoleMenus(id, menuIds)) {
+            List<Long> affectedUserIds = mapperSupport.listUserIdsByRoleId(id);
+            if (!mapperSupport.replaceRoleMenus(id, menuIds)) {
                 return resourceNotFound("角色");
             }
             refreshPermissionCache(affectedUserIds);
@@ -507,7 +507,7 @@ public class AdminSystemService {
 
     public List<Menu> menus() {
         try {
-            return repository.listMenuTree();
+            return mapperSupport.listMenuTree();
         } catch (RuntimeException e) {
             log.warn("[系统管理] 菜单树查询失败 error={}", e.getMessage());
             return List.of();
@@ -524,7 +524,7 @@ public class AdminSystemService {
             if (parentValidation != null) {
                 return Result.fail(parentValidation.getCode(), parentValidation.getMessage());
             }
-            Long menuId = repository.createMenu(request);
+            Long menuId = mapperSupport.createMenu(request);
             clearPermissionCache();
             forceLogoutAllUsers();
             auditSuccess(servletRequest, "新增菜单", "INSERT",
@@ -549,7 +549,7 @@ public class AdminSystemService {
             if (parentValidation != null) {
                 return parentValidation;
             }
-            if (!repository.updateMenu(id, request)) {
+            if (!mapperSupport.updateMenu(id, request)) {
                 return resourceNotFound("菜单");
             }
             clearPermissionCache();
@@ -568,7 +568,7 @@ public class AdminSystemService {
             return invalidId;
         }
         try {
-            if (!repository.deleteMenu(id)) {
+            if (!mapperSupport.deleteMenu(id)) {
                 return resourceNotFound("菜单");
             }
             clearPermissionCache();
@@ -582,7 +582,7 @@ public class AdminSystemService {
 
     public List<DictType> dictTypes() {
         try {
-            return repository.listDictTypes();
+            return mapperSupport.listDictTypes();
         } catch (RuntimeException e) {
             log.warn("[系统管理] 字典类型查询失败 error={}", e.getMessage());
             return List.of();
@@ -595,7 +595,7 @@ public class AdminSystemService {
             return Result.fail(validation.getCode(), validation.getMessage());
         }
         try {
-            Long dictTypeId = repository.createDictType(request);
+            Long dictTypeId = mapperSupport.createDictType(request);
             auditSuccess(servletRequest, "新增字典类型", "INSERT",
                     "dictTypeId", dictTypeId, "dictCode", request.getDictCode());
             return Result.success(dictTypeId);
@@ -614,7 +614,7 @@ public class AdminSystemService {
             return validation;
         }
         try {
-            if (!repository.updateDictType(id, request)) {
+            if (!mapperSupport.updateDictType(id, request)) {
                 return resourceNotFound("字典类型");
             }
             auditSuccess(servletRequest, "更新字典类型", "UPDATE",
@@ -631,7 +631,7 @@ public class AdminSystemService {
             return invalidId;
         }
         try {
-            if (!repository.deleteDictType(id)) {
+            if (!mapperSupport.deleteDictType(id)) {
                 return resourceNotFound("字典类型");
             }
             auditSuccess(servletRequest, "删除字典类型", "DELETE", "dictTypeId", id);
@@ -643,7 +643,7 @@ public class AdminSystemService {
 
     public List<DictItem> dictItems(String dictCode) {
         try {
-            return repository.listDictItems(dictCode);
+            return mapperSupport.listDictItems(dictCode);
         } catch (RuntimeException e) {
             log.warn("[系统管理] 字典项查询失败 dictCode={}, error={}", dictCode, e.getMessage());
             return List.of();
@@ -656,7 +656,7 @@ public class AdminSystemService {
             return Result.fail(validation.getCode(), validation.getMessage());
         }
         try {
-            Long dictItemId = repository.createDictItem(request);
+            Long dictItemId = mapperSupport.createDictItem(request);
             auditSuccess(servletRequest, "新增字典项", "INSERT",
                     "dictItemId", dictItemId, "dictCode", request.getDictCode(),
                     "itemValue", request.getItemValue());
@@ -676,7 +676,7 @@ public class AdminSystemService {
             return validation;
         }
         try {
-            if (!repository.updateDictItem(id, request)) {
+            if (!mapperSupport.updateDictItem(id, request)) {
                 return resourceNotFound("字典项");
             }
             auditSuccess(servletRequest, "更新字典项", "UPDATE",
@@ -694,7 +694,7 @@ public class AdminSystemService {
             return invalidId;
         }
         try {
-            if (!repository.deleteDictItem(id)) {
+            if (!mapperSupport.deleteDictItem(id)) {
                 return resourceNotFound("字典项");
             }
             auditSuccess(servletRequest, "删除字典项", "DELETE", "dictItemId", id);
@@ -706,7 +706,7 @@ public class AdminSystemService {
 
     public List<ConfigItem> configs() {
         try {
-            return repository.listConfigs();
+            return mapperSupport.listConfigs();
         } catch (RuntimeException e) {
             log.warn("[系统管理] 系统参数查询失败 error={}", e.getMessage());
             return List.of();
@@ -719,7 +719,7 @@ public class AdminSystemService {
             return Result.fail(validation.getCode(), validation.getMessage());
         }
         try {
-            Long configId = repository.createConfig(request);
+            Long configId = mapperSupport.createConfig(request);
             auditSuccess(servletRequest, "新增系统参数", "INSERT",
                     "configId", configId, "configKey", request.getConfigKey(),
                     "sensitive", request.getSensitive());
@@ -739,7 +739,7 @@ public class AdminSystemService {
             return validation;
         }
         try {
-            if (!repository.updateConfig(id, request)) {
+            if (!mapperSupport.updateConfig(id, request)) {
                 return resourceNotFound("系统参数");
             }
             auditSuccess(servletRequest, "更新系统参数", "UPDATE",
@@ -757,7 +757,7 @@ public class AdminSystemService {
             return invalidId;
         }
         try {
-            if (!repository.deleteConfig(id)) {
+            if (!mapperSupport.deleteConfig(id)) {
                 return resourceNotFound("系统参数");
             }
             auditSuccess(servletRequest, "删除系统参数", "DELETE", "configId", id);
@@ -1068,10 +1068,10 @@ public class AdminSystemService {
         if (currentMenuId != null && currentMenuId.equals(parentId)) {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), "上级菜单不能选择自己");
         }
-        if (!repository.allMenusExist(List.of(parentId))) {
+        if (!mapperSupport.allMenusExist(List.of(parentId))) {
             return Result.fail(ResultCode.NOT_FOUND.getCode(), "上级菜单不存在");
         }
-        if (currentMenuId != null && repository.isMenuDescendant(currentMenuId, parentId)) {
+        if (currentMenuId != null && mapperSupport.isMenuDescendant(currentMenuId, parentId)) {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), "上级菜单不能选择自己的下级");
         }
         return null;

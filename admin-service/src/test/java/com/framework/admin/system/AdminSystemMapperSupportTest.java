@@ -24,10 +24,10 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-class AdminSystemRepositoryTest {
+class AdminSystemMapperSupportTest {
 
     private final RecordingMapper mapper = new RecordingMapper();
-    private final AdminSystemRepository repository = new AdminSystemRepository(mapper.proxy());
+    private final AdminSystemMapperSupport mapperSupport = new AdminSystemMapperSupport(mapper.proxy());
 
     @Test
     void listConfigsMasksSensitiveValues() {
@@ -43,7 +43,7 @@ class AdminSystemRepositoryTest {
                         .setConfigValue("real-secret")
                         .setSensitive(true));
 
-        List<ConfigItem> configs = repository.listConfigs();
+        List<ConfigItem> configs = mapperSupport.listConfigs();
 
         assertThat(configs.get(0).getConfigValue()).isEqualTo("Framework");
         assertThat(configs.get(1).getConfigValue()).isEqualTo("******");
@@ -57,7 +57,7 @@ class AdminSystemRepositoryTest {
         request.setConfigValue("\u00A0******\u3000");
         request.setSensitive(true);
 
-        repository.updateConfig(9L, request);
+        mapperSupport.updateConfig(9L, request);
 
         assertThat(mapper.updatedConfig.getId()).isEqualTo(9L);
         assertThat(mapper.updatedConfig.getConfigKey()).isEqualTo("oauth.client-secret");
@@ -72,7 +72,7 @@ class AdminSystemRepositoryTest {
         request.setConfigValue("\u00A0\u3000");
         request.setSensitive(true);
 
-        repository.updateConfig(9L, request);
+        mapperSupport.updateConfig(9L, request);
 
         assertThat(mapper.updatedConfig.getId()).isEqualTo(9L);
         assertThat(mapper.preserveValue).isTrue();
@@ -86,7 +86,7 @@ class AdminSystemRepositoryTest {
         request.setConfigValue("new-secret");
         request.setSensitive(true);
 
-        repository.updateConfig(9L, request);
+        mapperSupport.updateConfig(9L, request);
 
         assertThat(mapper.updatedConfig.getConfigValue()).isEqualTo("new-secret");
         assertThat(mapper.preserveValue).isFalse();
@@ -94,24 +94,24 @@ class AdminSystemRepositoryTest {
 
     @Test
     void updateConfigValueReportsAffectedRows() {
-        assertThat(repository.updateConfigValue("admin.default.password.changed", "true")).isTrue();
+        assertThat(mapperSupport.updateConfigValue("admin.default.password.changed", "true")).isTrue();
 
         mapper.updateConfigValueResult = 0;
 
-        assertThat(repository.updateConfigValue("missing.key", "true")).isFalse();
+        assertThat(mapperSupport.updateConfigValue("missing.key", "true")).isFalse();
     }
 
     @Test
     void createResourcesReturnGeneratedIdsAndValidateRelationInserts() {
         List<Long> ids = List.of(
-                repository.createUser(userRequest(List.of(2L, 3L)), "password-hash"),
-                repository.createTenant(tenantRequest()),
-                repository.createDept(deptRequest()),
-                repository.createRole(roleRequest()),
-                repository.createMenu(menuRequest()),
-                repository.createDictType(dictTypeRequest()),
-                repository.createDictItem(dictItemRequest()),
-                repository.createConfig(configRequest()));
+                mapperSupport.createUser(userRequest(List.of(2L, 3L)), "password-hash"),
+                mapperSupport.createTenant(tenantRequest()),
+                mapperSupport.createDept(deptRequest()),
+                mapperSupport.createRole(roleRequest()),
+                mapperSupport.createMenu(menuRequest()),
+                mapperSupport.createDictType(dictTypeRequest()),
+                mapperSupport.createDictItem(dictItemRequest()),
+                mapperSupport.createConfig(configRequest()));
 
         assertThat(ids).containsExactly(100L, 101L, 102L, 103L, 104L, 105L, 106L, 107L);
         assertThat(mapper.operations).containsExactly(
@@ -169,14 +169,14 @@ class AdminSystemRepositoryTest {
         config.setConfigValue("\u00A0Framework\u3000");
         config.setRemark("\u3000公开显示名称\u00A0");
 
-        repository.createUser(user, "password-hash");
-        repository.createTenant(tenant);
-        repository.createDept(dept);
-        repository.createRole(role);
-        repository.createMenu(menu);
-        repository.createDictType(dictType);
-        repository.createDictItem(dictItem);
-        repository.createConfig(config);
+        mapperSupport.createUser(user, "password-hash");
+        mapperSupport.createTenant(tenant);
+        mapperSupport.createDept(dept);
+        mapperSupport.createRole(role);
+        mapperSupport.createMenu(menu);
+        mapperSupport.createDictType(dictType);
+        mapperSupport.createDictItem(dictItem);
+        mapperSupport.createConfig(config);
 
         assertThat(mapper.insertedUser.getUsername()).isEqualTo("alice");
         assertThat(mapper.insertedUser.getNickname()).isEqualTo("Alice");
@@ -214,7 +214,7 @@ class AdminSystemRepositoryTest {
     void createResourceThrowsWhenInsertAffectsNoRows() {
         mapper.insertTenantResult = 0;
 
-        assertThatThrownBy(() -> repository.createTenant(tenantRequest()))
+        assertThatThrownBy(() -> mapperSupport.createTenant(tenantRequest()))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("system tenant insert failed");
         assertThat(mapper.operations).containsExactly("insertTenant");
@@ -224,7 +224,7 @@ class AdminSystemRepositoryTest {
     void createResourceThrowsWhenGeneratedIdIsMissing() {
         mapper.assignGeneratedIds = false;
 
-        assertThatThrownBy(() -> repository.createMenu(menuRequest()))
+        assertThatThrownBy(() -> mapperSupport.createMenu(menuRequest()))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("system menu generated id missing");
         assertThat(mapper.operations).containsExactly("insertMenu");
@@ -234,7 +234,7 @@ class AdminSystemRepositoryTest {
     void createUserSkipsRoleBindingsWhenUserInsertFails() {
         mapper.insertUserResult = 0;
 
-        assertThatThrownBy(() -> repository.createUser(userRequest(List.of(2L)), "password-hash"))
+        assertThatThrownBy(() -> mapperSupport.createUser(userRequest(List.of(2L)), "password-hash"))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("system user insert failed");
         assertThat(mapper.operations).containsExactly("countRolesByIds:[2]", "insertUser");
@@ -244,7 +244,7 @@ class AdminSystemRepositoryTest {
     void createUserThrowsBeforeInsertWhenRoleReferenceIsMissing() {
         mapper.countRolesByIdsResult = 1L;
 
-        assertThatThrownBy(() -> repository.createUser(userRequest(List.of(2L, 3L)), "password-hash"))
+        assertThatThrownBy(() -> mapperSupport.createUser(userRequest(List.of(2L, 3L)), "password-hash"))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("system role reference missing");
         assertThat(mapper.operations).containsExactly("countRolesByIds:[2, 3]");
@@ -254,7 +254,7 @@ class AdminSystemRepositoryTest {
     void createUserThrowsWhenDefaultRoleBindingInsertFails() {
         mapper.insertUserRoleResult = 0;
 
-        assertThatThrownBy(() -> repository.createUser(userRequest(null), "password-hash"))
+        assertThatThrownBy(() -> mapperSupport.createUser(userRequest(null), "password-hash"))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("system user role insert failed");
         assertThat(mapper.operations).containsExactly(
@@ -266,7 +266,7 @@ class AdminSystemRepositoryTest {
 
     @Test
     void createUserDeduplicatesRoleBindings() {
-        Long userId = repository.createUser(userRequest(List.of(2L, 2L, 3L)), "password-hash");
+        Long userId = mapperSupport.createUser(userRequest(List.of(2L, 2L, 3L)), "password-hash");
 
         assertThat(userId).isEqualTo(100L);
         assertThat(mapper.operations).containsExactly(
@@ -281,7 +281,7 @@ class AdminSystemRepositoryTest {
     void replaceRoleMenusThrowsWhenRelationInsertFails() {
         mapper.insertRoleMenuResult = 0;
 
-        assertThatThrownBy(() -> repository.replaceRoleMenus(9L, List.of(11L)))
+        assertThatThrownBy(() -> mapperSupport.replaceRoleMenus(9L, List.of(11L)))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("system role menu insert failed");
         assertThat(mapper.operations).containsExactly(
@@ -295,7 +295,7 @@ class AdminSystemRepositoryTest {
     void replaceRoleMenusReturnsFalseWhenRoleDoesNotExist() {
         mapper.roleCountById = 0;
 
-        boolean replaced = repository.replaceRoleMenus(9L, List.of(11L));
+        boolean replaced = mapperSupport.replaceRoleMenus(9L, List.of(11L));
 
         assertThat(replaced).isFalse();
         assertThat(mapper.operations).containsExactly("countRoleById:9");
@@ -303,7 +303,7 @@ class AdminSystemRepositoryTest {
 
     @Test
     void replaceRoleMenusReturnsTrueWhenClearingExistingRoleMenus() {
-        boolean replaced = repository.replaceRoleMenus(9L, null);
+        boolean replaced = mapperSupport.replaceRoleMenus(9L, null);
 
         assertThat(replaced).isTrue();
         assertThat(mapper.operations).containsExactly(
@@ -315,7 +315,7 @@ class AdminSystemRepositoryTest {
     void replaceRoleMenusThrowsBeforeClearingWhenMenuReferenceIsMissing() {
         mapper.countMenusByIdsResult = 1L;
 
-        assertThatThrownBy(() -> repository.replaceRoleMenus(9L, List.of(11L, 12L)))
+        assertThatThrownBy(() -> mapperSupport.replaceRoleMenus(9L, List.of(11L, 12L)))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("system menu reference missing");
         assertThat(mapper.operations).containsExactly(
@@ -325,7 +325,7 @@ class AdminSystemRepositoryTest {
 
     @Test
     void replaceRoleMenusDeduplicatesMenuBindings() {
-        boolean replaced = repository.replaceRoleMenus(9L, List.of(11L, 11L, 12L));
+        boolean replaced = mapperSupport.replaceRoleMenus(9L, List.of(11L, 11L, 12L));
 
         assertThat(replaced).isTrue();
         assertThat(mapper.operations).containsExactly(
@@ -338,7 +338,7 @@ class AdminSystemRepositoryTest {
 
     @Test
     void resetPasswordAndUpdateConfigValueUpdatesBothInOrder() {
-        boolean updated = repository.resetPasswordAndUpdateConfigValue(
+        boolean updated = mapperSupport.resetPasswordAndUpdateConfigValue(
                 7L, "password-hash", "admin.default.password.changed", "true");
 
         assertThat(updated).isTrue();
@@ -351,7 +351,7 @@ class AdminSystemRepositoryTest {
     void resetPasswordAndUpdateConfigValueSkipsConfigWhenPasswordRowIsMissing() {
         mapper.resetPasswordResult = 0;
 
-        boolean updated = repository.resetPasswordAndUpdateConfigValue(
+        boolean updated = mapperSupport.resetPasswordAndUpdateConfigValue(
                 7L, "password-hash", "admin.default.password.changed", "true");
 
         assertThat(updated).isFalse();
@@ -362,7 +362,7 @@ class AdminSystemRepositoryTest {
     void resetPasswordAndUpdateConfigValueThrowsWhenConfigRowIsMissing() {
         mapper.updateConfigValueResult = 0;
 
-        assertThatThrownBy(() -> repository.resetPasswordAndUpdateConfigValue(
+        assertThatThrownBy(() -> mapperSupport.resetPasswordAndUpdateConfigValue(
                 7L, "password-hash", "admin.default.password.changed", "true"))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("admin.default.password.changed");
@@ -375,7 +375,7 @@ class AdminSystemRepositoryTest {
     void deleteTenantSkipsDeptCleanupWhenTenantDoesNotExist() {
         mapper.deleteTenantResult = 0;
 
-        boolean deleted = repository.deleteTenant(9L);
+        boolean deleted = mapperSupport.deleteTenant(9L);
 
         assertThat(deleted).isFalse();
         assertThat(mapper.operations).containsExactly("deleteTenant:9");
@@ -383,7 +383,7 @@ class AdminSystemRepositoryTest {
 
     @Test
     void deleteUserDeletesUserBeforeRoleBindingsAndReportsAffectedRows() {
-        boolean deleted = repository.deleteUser(7L);
+        boolean deleted = mapperSupport.deleteUser(7L);
 
         assertThat(deleted).isTrue();
         assertThat(mapper.operations).containsExactly("deleteUser:7", "deleteUserRoles:7");
@@ -393,7 +393,7 @@ class AdminSystemRepositoryTest {
     void deleteDeptDeletesSubtreeAndValidatesMainDeleteRows() {
         mapper.allDepts = List.of(dept(7L, 0L), dept(8L, 7L), dept(9L, 0L));
 
-        boolean deleted = repository.deleteDept(7L);
+        boolean deleted = mapperSupport.deleteDept(7L);
 
         assertThat(deleted).isTrue();
         assertThat(mapper.operations).containsExactly(
@@ -406,7 +406,7 @@ class AdminSystemRepositoryTest {
     void deleteDeptReturnsFalseWhenSubtreeIsMissing() {
         mapper.allDepts = List.of(dept(9L, 0L));
 
-        boolean deleted = repository.deleteDept(7L);
+        boolean deleted = mapperSupport.deleteDept(7L);
 
         assertThat(deleted).isFalse();
         assertThat(mapper.operations).containsExactly("listAllDepts");
@@ -417,7 +417,7 @@ class AdminSystemRepositoryTest {
         mapper.allDepts = List.of(dept(7L, 0L), dept(8L, 7L));
         mapper.deleteDeptIdsResult = 1;
 
-        assertThatThrownBy(() -> repository.deleteDept(7L))
+        assertThatThrownBy(() -> mapperSupport.deleteDept(7L))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("system dept delete failed");
         assertThat(mapper.operations).containsExactly(
@@ -430,7 +430,7 @@ class AdminSystemRepositoryTest {
     void deleteMenuDeletesSubtreeAndValidatesMainDeleteRows() {
         mapper.allMenus = List.of(menu(11L, 0L), menu(12L, 11L), menu(13L, 0L));
 
-        boolean deleted = repository.deleteMenu(11L);
+        boolean deleted = mapperSupport.deleteMenu(11L);
 
         assertThat(deleted).isTrue();
         assertThat(mapper.operations).containsExactly(
@@ -443,7 +443,7 @@ class AdminSystemRepositoryTest {
     void deleteMenuReturnsFalseWhenSubtreeIsMissing() {
         mapper.allMenus = List.of(menu(13L, 0L));
 
-        boolean deleted = repository.deleteMenu(11L);
+        boolean deleted = mapperSupport.deleteMenu(11L);
 
         assertThat(deleted).isFalse();
         assertThat(mapper.operations).containsExactly("listAllMenus");
@@ -454,7 +454,7 @@ class AdminSystemRepositoryTest {
         mapper.allMenus = List.of(menu(11L, 0L), menu(12L, 11L));
         mapper.deleteMenuIdsResult = 1;
 
-        assertThatThrownBy(() -> repository.deleteMenu(11L))
+        assertThatThrownBy(() -> mapperSupport.deleteMenu(11L))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("system menu delete failed");
         assertThat(mapper.operations).containsExactly(
@@ -467,9 +467,9 @@ class AdminSystemRepositoryTest {
     void isMenuDescendantDetectsNestedMenuSubtree() {
         mapper.allMenus = List.of(menu(11L, 0L), menu(12L, 11L), menu(13L, 12L), menu(14L, 0L));
 
-        assertThat(repository.isMenuDescendant(11L, 13L)).isTrue();
-        assertThat(repository.isMenuDescendant(11L, 14L)).isFalse();
-        assertThat(repository.isMenuDescendant(11L, 11L)).isFalse();
+        assertThat(mapperSupport.isMenuDescendant(11L, 13L)).isTrue();
+        assertThat(mapperSupport.isMenuDescendant(11L, 14L)).isFalse();
+        assertThat(mapperSupport.isMenuDescendant(11L, 11L)).isFalse();
         assertThat(mapper.operations).containsExactly(
                 "listAllMenus",
                 "listAllMenus");
@@ -477,7 +477,7 @@ class AdminSystemRepositoryTest {
 
     @Test
     void deleteDictTypeDeletesItemsThenTypeAndValidatesTypeDelete() {
-        boolean deleted = repository.deleteDictType(5L);
+        boolean deleted = mapperSupport.deleteDictType(5L);
 
         assertThat(deleted).isTrue();
         assertThat(mapper.operations).containsExactly(
@@ -490,7 +490,7 @@ class AdminSystemRepositoryTest {
     void deleteDictTypeReturnsFalseWhenTypeIsMissing() {
         mapper.dictCodeById = null;
 
-        boolean deleted = repository.deleteDictType(5L);
+        boolean deleted = mapperSupport.deleteDictType(5L);
 
         assertThat(deleted).isFalse();
         assertThat(mapper.operations).containsExactly("findDictCodeById:5");
@@ -500,7 +500,7 @@ class AdminSystemRepositoryTest {
     void deleteDictTypeThrowsWhenTypeDeleteAffectsNoRows() {
         mapper.deleteDictTypeResult = 0;
 
-        assertThatThrownBy(() -> repository.deleteDictType(5L))
+        assertThatThrownBy(() -> mapperSupport.deleteDictType(5L))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("system dict type delete failed");
         assertThat(mapper.operations).containsExactly(

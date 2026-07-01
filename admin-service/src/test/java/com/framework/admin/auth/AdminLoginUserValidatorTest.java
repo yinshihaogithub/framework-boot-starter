@@ -1,7 +1,7 @@
 package com.framework.admin.auth;
 
 import com.framework.admin.system.AdminSystemModels.AdminUser;
-import com.framework.admin.system.AdminSystemRepository;
+import com.framework.admin.system.AdminSystemMapperSupport;
 import com.framework.auth.context.LoginUser;
 import org.junit.jupiter.api.Test;
 
@@ -11,23 +11,23 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class AdminLoginUserValidatorTest {
 
-    private final FakeRepository repository = new FakeRepository();
-    private final AdminLoginUserValidator validator = new AdminLoginUserValidator(repository);
+    private final FakeMapperSupport mapperSupport = new FakeMapperSupport();
+    private final AdminLoginUserValidator validator = new AdminLoginUserValidator(mapperSupport);
 
     @Test
     void acceptsEnabledUser() {
-        repository.user = user("ENABLED");
+        mapperSupport.user = user("ENABLED");
 
         assertThat(validator.isValid(new LoginUser().setUserId(1L))).isTrue();
     }
 
     @Test
     void rejectsDisabledOrMissingUser() {
-        repository.user = user("DISABLED");
+        mapperSupport.user = user("DISABLED");
 
         assertThat(validator.isValid(new LoginUser().setUserId(1L))).isFalse();
 
-        repository.user = null;
+        mapperSupport.user = null;
         assertThat(validator.isValid(new LoginUser().setUserId(1L))).isFalse();
         assertThat(validator.isValid(new LoginUser())).isFalse();
         assertThat(validator.isValid(null)).isFalse();
@@ -39,10 +39,10 @@ class AdminLoginUserValidatorTest {
                 .setStatus(status);
     }
 
-    private static class FakeRepository extends AdminSystemRepository {
+    private static class FakeMapperSupport extends AdminSystemMapperSupport {
         private AdminUser user;
 
-        private FakeRepository() {
+        private FakeMapperSupport() {
             super(null);
         }
 

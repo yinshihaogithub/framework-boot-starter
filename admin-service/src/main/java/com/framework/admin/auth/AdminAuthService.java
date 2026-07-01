@@ -3,7 +3,7 @@ package com.framework.admin.auth;
 import com.framework.admin.audit.AdminAuditService;
 import com.framework.admin.system.AdminSystemModels.AdminUser;
 import com.framework.admin.system.AdminSystemModels.Menu;
-import com.framework.admin.system.AdminSystemRepository;
+import com.framework.admin.system.AdminSystemMapperSupport;
 import com.framework.admin.support.AdminTextSupport;
 import com.framework.auth.context.LoginUser;
 import com.framework.auth.context.UserContextHolder;
@@ -36,23 +36,23 @@ public class AdminAuthService {
     private static final String DEFAULT_DEVICE_ID = "admin-web";
     private static final String DEFAULT_PASSWORD_CHANGED_CONFIG_KEY = "admin.default.password.changed";
 
-    private final AdminSystemRepository systemRepository;
+    private final AdminSystemMapperSupport systemMapperSupport;
     private final SessionManager sessionManager;
     private final ObjectProvider<LoginSecurityService> loginSecurityServiceProvider;
     private final AdminAuditService auditService;
 
-    public AdminAuthService(AdminSystemRepository systemRepository,
+    public AdminAuthService(AdminSystemMapperSupport systemMapperSupport,
                             SessionManager sessionManager,
                             ObjectProvider<LoginSecurityService> loginSecurityServiceProvider) {
-        this(systemRepository, sessionManager, loginSecurityServiceProvider, null);
+        this(systemMapperSupport, sessionManager, loginSecurityServiceProvider, null);
     }
 
     @Autowired
-    public AdminAuthService(AdminSystemRepository systemRepository,
+    public AdminAuthService(AdminSystemMapperSupport systemMapperSupport,
                             SessionManager sessionManager,
                             ObjectProvider<LoginSecurityService> loginSecurityServiceProvider,
                             AdminAuditService auditService) {
-        this.systemRepository = systemRepository;
+        this.systemMapperSupport = systemMapperSupport;
         this.sessionManager = sessionManager;
         this.loginSecurityServiceProvider = loginSecurityServiceProvider;
         this.auditService = auditService;
@@ -76,7 +76,7 @@ public class AdminAuthService {
             if (loginSecurity != null) {
                 loginSecurity.checkAccountLocked(username);
             }
-            AdminUser user = systemRepository.findUserByUsername(username).orElse(null);
+            AdminUser user = systemMapperSupport.findUserByUsername(username).orElse(null);
             if (user == null || !"ENABLED".equals(user.getStatus())
                     || !PasswordUtils.verify(request.getPassword(), user.getPasswordHash())) {
                 recordLoginFailure(loginSecurity, username);
@@ -85,7 +85,7 @@ public class AdminAuthService {
                 return Result.fail(ResultCode.LOGIN_FAIL);
             }
             clearLoginFailure(loginSecurity, username);
-            List<Menu> menus = safeList(systemRepository.listMenusByUserId(user.getId()));
+            List<Menu> menus = safeList(systemMapperSupport.listMenusByUserId(user.getId()));
             LoginUser loginUser = sessionManager.createSession(
                     user.getId(),
                     user.getUsername(),
@@ -114,11 +114,11 @@ public class AdminAuthService {
             return Result.fail(ResultCode.UNAUTHORIZED);
         }
         try {
-            AdminUser user = systemRepository.findUserById(loginUser.getUserId()).orElse(null);
+            AdminUser user = systemMapperSupport.findUserById(loginUser.getUserId()).orElse(null);
             if (user == null) {
                 return Result.fail(ResultCode.UNAUTHORIZED);
             }
-            return Result.success(toCurrentUser(user).setMenus(systemRepository.listMenusByUserId(user.getId())));
+            return Result.success(toCurrentUser(user).setMenus(systemMapperSupport.listMenusByUserId(user.getId())));
         } catch (RuntimeException e) {
             return serviceError("查询当前用户", "当前用户查询失败", e);
         }
@@ -150,7 +150,7 @@ public class AdminAuthService {
             return Result.fail(ResultCode.PARAM_ERROR.getCode(), passwordError);
         }
         try {
-            AdminUser user = systemRepository.findUserById(loginUser.getUserId()).orElse(null);
+            AdminUser user = systemMapperSupport.findUserById(loginUser.getUserId()).orElse(null);
             if (user == null || !"ENABLED".equals(user.getStatus())) {
                 return Result.fail(ResultCode.UNAUTHORIZED);
             }
@@ -160,7 +160,7 @@ public class AdminAuthService {
             if (PasswordUtils.verify(request.getNewPassword(), user.getPasswordHash())) {
                 return Result.fail(ResultCode.PARAM_ERROR.getCode(), "新密码不能与原密码相同");
             }
-            if (!systemRepository.resetPasswordAndUpdateConfigValue(user.getId(),
+            if (!systemMapperSupport.resetPasswordAndUpdateConfigValue(user.getId(),
                     PasswordUtils.hash(request.getNewPassword()), DEFAULT_PASSWORD_CHANGED_CONFIG_KEY, "true")) {
                 return Result.fail(ResultCode.UNAUTHORIZED);
             }
@@ -208,7 +208,7 @@ public class AdminAuthService {
 
     private void updateLastLogin(Long userId) {
         try {
-            systemRepository.updateLastLogin(userId);
+            systemMapperSupport.updateLastLogin(userId);
         } catch (RuntimeException e) {
             log.warn("[后台认证] 最近登录时间更新失败 userId={}, error={}", userId, e.getMessage());
         }
@@ -216,7 +216,7 @@ public class AdminAuthService {
 
     private void insertLoginLog(String username, Long userId, String clientIp, boolean success, String message) {
         try {
-            systemRepository.insertLoginLog(username, userId, clientIp, success, message);
+            systemMapperSupport.insertLoginLog(username, userId, clientIp, success, message);
         } catch (RuntimeException e) {
             log.warn("[后台认证] 登录日志写入失败 username={}, success={}, error={}",
                     username, success, e.getMessage());

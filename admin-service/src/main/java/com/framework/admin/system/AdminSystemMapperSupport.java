@@ -20,7 +20,7 @@ import com.framework.admin.system.AdminSystemModels.Tenant;
 import com.framework.admin.system.AdminSystemModels.TenantRequest;
 import com.framework.admin.system.AdminSystemModels.UserUpdateRequest;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Repository;
+import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.ArrayList;
@@ -31,8 +31,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.function.Supplier;
 
-@Repository
-public class AdminSystemRepository {
+@Component
+public class AdminSystemMapperSupport {
 
     private static final Long DEFAULT_TENANT_ID = 1L;
     private static final Long DEFAULT_PARENT_ID = 0L;
@@ -42,12 +42,12 @@ public class AdminSystemRepository {
     private final TransactionTemplate transactionTemplate;
 
     @Autowired
-    public AdminSystemRepository(AdminSystemMapper mapper, TransactionTemplate transactionTemplate) {
+    public AdminSystemMapperSupport(AdminSystemMapper mapper, TransactionTemplate transactionTemplate) {
         this.mapper = mapper;
         this.transactionTemplate = transactionTemplate;
     }
 
-    public AdminSystemRepository(AdminSystemMapper mapper) {
+    public AdminSystemMapperSupport(AdminSystemMapper mapper) {
         this(mapper, null);
     }
 

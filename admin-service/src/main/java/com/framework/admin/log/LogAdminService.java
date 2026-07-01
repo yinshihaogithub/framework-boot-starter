@@ -1,7 +1,7 @@
 package com.framework.admin.log;
 
 import com.framework.admin.system.AdminSystemModels.LoginLog;
-import com.framework.admin.system.AdminSystemRepository;
+import com.framework.admin.system.AdminSystemMapperSupport;
 import com.framework.admin.support.AdminPageSupport;
 import com.framework.admin.support.AdminTextSupport;
 import com.framework.core.result.PageResult;
@@ -25,12 +25,12 @@ public class LogAdminService {
     private static final Set<String> SUPPORTED_LOG_TYPES = Set.of("OPERATION", "API", "EXCEPTION");
 
     private final ObjectProvider<OperationLogMapper> mapperProvider;
-    private final AdminSystemRepository systemRepository;
+    private final AdminSystemMapperSupport systemMapperSupport;
 
     public LogAdminService(ObjectProvider<OperationLogMapper> mapperProvider,
-                           AdminSystemRepository systemRepository) {
+                           AdminSystemMapperSupport systemMapperSupport) {
         this.mapperProvider = mapperProvider;
-        this.systemRepository = systemRepository;
+        this.systemMapperSupport = systemMapperSupport;
     }
 
     public Map<String, Long> stats() {
@@ -80,8 +80,8 @@ public class LogAdminService {
         int safePageSize = AdminPageSupport.safePageSize(pageSize);
         String safeUsername = trimToNull(username);
         try {
-            List<LoginLog> records = systemRepository.listLoginLogs(safeUsername, success, safePageNum, safePageSize);
-            long total = systemRepository.countLoginLogs(safeUsername, success);
+            List<LoginLog> records = systemMapperSupport.listLoginLogs(safeUsername, success, safePageNum, safePageSize);
+            long total = systemMapperSupport.countLoginLogs(safeUsername, success);
             return PageResult.of(records, total, safePageNum, safePageSize);
         } catch (RuntimeException e) {
             log.warn("[日志中心] 登录日志查询失败 error={}", e.getMessage());
