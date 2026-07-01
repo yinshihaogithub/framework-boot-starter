@@ -14,6 +14,8 @@ import org.springframework.amqp.core.MessageProperties;
 import java.lang.reflect.Proxy;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.Date;
 import java.util.List;
 import java.util.Optional;
 
@@ -207,9 +209,42 @@ class DeadLetterHandlerTest {
                 .hasMessage("delete processed failed");
 
         assertThat(handler.getFailedMessageStore().keySet()).containsExactlyInAnyOrder(1L, 2L, 3L, 4L);
-        assertThat(repository.findAll())
+        assertThat(repository.findRecent(Integer.MAX_VALUE))
                 .extracting(MqFailedMessage::getId)
-                .containsExactly(1L, 2L, 3L, 4L);
+                .containsExactlyInAnyOrder(1L, 2L, 3L, 4L);
+    }
+
+    @Test
+    void constructorRestoresOnlyConfiguredRecentMessages() {
+        InMemoryRepository repository = new InMemoryRepository(List.of(
+                failedMessage(1L, MqFailedMessage.STATUS_PENDING, new Date(1_000L)),
+                failedMessage(2L, MqFailedMessage.STATUS_PENDING, new Date(3_000L)),
+                failedMessage(3L, MqFailedMessage.STATUS_PENDING, new Date(2_000L))));
+        MqProperties properties = new MqProperties();
+        properties.getDeadLetter().setRestoreLimit(2);
+
+        DeadLetterHandler handler = new DeadLetterHandler(repository, properties);
+
+        assertThat(handler.getFailedMessageStore().keySet()).containsExactlyInAnyOrder(2L, 3L);
+    }
+
+    @Test
+    void getByIdLazyLoadsRecordOutsideStartupRestoreWindow() {
+        InMemoryRepository repository = new InMemoryRepository(List.of(
+                failedMessage(1L, MqFailedMessage.STATUS_PENDING, new Date(1_000L)),
+                failedMessage(2L, MqFailedMessage.STATUS_PENDING, new Date(2_000L))));
+        MqProperties properties = new MqProperties();
+        properties.getDeadLetter().setRestoreLimit(1);
+        DeadLetterHandler handler = new DeadLetterHandler(repository, properties);
+
+        assertThat(handler.getFailedMessageStore().keySet()).containsExactly(2L);
+
+        MqFailedMessage loaded = handler.getById(1L);
+
+        assertThat(loaded).isNotNull();
+        assertThat(loaded.getId()).isEqualTo(1L);
+        assertThat(handler.getFailedMessageStore().keySet()).containsExactlyInAnyOrder(1L, 2L);
+        assertThat(handler.getById(null)).isNull();
     }
 
     private static class InMemoryRepository implements MqFailedMessageRepository {
@@ -251,8 +286,15 @@ class DeadLetterHandlerTest {
         }
 
         @Override
-        public List<MqFailedMessage> findAll() {
-            return List.copyOf(saved);
+        public List<MqFailedMessage> findRecent(int limit) {
+            return saved.stream()
+                    .sorted(Comparator
+                            .comparing(MqFailedMessage::getCreateTime,
+                                    Comparator.nullsLast(Comparator.reverseOrder()))
+                            .thenComparing(MqFailedMessage::getId,
+                                    Comparator.nullsLast(Comparator.reverseOrder())))
+                    .limit(limit)
+                    .toList();
         }
 
         @Override
@@ -279,10 +321,15 @@ class DeadLetterHandlerTest {
     }
 
     private static MqFailedMessage failedMessage(Long id, String status) {
+        return failedMessage(id, status, null);
+    }
+
+    private static MqFailedMessage failedMessage(Long id, String status, Date createTime) {
         MqFailedMessage message = new MqFailedMessage();
         message.setId(id);
         message.setMessageId("msg-" + id);
         message.setStatus(status);
+        message.setCreateTime(createTime);
         return message;
     }
 

@@ -695,9 +695,14 @@ class RepositoryEngineeringGuardTest {
         }
 
         String autoConfiguration = read(root.resolve("framework-mq/src/main/java/com/framework/mq/config/MqAutoConfiguration.java"));
+        String properties = read(root.resolve("framework-mq/src/main/java/com/framework/mq/config/MqProperties.java"));
         String mapper = read(root.resolve("framework-mq/src/main/java/com/framework/mq/mapper/MqFailedMessageMapper.java"));
+        String repositoryInterface = read(root.resolve(
+                "framework-mq/src/main/java/com/framework/mq/deadletter/MqFailedMessageRepository.java"));
         String repository = read(root.resolve(
                 "framework-mq/src/main/java/com/framework/mq/deadletter/MybatisMqFailedMessageRepository.java"));
+        String handler = read(root.resolve(
+                "framework-mq/src/main/java/com/framework/mq/deadletter/DeadLetterHandler.java"));
         String adminMqService = read(root.resolve(
                 "admin-service/src/main/java/com/framework/admin/mq/MqAdminService.java"));
         String adminMqMapperSupport = read(root.resolve(
@@ -721,12 +726,29 @@ class RepositoryEngineeringGuardTest {
                 .contains("@Options(useGeneratedKeys = true, keyProperty = \"message.id\")")
                 .contains("WHERE status IN (#{successStatus}, #{exhaustedStatus}, #{manualStatus})")
                 .contains("ORDER BY create_time DESC, id DESC")
+                .contains("LIMIT #{limit}")
                 .contains("LIMIT #{offset}, #{pageSize}")
-                .contains("SELECT COUNT(*)");
+                .contains("SELECT COUNT(*)")
+                .doesNotContain("ORDER BY id ASC")
+                .doesNotContain("List<MqFailedMessage> findAll");
+        assertThat(properties)
+                .contains("private int restoreLimit = 1000")
+                .contains("framework.mq.dead-letter.restore-limit must be greater than 0");
+        assertThat(repositoryInterface)
+                .contains("findRecent(int limit)")
+                .doesNotContain("findAll()");
         assertThat(repository)
                 .contains("mapper.insert(tableName, message)")
+                .contains("mapper.findRecent(tableName, limit)")
                 .contains("mapper.deleteProcessed(tableName")
-                .contains("mq failed message insert failed");
+                .contains("mq failed message insert failed")
+                .contains("recent limit must be greater than 0")
+                .doesNotContain("mapper.findAll");
+        assertThat(handler)
+                .contains("repository.findRecent(restoreLimit)")
+                .contains("repository.findById(id)")
+                .contains("getRestoreLimit()")
+                .doesNotContain("repository.findAll()");
         assertThat(adminMqService)
                 .contains("ObjectProvider<MqFailedMessageMapper>")
                 .contains("MqAdminMapperSupport.list")

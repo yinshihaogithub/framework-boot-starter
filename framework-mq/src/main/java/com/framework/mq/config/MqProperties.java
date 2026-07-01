@@ -39,6 +39,9 @@ public class MqProperties implements InitializingBean {
         if (deadLetter.isEnabled() && deadLetter.getQueue() == null) {
             throw new IllegalArgumentException("framework.mq.dead-letter.queue must not be blank");
         }
+        if (deadLetter.getRestoreLimit() <= 0) {
+            throw new IllegalArgumentException("framework.mq.dead-letter.restore-limit must be greater than 0");
+        }
         if (retry == null) {
             throw new IllegalArgumentException("framework.mq.retry must not be null");
         }
@@ -55,6 +58,7 @@ public class MqProperties implements InitializingBean {
     public static class DeadLetter {
         private boolean enabled = true;
         private String queue = "framework.dead.letter.queue";
+        private int restoreLimit = 1000;
     }
 
     @Data

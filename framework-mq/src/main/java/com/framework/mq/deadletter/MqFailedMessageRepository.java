@@ -14,7 +14,7 @@ public interface MqFailedMessageRepository {
 
     Optional<MqFailedMessage> findById(Long id);
 
-    List<MqFailedMessage> findAll();
+    List<MqFailedMessage> findRecent(int limit);
 
     boolean deleteById(Long id);
 

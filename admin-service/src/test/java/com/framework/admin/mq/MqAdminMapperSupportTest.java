@@ -106,7 +106,7 @@ class MqAdminMapperSupportTest {
         }
 
         @Override
-        public List<MqFailedMessage> findAll(String tableName) {
+        public List<MqFailedMessage> findRecent(String tableName, int limit) {
             return List.of();
         }
 

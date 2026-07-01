@@ -83,7 +83,8 @@ class MybatisMqFailedMessageRepositoryTest {
         assertThat(mapper.updatedMessage.getId()).isEqualTo(9L);
         assertThat(mapper.updatedMessage.getStatus()).isEqualTo(MqFailedMessage.STATUS_MANUAL);
         assertThat(repository.findById(7L)).containsSame(mapper.message);
-        assertThat(repository.findAll()).containsExactly(mapper.message);
+        assertThat(repository.findRecent(100)).containsExactly(mapper.message);
+        assertThat(mapper.recentLimit).isEqualTo(100);
         assertThat(repository.deleteById(9L)).isTrue();
         assertThat(mapper.deletedId).isEqualTo(9L);
         assertThat(repository.deleteProcessed()).isEqualTo(3);
@@ -96,6 +97,9 @@ class MybatisMqFailedMessageRepositoryTest {
 
         assertThat(repository.update(message)).isFalse();
         assertThat(repository.deleteById(9L)).isFalse();
+        assertThatThrownBy(() -> repository.findRecent(0))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("recent limit");
     }
 
     private static MqFailedMessage message(Date nextRetryTime, Date createTime, Date updateTime) {
@@ -134,6 +138,7 @@ class MybatisMqFailedMessageRepositoryTest {
         private Long generatedKey = 42L;
         private int affectedRows = 1;
         private Long deletedId;
+        private int recentLimit;
         private List<String> cleanupStatuses = List.of();
 
         private RecordingMqFailedMessageMapper() {
@@ -167,8 +172,9 @@ class MybatisMqFailedMessageRepositoryTest {
         }
 
         @Override
-        public List<MqFailedMessage> findAll(String tableName) {
+        public List<MqFailedMessage> findRecent(String tableName, int limit) {
             this.tableName = tableName;
+            this.recentLimit = limit;
             return new ArrayList<>(List.of(message));
         }
 

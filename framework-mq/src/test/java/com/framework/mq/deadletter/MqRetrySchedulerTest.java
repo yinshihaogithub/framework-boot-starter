@@ -104,7 +104,7 @@ class MqRetrySchedulerTest {
     }
 
     @Test
-    void manualRetrySkipsSendingWhenMessageDisappearsBeforeRetryingState() {
+    void manualRetrySkipsSendingWhenRetryingStateUpdateMisses() {
         MqFailedMessage failedMessage = failedMessage("{\"legacy\":true}");
         InMemoryMqFailedMessageRepository repository = new InMemoryMqFailedMessageRepository(List.of(failedMessage));
         DeadLetterHandler deadLetterHandler = new DeadLetterHandler(repository, new MqProperties());
@@ -120,7 +120,7 @@ class MqRetrySchedulerTest {
 
         assertThat(result).isFalse();
         assertThat(sender.wrapper).isNull();
-        assertThat(deadLetterHandler.getById(1L)).isNull();
+        assertThat(deadLetterHandler.getById(1L)).isNotNull();
         MqFailedMessage stored = repository.findById(1L).orElseThrow();
         assertThat(stored.getStatus()).isEqualTo(MqFailedMessage.STATUS_PENDING);
         assertThat(stored.getRetryCount()).isZero();
@@ -557,8 +557,10 @@ class MqRetrySchedulerTest {
         }
 
         @Override
-        public List<MqFailedMessage> findAll() {
-            return new ArrayList<>(messages.values());
+        public List<MqFailedMessage> findRecent(int limit) {
+            return new ArrayList<>(messages.values()).stream()
+                    .limit(limit)
+                    .toList();
         }
 
         @Override

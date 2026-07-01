@@ -535,7 +535,7 @@ class MqAdminControllerTest {
     }
 
     @Test
-    void manualSuccessReturnsNotFoundWhenMessageDisappearsBeforeUpdate() {
+    void manualSuccessReturnsNotFoundWhenUpdateMisses() {
         InMemoryMqFailedMessageRepository repository = new InMemoryMqFailedMessageRepository(List.of(
                 withNextRetryTime(failedMessage(10L, "trace-j", MqFailedMessage.STATUS_EXHAUSTED))));
         DeadLetterHandler handler = new DeadLetterHandler(repository, new MqProperties());
@@ -549,7 +549,7 @@ class MqAdminControllerTest {
         assertThat(result.isSuccess()).isFalse();
         assertThat(result.getCode()).isEqualTo(ResultCode.NOT_FOUND.getCode());
         assertThat(result.getMessage()).isEqualTo("消息不存在");
-        assertThat(handler.getById(10L)).isNull();
+        assertThat(handler.getById(10L)).isNotNull();
         MqFailedMessage stored = repository.findById(10L).orElseThrow();
         assertThat(stored.getStatus()).isEqualTo(MqFailedMessage.STATUS_EXHAUSTED);
         assertThat(stored.getOperator()).isNull();
@@ -600,7 +600,7 @@ class MqAdminControllerTest {
     }
 
     @Test
-    void manualFailureReturnsNotFoundWhenMessageDisappearsBeforeUpdate() {
+    void manualFailureReturnsNotFoundWhenUpdateMisses() {
         InMemoryMqFailedMessageRepository repository = new InMemoryMqFailedMessageRepository(List.of(
                 withNextRetryTime(failedMessage(11L, "trace-k", MqFailedMessage.STATUS_PENDING))));
         DeadLetterHandler handler = new DeadLetterHandler(repository, new MqProperties());
@@ -612,7 +612,7 @@ class MqAdminControllerTest {
         assertThat(result.isSuccess()).isFalse();
         assertThat(result.getCode()).isEqualTo(ResultCode.NOT_FOUND.getCode());
         assertThat(result.getMessage()).isEqualTo("消息不存在");
-        assertThat(handler.getById(11L)).isNull();
+        assertThat(handler.getById(11L)).isNotNull();
         MqFailedMessage stored = repository.findById(11L).orElseThrow();
         assertThat(stored.getStatus()).isEqualTo(MqFailedMessage.STATUS_PENDING);
         assertThat(stored.getOperator()).isNull();
@@ -674,7 +674,7 @@ class MqAdminControllerTest {
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getData()).isEqualTo("已清理 3 条记录");
         assertThat(handler.getFailedMessageStore().keySet()).containsExactly(4L);
-        assertThat(repository.findAll()).extracting(MqFailedMessage::getId).containsExactly(4L);
+        assertThat(repository.findRecent(Integer.MAX_VALUE)).extracting(MqFailedMessage::getId).containsExactly(4L);
         assertThat(auditService.action).isEqualTo("清空MQ已处理记录");
         assertThat(auditService.params)
                 .containsEntry("cleaned", 3)
@@ -860,7 +860,7 @@ class MqAdminControllerTest {
             }
 
             @Override
-            public List<MqFailedMessage> findAll(String tableName) {
+            public List<MqFailedMessage> findRecent(String tableName, int limit) {
                 return List.copyOf(handler.getFailedMessageStore().values());
             }
 
@@ -1004,8 +1004,10 @@ class MqAdminControllerTest {
         }
 
         @Override
-        public List<MqFailedMessage> findAll() {
-            return List.copyOf(messages.values());
+        public List<MqFailedMessage> findRecent(int limit) {
+            return messages.values().stream()
+                    .limit(limit)
+                    .toList();
         }
 
         @Override

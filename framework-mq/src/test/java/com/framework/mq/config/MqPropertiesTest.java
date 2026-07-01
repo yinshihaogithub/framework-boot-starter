@@ -41,6 +41,16 @@ class MqPropertiesTest {
     }
 
     @Test
+    void rejectsInvalidDeadLetterRestoreLimit() {
+        MqProperties properties = new MqProperties();
+        properties.getDeadLetter().setRestoreLimit(0);
+
+        assertThatThrownBy(properties::afterPropertiesSet)
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("framework.mq.dead-letter.restore-limit");
+    }
+
+    @Test
     void rejectsInvalidFailedMessageTableNameAfterTrimming() {
         MqProperties properties = new MqProperties();
         properties.setFailedMessageTableName("\u00A0framework-mq-failed-message\u3000");

@@ -35,7 +35,7 @@ public class DeadLetterHandler {
     private final MqProperties properties;
     private final ObjectMapper objectMapper;
 
-    /** 内存缓存索引（启动时从 MySQL 加载，读写同步到 MySQL） */
+    /** 内存缓存索引（启动时从 MySQL 限量加载，读写同步到 MySQL） */
     private final ConcurrentMap<Long, MqFailedMessage> failedMessageStore = new ConcurrentHashMap<>();
 
     public DeadLetterHandler(MqFailedMessageRepository repository, MqProperties properties) {
@@ -46,14 +46,19 @@ public class DeadLetterHandler {
     }
 
     /**
-     * 启动时从 MySQL 加载历史失败消息到内存缓存
+     * 启动时从 MySQL 限量加载最近失败消息到内存缓存
      */
     private void loadFromRepository() {
         try {
-            for (MqFailedMessage msg : repository.findAll()) {
-                failedMessageStore.put(msg.getId(), msg);
+            int restored = 0;
+            int restoreLimit = properties.getDeadLetter().getRestoreLimit();
+            for (MqFailedMessage msg : repository.findRecent(restoreLimit)) {
+                if (msg.getId() != null) {
+                    failedMessageStore.put(msg.getId(), msg);
+                    restored++;
+                }
             }
-            log.info("[死信处理器] 从 MySQL 恢复 {} 条失败消息记录", failedMessageStore.size());
+            log.info("[死信处理器] 从 MySQL 恢复最近 {} 条失败消息记录，restoreLimit={}", restored, restoreLimit);
         } catch (Exception e) {
             log.warn("[死信处理器] 从 MySQL 加载失败消息异常: {}", failureMessage(e));
         }
@@ -352,7 +357,18 @@ public class DeadLetterHandler {
     }
 
     public MqFailedMessage getById(Long id) {
-        return failedMessageStore.get(id);
+        if (id == null) {
+            return null;
+        }
+        MqFailedMessage cached = failedMessageStore.get(id);
+        if (cached != null) {
+            return cached;
+        }
+        MqFailedMessage loaded = repository.findById(id).orElse(null);
+        if (loaded != null && loaded.getId() != null) {
+            failedMessageStore.put(loaded.getId(), loaded);
+        }
+        return loaded;
     }
 
     /**

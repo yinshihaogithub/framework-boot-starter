@@ -189,7 +189,7 @@ class MqAutoConfigurationTest {
         }
 
         @Override
-        public List<MqFailedMessage> findAll(String tableName) {
+        public List<MqFailedMessage> findRecent(String tableName, int limit) {
             return List.of();
         }
 
@@ -248,7 +248,7 @@ class MqAutoConfigurationTest {
         }
 
         @Override
-        public List<com.framework.mq.deadletter.MqFailedMessage> findAll() {
+        public List<com.framework.mq.deadletter.MqFailedMessage> findRecent(int limit) {
             return Collections.emptyList();
         }
 

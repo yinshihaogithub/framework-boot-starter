@@ -40,6 +40,12 @@ class MqFailedMessageMapperTest {
                 .contains("UPDATE ${tableName} SET")
                 .contains("WHERE id = #{message.id}");
 
+        Method findRecent = MqFailedMessageMapper.class.getMethod("findRecent", String.class, int.class);
+        assertThat(sql(findRecent.getAnnotation(Select.class).value()))
+                .contains("ORDER BY create_time DESC, id DESC")
+                .contains("LIMIT #{limit}")
+                .doesNotContain("ORDER BY id ASC");
+
         Method list = MqFailedMessageMapper.class.getMethod("list", String.class, String.class, String.class,
                 String.class, String.class, String.class, int.class, int.class);
         assertThat(sql(list.getAnnotation(Select.class).value()))

@@ -134,10 +134,12 @@ public interface MqFailedMessageMapper {
     @Select("""
             SELECT *
             FROM ${tableName}
-            ORDER BY id ASC
+            ORDER BY create_time DESC, id DESC
+            LIMIT #{limit}
             """)
     @ResultMap("mqFailedMessageMap")
-    List<MqFailedMessage> findAll(@Param("tableName") String tableName);
+    List<MqFailedMessage> findRecent(@Param("tableName") String tableName,
+                                      @Param("limit") int limit);
 
     @Select("""
             <script>

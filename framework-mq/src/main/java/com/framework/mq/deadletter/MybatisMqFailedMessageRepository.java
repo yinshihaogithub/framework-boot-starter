@@ -45,8 +45,11 @@ public class MybatisMqFailedMessageRepository implements MqFailedMessageReposito
     }
 
     @Override
-    public List<MqFailedMessage> findAll() {
-        return mapper.findAll(tableName);
+    public List<MqFailedMessage> findRecent(int limit) {
+        if (limit <= 0) {
+            throw new IllegalArgumentException("mq failed message recent limit must be greater than 0");
+        }
+        return mapper.findRecent(tableName, limit);
     }
 
     @Override
