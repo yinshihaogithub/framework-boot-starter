@@ -22,6 +22,26 @@ import java.util.List;
 @Mapper
 public interface LocalMessageMapper {
 
+    String MESSAGE_COLUMNS = """
+            id,
+            message_id,
+            trace_id,
+            parent_message_id,
+            topic,
+            business_key,
+            tenant_id,
+            operator,
+            source,
+            payload,
+            status,
+            retry_count,
+            max_retry,
+            next_retry_time,
+            error_message,
+            create_time,
+            update_time
+            """;
+
     @Update("""
             <script>
             CREATE TABLE IF NOT EXISTS ${tableName} (
@@ -89,7 +109,8 @@ public interface LocalMessageMapper {
     int update(@Param("tableName") String tableName, @Param("message") LocalMessage message);
 
     @Select("""
-            SELECT *
+            SELECT
+            """ + MESSAGE_COLUMNS + """
             FROM ${tableName}
             WHERE id = #{id}
             """)
@@ -115,7 +136,8 @@ public interface LocalMessageMapper {
     LocalMessage findById(@Param("tableName") String tableName, @Param("id") Long id);
 
     @Select("""
-            SELECT *
+            SELECT
+            """ + MESSAGE_COLUMNS + """
             FROM ${tableName}
             WHERE status = #{status}
               AND (next_retry_time IS NULL OR next_retry_time <= #{now})
@@ -130,7 +152,8 @@ public interface LocalMessageMapper {
 
     @Select("""
             <script>
-            SELECT *
+            SELECT
+            """ + MESSAGE_COLUMNS + """
             FROM ${tableName}
             <where>
                 <if test="topic != null">AND topic = #{topic}</if>

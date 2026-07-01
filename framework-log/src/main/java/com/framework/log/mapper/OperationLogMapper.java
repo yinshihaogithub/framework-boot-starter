@@ -13,6 +13,27 @@ import java.util.List;
 @Mapper
 public interface OperationLogMapper {
 
+    String LOG_COLUMNS = """
+            id,
+            log_type,
+            module,
+            action,
+            operation_type,
+            uri,
+            http_method,
+            method,
+            params,
+            result,
+            success,
+            error_message,
+            elapsed_ms,
+            operator_id,
+            operator_name,
+            client_ip,
+            trace_id,
+            create_time
+            """;
+
     /**
      * 创建日志表（应用启动时调用）
      */
@@ -65,7 +86,9 @@ public interface OperationLogMapper {
      */
     @Select("""
             <script>
-            SELECT * FROM sys_operation_log
+            SELECT
+            """ + LOG_COLUMNS + """
+            FROM sys_operation_log
             <where>
                 <if test="module != null and module != ''">AND module = #{module}</if>
                 <if test="logType != null and logType != ''">AND log_type = #{logType}</if>

@@ -1,5 +1,6 @@
 package com.framework.log.mapper;
 
+import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.ClassPathResource;
@@ -29,6 +30,18 @@ class OperationLogMysqlScriptTest {
 
         assertThat(normalizeSql(sql(create.getAnnotation(Update.class).value())))
                 .isEqualTo(moduleMysqlScript("db/mysql/sys_operation_log.sql"));
+    }
+
+    @Test
+    void listQueryUsesExplicitProjectionColumns() throws Exception {
+        Method selectList = OperationLogMapper.class.getMethod("selectList",
+                String.class, String.class, Long.class, Boolean.class, String.class, int.class, int.class);
+
+        assertThat(sql(selectList.getAnnotation(Select.class).value()))
+                .contains("log_type")
+                .contains("operator_name")
+                .contains("trace_id")
+                .doesNotContain("SELECT *");
     }
 
     private static String moduleMysqlScript(String path) throws Exception {

@@ -55,6 +55,7 @@ class RepositoryEngineeringGuardTest {
     private static final Pattern MAPPER_METHOD_DECLARATION_PATTERN = Pattern.compile(
             "(?m)^\\s*(?!default\\b)(?:[\\w<>.?]+\\s+)+\\w+\\s*\\([^;{}]*\\)\\s*;",
             Pattern.DOTALL);
+    private static final Pattern SELECT_STAR_PATTERN = Pattern.compile("(?i)SELECT\\s+\\*");
 
     private final Path root = repositoryRoot();
 
@@ -584,6 +585,23 @@ class RepositoryEngineeringGuardTest {
                 assertThat(methodCount)
                         .as(mapperFile + " must declare mapper methods")
                         .isPositive();
+            }
+        }
+    }
+
+    @Test
+    void mybatisMappersUseExplicitProjectionColumns() throws Exception {
+        try (Stream<Path> files = Files.walk(root)) {
+            List<Path> mapperFiles = files
+                    .filter(this::isProductionSourceFile)
+                    .filter(path -> path.getFileName().toString().endsWith("Mapper.java"))
+                    .toList();
+
+            assertThat(mapperFiles).isNotEmpty();
+            for (Path mapperFile : mapperFiles) {
+                assertThat(SELECT_STAR_PATTERN.matcher(read(mapperFile)).find())
+                        .as(mapperFile + " must avoid SELECT * and declare stable projection columns")
+                        .isFalse();
             }
         }
     }

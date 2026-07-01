@@ -40,10 +40,17 @@ class MqFailedMessageMapperTest {
                 .contains("UPDATE ${tableName} SET")
                 .contains("WHERE id = #{message.id}");
 
+        Method findById = MqFailedMessageMapper.class.getMethod("findById", String.class, Long.class);
+        assertThat(sql(findById.getAnnotation(Select.class).value()))
+                .contains("message_id")
+                .contains("compensate_remark")
+                .doesNotContain("SELECT *");
+
         Method findRecent = MqFailedMessageMapper.class.getMethod("findRecent", String.class, int.class);
         assertThat(sql(findRecent.getAnnotation(Select.class).value()))
                 .contains("ORDER BY create_time DESC, id DESC")
                 .contains("LIMIT #{limit}")
+                .doesNotContain("SELECT *")
                 .doesNotContain("ORDER BY id ASC");
 
         Method list = MqFailedMessageMapper.class.getMethod("list", String.class, String.class, String.class,
@@ -51,7 +58,8 @@ class MqFailedMessageMapperTest {
         assertThat(sql(list.getAnnotation(Select.class).value()))
                 .contains("ORDER BY create_time DESC, id DESC")
                 .contains("LOWER(message_type) = LOWER(#{messageType})")
-                .contains("LIMIT #{offset}, #{pageSize}");
+                .contains("LIMIT #{offset}, #{pageSize}")
+                .doesNotContain("SELECT *");
 
         Method count = MqFailedMessageMapper.class.getMethod("count", String.class, String.class, String.class,
                 String.class, String.class, String.class);

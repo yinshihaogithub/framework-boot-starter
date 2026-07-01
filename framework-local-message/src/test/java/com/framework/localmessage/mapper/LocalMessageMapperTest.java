@@ -39,12 +39,19 @@ class LocalMessageMapperTest {
                 .contains("UPDATE ${tableName} SET")
                 .contains("WHERE id = #{message.id}");
 
+        Method findById = LocalMessageMapper.class.getMethod("findById", String.class, Long.class);
+        assertThat(sql(findById.getAnnotation(Select.class).value()))
+                .contains("message_id")
+                .contains("parent_message_id")
+                .doesNotContain("SELECT *");
+
         Method findDueMessages = LocalMessageMapper.class.getMethod("findDueMessages", String.class,
                 com.framework.localmessage.model.LocalMessageStatus.class, java.time.LocalDateTime.class, int.class);
         assertThat(sql(findDueMessages.getAnnotation(Select.class).value()))
                 .contains("WHERE status = #{status}")
                 .contains("next_retry_time <= #{now}")
-                .contains("LIMIT #{limit}");
+                .contains("LIMIT #{limit}")
+                .doesNotContain("SELECT *");
 
         Method list = LocalMessageMapper.class.getMethod("list", String.class, String.class,
                 com.framework.localmessage.model.LocalMessageStatus.class, String.class, String.class, int.class, int.class);
@@ -54,7 +61,8 @@ class LocalMessageMapperTest {
                 .contains("trace_id LIKE #{traceIdLike}")
                 .contains("business_key LIKE #{businessKeyLike}")
                 .contains("ORDER BY create_time DESC, id DESC")
-                .contains("LIMIT #{offset}, #{pageSize}");
+                .contains("LIMIT #{offset}, #{pageSize}")
+                .doesNotContain("SELECT *");
 
         Method count = LocalMessageMapper.class.getMethod("count", String.class, String.class,
                 com.framework.localmessage.model.LocalMessageStatus.class, String.class, String.class);

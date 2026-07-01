@@ -20,6 +20,31 @@ import java.util.List;
 @Mapper
 public interface MqFailedMessageMapper {
 
+    String MESSAGE_COLUMNS = """
+            id,
+            message_id,
+            trace_id,
+            parent_message_id,
+            business_key,
+            message_type,
+            exchange_name,
+            routing_key,
+            queue_name,
+            payload,
+            error_message,
+            error_stack,
+            retry_count,
+            max_retry,
+            status,
+            next_retry_time,
+            source,
+            tenant_id,
+            operator,
+            compensate_remark,
+            create_time,
+            update_time
+            """;
+
     @Update("""
             <script>
             CREATE TABLE IF NOT EXISTS ${tableName} (
@@ -101,7 +126,8 @@ public interface MqFailedMessageMapper {
     int update(@Param("tableName") String tableName, @Param("message") MqFailedMessage message);
 
     @Select("""
-            SELECT *
+            SELECT
+            """ + MESSAGE_COLUMNS + """
             FROM ${tableName}
             WHERE id = #{id}
             """)
@@ -132,7 +158,8 @@ public interface MqFailedMessageMapper {
     MqFailedMessage findById(@Param("tableName") String tableName, @Param("id") Long id);
 
     @Select("""
-            SELECT *
+            SELECT
+            """ + MESSAGE_COLUMNS + """
             FROM ${tableName}
             ORDER BY create_time DESC, id DESC
             LIMIT #{limit}
@@ -143,7 +170,8 @@ public interface MqFailedMessageMapper {
 
     @Select("""
             <script>
-            SELECT *
+            SELECT
+            """ + MESSAGE_COLUMNS + """
             FROM ${tableName}
             <where>
                 <if test="queueName != null">AND queue_name = #{queueName}</if>
