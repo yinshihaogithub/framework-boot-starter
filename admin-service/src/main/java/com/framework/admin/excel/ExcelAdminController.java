@@ -14,7 +14,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -62,8 +61,10 @@ public class ExcelAdminController {
 
     @Operation(summary = "Excel错误明细")
     @GetMapping("/tasks/{taskId}/errors")
-    public Result<List<ExcelAdminModels.ErrorRecord>> errors(@PathVariable Long taskId) {
-        return Result.success(excelAdminService.errors(taskId));
+    public Result<PageResult<ExcelAdminModels.ErrorRecord>> errors(@PathVariable Long taskId,
+                                                                   @RequestParam(defaultValue = "1") int pageNum,
+                                                                   @RequestParam(defaultValue = "20") int pageSize) {
+        return Result.success(excelAdminService.errors(taskId, pageNum, pageSize));
     }
 
     private <T> Result<T> toResult(ExcelAdminService.ActionResult<T> result) {

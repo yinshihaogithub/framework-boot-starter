@@ -996,6 +996,33 @@ class RepositoryEngineeringGuardTest {
     }
 
     @Test
+    void adminExcelErrorDetailsArePaged() throws Exception {
+        String mapper = read(root.resolve("admin-service/src/main/java/com/framework/admin/excel/ExcelAdminMapper.java"));
+        String service = read(root.resolve("admin-service/src/main/java/com/framework/admin/excel/ExcelAdminService.java"));
+        String controller = read(root.resolve("admin-service/src/main/java/com/framework/admin/excel/ExcelAdminController.java"));
+        String client = read(root.resolve("frontend/admin-web/src/api/client.ts"));
+        String app = read(root.resolve("frontend/admin-web/src/App.vue"));
+
+        assertThat(mapper)
+                .contains("FROM framework_excel_error")
+                .contains("LIMIT #{pageSize} OFFSET #{offset}")
+                .contains("long countErrors");
+        assertThat(service)
+                .contains("PageResult<ExcelAdminModels.ErrorRecord> errors")
+                .contains("ExcelAdminMapperSupport.listErrors(mapper, taskId, safePageNum, safePageSize)")
+                .contains("ExcelAdminMapperSupport.countErrors(mapper, taskId)")
+                .doesNotContain("return ExcelAdminMapperSupport.listErrors(mapper, taskId)");
+        assertThat(controller)
+                .contains("Result<PageResult<ExcelAdminModels.ErrorRecord>> errors")
+                .contains("@RequestParam(defaultValue = \"20\") int pageSize");
+        assertThat(client)
+                .contains("getData<PageResult<ExcelErrorRecord>>");
+        assertThat(app)
+                .contains("reactive<PageResult<ExcelErrorRecord>>")
+                .contains("errorPage");
+    }
+
+    @Test
     void adminControllersUseExplicitFailureCodes() throws Exception {
         try (Stream<Path> files = Files.walk(root.resolve("admin-service/src/main/java"))) {
             List<Path> controllerFiles = files

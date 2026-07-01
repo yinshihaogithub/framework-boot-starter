@@ -196,14 +196,19 @@ public class ExcelAdminService {
         }
     }
 
-    public List<ExcelAdminModels.ErrorRecord> errors(Long taskId) {
+    public PageResult<ExcelAdminModels.ErrorRecord> errors(Long taskId, int pageNum, int pageSize) {
+        int safePageNum = AdminPageSupport.safePageNum(pageNum);
+        int safePageSize = AdminPageSupport.safePageSize(pageSize);
         if (taskId == null || taskId <= 0) {
-            return List.of();
+            return PageResult.empty(safePageNum, safePageSize);
         }
         try {
-            return ExcelAdminMapperSupport.listErrors(mapper, taskId);
+            List<ExcelAdminModels.ErrorRecord> records =
+                    ExcelAdminMapperSupport.listErrors(mapper, taskId, safePageNum, safePageSize);
+            long total = ExcelAdminMapperSupport.countErrors(mapper, taskId);
+            return PageResult.of(records, total, safePageNum, safePageSize);
         } catch (Exception ignored) {
-            return List.of();
+            return PageResult.empty(safePageNum, safePageSize);
         }
     }
 

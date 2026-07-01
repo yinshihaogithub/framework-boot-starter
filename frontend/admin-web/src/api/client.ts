@@ -640,7 +640,8 @@ export const api = {
     postData<ExcelTaskResult>('/admin/excel/tasks/export', data),
   createImportFailureTask: (data: Record<string, unknown>) =>
     postData<ExcelTaskResult>('/admin/excel/tasks/import-failure', data),
-  excelErrors: (taskId: number) => getData<ExcelErrorRecord[]>(`/admin/excel/tasks/${taskId}/errors`),
+  excelErrors: (taskId: number, params: Record<string, unknown>) =>
+    getData<PageResult<ExcelErrorRecord>>(`/admin/excel/tasks/${taskId}/errors`, params),
   fileStats: () => getData<Record<string, number>>('/admin/files/stats'),
   files: (params: Record<string, unknown>) => getData<PageResult<FileRecord>>('/admin/files', params),
   uploadFile: (data: FormData) => postForm<FileRecord>('/admin/files', data),

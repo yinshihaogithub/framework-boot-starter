@@ -313,7 +313,7 @@ class ExcelAdminServiceTest {
 
         Map<String, Long> stats = service.stats();
         PageResult<ExcelAdminModels.Task> page = service.tasks(null, null, -1, 500);
-        List<ExcelAdminModels.ErrorRecord> errors = service.errors(1L);
+        PageResult<ExcelAdminModels.ErrorRecord> errors = service.errors(1L, -1, 500);
 
         assertThat(stats)
                 .containsEntry("total", 0L)
@@ -324,18 +324,49 @@ class ExcelAdminServiceTest {
         assertThat(page.getPageNum()).isEqualTo(1);
         assertThat(page.getPageSize()).isEqualTo(200);
         assertThat(page.getRecords()).isEmpty();
-        assertThat(errors).isEmpty();
+        assertThat(errors.getPageNum()).isEqualTo(1);
+        assertThat(errors.getPageSize()).isEqualTo(200);
+        assertThat(errors.getRecords()).isEmpty();
     }
 
     @Test
-    void errorsRejectInvalidTaskIdBeforeRepositoryLookup() {
+    void errorsRejectInvalidTaskIdBeforeRepositoryLookupAndKeepSafePaging() {
         InMemoryExcelAdminMapper repository = new InMemoryExcelAdminMapper();
         ExcelAdminService service = service(repository, null);
 
-        assertThat(service.errors(0L)).isEmpty();
-        assertThat(service.errors(null)).isEmpty();
+        PageResult<ExcelAdminModels.ErrorRecord> zeroId = service.errors(0L, -1, 500);
+        PageResult<ExcelAdminModels.ErrorRecord> nullId = service.errors(null, 2, 10);
+
+        assertThat(zeroId.getPageNum()).isEqualTo(1);
+        assertThat(zeroId.getPageSize()).isEqualTo(200);
+        assertThat(zeroId.getRecords()).isEmpty();
+        assertThat(nullId.getPageNum()).isEqualTo(2);
+        assertThat(nullId.getPageSize()).isEqualTo(10);
+        assertThat(nullId.getRecords()).isEmpty();
 
         assertThat(repository.listErrorsTaskId).isNull();
+    }
+
+    @Test
+    void errorsArePagedAndCounted() {
+        InMemoryExcelAdminMapper repository = new InMemoryExcelAdminMapper();
+        Long taskId = repository.createTask(new ExcelAdminModels.Task().setTaskName("导入失败"));
+        for (int i = 1; i <= 5; i++) {
+            repository.insertError(taskId, i, "错误" + i, "{}");
+        }
+        ExcelAdminService service = service(repository, null);
+
+        PageResult<ExcelAdminModels.ErrorRecord> page = service.errors(taskId, 2, 2);
+
+        assertThat(page.getTotal()).isEqualTo(5);
+        assertThat(page.getPageNum()).isEqualTo(2);
+        assertThat(page.getPageSize()).isEqualTo(2);
+        assertThat(page.getRecords())
+                .extracting(ExcelAdminModels.ErrorRecord::getRowIndex)
+                .containsExactly(3, 4);
+        assertThat(repository.listErrorsOffset).isEqualTo(2);
+        assertThat(repository.listErrorsPageSize).isEqualTo(2);
+        assertThat(repository.countErrorsTaskId).isEqualTo(taskId);
     }
 
     private static ExcelAdminService service(ExcelAdminMapper mapper, ExcelExportService exportService) {
@@ -486,6 +517,9 @@ class ExcelAdminServiceTest {
         private long nextTaskId = 1;
         private long nextErrorId = 1;
         private Long listErrorsTaskId;
+        private Long countErrorsTaskId;
+        private int listErrorsOffset;
+        private int listErrorsPageSize;
         private RuntimeException commandFailure;
 
         Long createTask(ExcelAdminModels.Task task) {
@@ -551,9 +585,20 @@ class ExcelAdminServiceTest {
         }
 
         @Override
-        public List<ExcelAdminModels.ErrorRecord> listErrors(Long taskId) {
+        public List<ExcelAdminModels.ErrorRecord> listErrors(Long taskId, int offset, int pageSize) {
             this.listErrorsTaskId = taskId;
-            return errors(taskId);
+            this.listErrorsOffset = offset;
+            this.listErrorsPageSize = pageSize;
+            return errors(taskId).stream()
+                    .skip(offset)
+                    .limit(pageSize)
+                    .toList();
+        }
+
+        @Override
+        public long countErrors(Long taskId) {
+            this.countErrorsTaskId = taskId;
+            return errors(taskId).size();
         }
 
         private void failCommandIfNeeded() {
@@ -600,7 +645,12 @@ class ExcelAdminServiceTest {
         }
 
         @Override
-        public List<ExcelAdminModels.ErrorRecord> listErrors(Long taskId) {
+        public List<ExcelAdminModels.ErrorRecord> listErrors(Long taskId, int offset, int pageSize) {
+            throw unavailable();
+        }
+
+        @Override
+        public long countErrors(Long taskId) {
             throw unavailable();
         }
 

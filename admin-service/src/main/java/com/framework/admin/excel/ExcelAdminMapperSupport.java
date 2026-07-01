@@ -59,8 +59,13 @@ final class ExcelAdminMapperSupport {
         return taskId;
     }
 
-    static List<ExcelAdminModels.ErrorRecord> listErrors(ExcelAdminMapper mapper, Long taskId) {
-        return mapper.listErrors(taskId);
+    static List<ExcelAdminModels.ErrorRecord> listErrors(ExcelAdminMapper mapper, Long taskId,
+                                                         int pageNum, int pageSize) {
+        return mapper.listErrors(taskId, offset(pageNum, pageSize), pageSize);
+    }
+
+    static long countErrors(ExcelAdminMapper mapper, Long taskId) {
+        return mapper.countErrors(taskId);
     }
 
     private static int offset(int pageNum, int pageSize) {

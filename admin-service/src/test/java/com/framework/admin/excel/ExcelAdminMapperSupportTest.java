@@ -33,6 +33,18 @@ class ExcelAdminMapperSupportTest {
     }
 
     @Test
+    void listErrorsCalculatesOffsetAndCountsByTaskId() {
+        ExcelAdminMapperSupport.listErrors(mapper, 9L, 4, 25);
+        long total = ExcelAdminMapperSupport.countErrors(mapper, 9L);
+
+        assertThat(mapper.listErrorsTaskId).isEqualTo(9L);
+        assertThat(mapper.offset).isEqualTo(75);
+        assertThat(mapper.pageSize).isEqualTo(25);
+        assertThat(mapper.countErrorsTaskId).isEqualTo(9L);
+        assertThat(total).isZero();
+    }
+
+    @Test
     void createTaskReturnsGeneratedIdFromMapper() {
         ExcelAdminModels.Task task = new ExcelAdminModels.Task().setTaskName("导出");
 
@@ -95,6 +107,8 @@ class ExcelAdminMapperSupportTest {
         private int insertTaskResult = 1;
         private int insertErrorResult = 1;
         private boolean assignGeneratedId = true;
+        private Long listErrorsTaskId;
+        private Long countErrorsTaskId;
         private final java.util.ArrayList<Long> errorTaskIds = new java.util.ArrayList<>();
         private final java.util.ArrayList<Integer> errorRowIndexes = new java.util.ArrayList<>();
 
@@ -145,8 +159,17 @@ class ExcelAdminMapperSupportTest {
         }
 
         @Override
-        public List<ExcelAdminModels.ErrorRecord> listErrors(Long taskId) {
+        public List<ExcelAdminModels.ErrorRecord> listErrors(Long taskId, int offset, int pageSize) {
+            this.listErrorsTaskId = taskId;
+            this.offset = offset;
+            this.pageSize = pageSize;
             return List.of();
+        }
+
+        @Override
+        public long countErrors(Long taskId) {
+            this.countErrorsTaskId = taskId;
+            return 0;
         }
     }
 

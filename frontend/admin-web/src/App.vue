@@ -1524,7 +1524,7 @@ const notifyTemplates = reactive<PageResult<NotifyTemplate>>({ records: [], tota
 const notifyRecords = reactive<PageResult<NotifyRecord>>({ records: [], total: 0, pageNum: 1, pageSize: 20, pages: 0 })
 const excelStats = ref<Record<string, number>>({})
 const excelTasks = reactive<PageResult<ExcelTask>>({ records: [], total: 0, pageNum: 1, pageSize: 20, pages: 0 })
-const excelErrors = ref<ExcelErrorRecord[]>([])
+const excelErrors = reactive<PageResult<ExcelErrorRecord>>({ records: [], total: 0, pageNum: 1, pageSize: 20, pages: 0 })
 const fileStats = ref<Record<string, number>>({})
 const fileRecords = reactive<PageResult<FileRecord>>({ records: [], total: 0, pageNum: 1, pageSize: 20, pages: 0 })
 const logs = reactive<PageResult<OperationLog>>({ records: [], total: 0, pageNum: 1, pageSize: 20, pages: 0 })
@@ -2476,10 +2476,17 @@ async function createImportFailureTask() {
 }
 
 async function loadExcelErrors(row: ExcelTask) {
-  excelErrors.value = await api.excelErrors(row.id)
+  const page = await api.excelErrors(row.id, { pageNum: 1, pageSize: 20 })
+  Object.assign(excelErrors, page)
   detailRecord.value = {
     task: row,
-    errors: excelErrors.value
+    errors: excelErrors.records,
+    errorPage: {
+      total: excelErrors.total,
+      pageNum: excelErrors.pageNum,
+      pageSize: excelErrors.pageSize,
+      pages: excelErrors.pages
+    }
   }
   detailVisible.value = true
 }

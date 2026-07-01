@@ -114,6 +114,7 @@ public interface ExcelAdminMapper {
             FROM framework_excel_error
             WHERE task_id = #{taskId}
             ORDER BY row_index ASC, id ASC
+            LIMIT #{pageSize} OFFSET #{offset}
             """)
     @Results(id = "excelErrorMap", value = {
             @Result(column = "id", property = "id"),
@@ -123,5 +124,10 @@ public interface ExcelAdminMapper {
             @Result(column = "raw_data", property = "rawData"),
             @Result(column = "create_time", property = "createTime")
     })
-    List<ExcelAdminModels.ErrorRecord> listErrors(@Param("taskId") Long taskId);
+    List<ExcelAdminModels.ErrorRecord> listErrors(@Param("taskId") Long taskId,
+                                                  @Param("offset") int offset,
+                                                  @Param("pageSize") int pageSize);
+
+    @Select("SELECT COUNT(*) FROM framework_excel_error WHERE task_id = #{taskId}")
+    long countErrors(@Param("taskId") Long taskId);
 }

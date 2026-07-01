@@ -369,8 +369,15 @@ class DashboardControllerTest {
         }
 
         @Override
-        public List<com.framework.admin.excel.ExcelAdminModels.ErrorRecord> listErrors(Long taskId) {
+        public List<com.framework.admin.excel.ExcelAdminModels.ErrorRecord> listErrors(Long taskId,
+                                                                                       int offset,
+                                                                                       int pageSize) {
             return List.of();
+        }
+
+        @Override
+        public long countErrors(Long taskId) {
+            return 0;
         }
     }
 
