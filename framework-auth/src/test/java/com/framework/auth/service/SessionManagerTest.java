@@ -93,6 +93,21 @@ class SessionManagerTest {
     }
 
     @Test
+    void forceLogoutNormalizesTargetAndIgnoresInvalidTarget() {
+        LoginUser user = sessionManager.createSession(1L, "alice", "tenant-a", "web",
+                new String[]{"ADMIN"}, new String[]{"user:view"});
+
+        sessionManager.forceLogout(null, "web");
+        sessionManager.forceLogout(0L, "web");
+        sessionManager.forceLogout(1L, " ");
+        assertThat(sessionManager.validateAccessToken(user.getAccessToken())).isTrue();
+
+        sessionManager.forceLogout(1L, "\u00A0web\u3000");
+
+        assertThat(sessionManager.validateAccessToken(user.getAccessToken())).isFalse();
+    }
+
+    @Test
     void getLoginUserRestoresRolesAndPermissionsFromSession() {
         LoginUser user = sessionManager.createSession(1L, "alice", "tenant-a", "web",
                 new String[]{"ADMIN", "AUDITOR"}, new String[]{"user:view", "user:edit"});
@@ -219,6 +234,20 @@ class SessionManagerTest {
         assertThat(sessionManager.hasOnlineSession(2L, " ")).isFalse();
         assertThat(sessionManager.hasOnlineSession(null, "web")).isFalse();
         assertThat(redis.scanCalls).isZero();
+    }
+
+    @Test
+    void hasOnlineSessionRejectsMismatchedStoredSessionIdentity() {
+        sessionManager.createSession(1L, "alice", "tenant-a", "web",
+                new String[]{"ADMIN"}, new String[]{"user:view"});
+        Map<Object, Object> data = redis.hashes.get(FrameworkConstants.SESSION_PREFIX + "1:web");
+
+        data.put("userId", "2");
+        assertThat(sessionManager.hasOnlineSession(1L, "web")).isFalse();
+
+        data.put("userId", "1");
+        data.put("deviceId", "mobile");
+        assertThat(sessionManager.hasOnlineSession(1L, "web")).isFalse();
     }
 
     @Test

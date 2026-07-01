@@ -231,11 +231,14 @@ public class SessionManager {
      * 查询指定用户设备会话是否在线，避免管理端强制下线前扫描全部会话。
      */
     public boolean hasOnlineSession(Long userId, String deviceId) {
-        if (userId == null || userId <= 0 || !AuthTextSupport.hasText(deviceId)) {
+        String safeDeviceId = normalizeTargetDeviceId(userId, deviceId);
+        if (safeDeviceId == null) {
             return false;
         }
-        String safeDeviceId = AuthTextSupport.trimBoundarySpace(deviceId);
-        return isValidOnlineSession(readOnlineSession(buildSessionKey(userId, safeDeviceId)));
+        OnlineSession session = readOnlineSession(buildSessionKey(userId, safeDeviceId));
+        return isValidOnlineSession(session)
+                && userId.equals(session.userId())
+                && safeDeviceId.equals(session.deviceId());
     }
 
     /**
@@ -284,15 +287,19 @@ public class SessionManager {
      * 强制下线
      */
     public void forceLogout(Long userId, String deviceId) {
-        deleteSessionKey(buildSessionKey(userId, deviceId), "强制下线");
-        log.info("[强制下线] userId={}, deviceId={}", userId, deviceId);
+        String safeDeviceId = normalizeTargetDeviceId(userId, deviceId);
+        if (safeDeviceId == null) {
+            return;
+        }
+        deleteSessionKey(buildSessionKey(userId, safeDeviceId), "强制下线");
+        log.info("[强制下线] userId={}, deviceId={}", userId, safeDeviceId);
     }
 
     /**
      * 强制下线指定用户的全部设备会话。
      */
     public void forceLogoutAll(Long userId) {
-        if (userId == null) {
+        if (userId == null || userId <= 0) {
             return;
         }
         long count = deleteSessionKeys(FrameworkConstants.SESSION_PREFIX + userId + ":*");
@@ -415,6 +422,13 @@ public class SessionManager {
 
     private String buildSessionKey(Long userId, String deviceId) {
         return FrameworkConstants.SESSION_PREFIX + userId + ":" + deviceId;
+    }
+
+    private String normalizeTargetDeviceId(Long userId, String deviceId) {
+        if (userId == null || userId <= 0 || !AuthTextSupport.hasText(deviceId)) {
+            return null;
+        }
+        return AuthTextSupport.trimBoundarySpace(deviceId);
     }
 
     private String requireSessionText(String value, String fieldName) {

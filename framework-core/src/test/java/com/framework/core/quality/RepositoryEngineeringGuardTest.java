@@ -953,6 +953,9 @@ class RepositoryEngineeringGuardTest {
                 .contains("OnlineSessionPage")
                 .contains("listOnlineSessionsPage")
                 .contains("boolean hasOnlineSession")
+                .contains("normalizeTargetDeviceId")
+                .contains("userId.equals(session.userId())")
+                .contains("safeDeviceId.equals(session.deviceId())")
                 .contains("PriorityQueue<OnlineSession>")
                 .contains("keepNewestSession");
         assertThat(service)
