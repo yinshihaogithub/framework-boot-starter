@@ -447,12 +447,47 @@ public interface AdminSystemMapper {
     int deleteDictItem(@Param("id") Long id);
 
     @Select("""
+            <script>
             SELECT id, config_key AS configKey, config_name AS configName, config_value AS configValue,
                    `sensitive`, remark
             FROM sys_config
+            <where>
+                <if test="keywordLike != null">
+                    AND (config_key LIKE #{keywordLike}
+                        OR config_name LIKE #{keywordLike}
+                        OR remark LIKE #{keywordLike})
+                </if>
+            </where>
             ORDER BY id ASC
+            LIMIT #{offset}, #{pageSize}
+            </script>
             """)
-    List<ConfigItem> listConfigs();
+    List<ConfigItem> listConfigs(@Param("keywordLike") String keywordLike,
+                                 @Param("offset") int offset,
+                                 @Param("pageSize") int pageSize);
+
+    @Select("""
+            <script>
+            SELECT COUNT(*)
+            FROM sys_config
+            <where>
+                <if test="keywordLike != null">
+                    AND (config_key LIKE #{keywordLike}
+                        OR config_name LIKE #{keywordLike}
+                        OR remark LIKE #{keywordLike})
+                </if>
+            </where>
+            </script>
+            """)
+    long countConfigs(@Param("keywordLike") String keywordLike);
+
+    @Select("""
+            SELECT id, config_key AS configKey, config_name AS configName, config_value AS configValue,
+                   `sensitive`, remark
+            FROM sys_config
+            WHERE config_key = #{configKey}
+            """)
+    ConfigItem findConfigByKey(@Param("configKey") String configKey);
 
     @Insert("""
             INSERT INTO sys_config (config_key, config_name, config_value, `sensitive`, remark)

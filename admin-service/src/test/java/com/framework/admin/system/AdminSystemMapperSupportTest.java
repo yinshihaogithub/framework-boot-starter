@@ -43,10 +43,44 @@ class AdminSystemMapperSupportTest {
                         .setConfigValue("real-secret")
                         .setSensitive(true));
 
-        List<ConfigItem> configs = mapperSupport.listConfigs();
+        List<ConfigItem> configs = mapperSupport.listConfigs(null, 1, 20);
 
         assertThat(configs.get(0).getConfigValue()).isEqualTo("Framework");
         assertThat(configs.get(1).getConfigValue()).isEqualTo("******");
+    }
+
+    @Test
+    void listConfigsUsesPagingAndKeywordThenCountsMatches() {
+        mapper.configs = List.of(new ConfigItem()
+                .setId(1L)
+                .setConfigKey("app.name")
+                .setConfigValue("Framework")
+                .setSensitive(false));
+        mapper.configCount = 8L;
+
+        List<ConfigItem> configs = mapperSupport.listConfigs(" app ", 2, 10);
+        long count = mapperSupport.countConfigs(" app ");
+
+        assertThat(configs).hasSize(1);
+        assertThat(count).isEqualTo(8L);
+        assertThat(mapper.operations).containsExactly(
+                "listConfigs:%app%:10:10",
+                "countConfigs:%app%");
+    }
+
+    @Test
+    void findConfigByKeyReturnsMaskedValue() {
+        mapper.configByKey = new ConfigItem()
+                .setId(9L)
+                .setConfigKey("oauth.secret")
+                .setConfigValue("real-secret")
+                .setSensitive(true);
+
+        assertThat(mapperSupport.findConfigByKey("\u00A0oauth.secret\u3000"))
+                .get()
+                .extracting(ConfigItem::getConfigValue)
+                .isEqualTo("******");
+        assertThat(mapper.operations).containsExactly("findConfigByKey:oauth.secret");
     }
 
     @Test
@@ -511,6 +545,8 @@ class AdminSystemMapperSupportTest {
 
     private static class RecordingMapper {
         private List<ConfigItem> configs = List.of();
+        private ConfigItem configByKey;
+        private long configCount;
         private List<Dept> allDepts = List.of();
         private List<Menu> allMenus = List.of();
         private AdminSystemModels.AdminUser insertedUser;
@@ -553,7 +589,18 @@ class AdminSystemMapperSupportTest {
                     AdminSystemMapper.class.getClassLoader(),
                     new Class<?>[]{AdminSystemMapper.class},
                     (proxy, method, args) -> switch (method.getName()) {
-                        case "listConfigs" -> configs;
+                        case "listConfigs" -> {
+                            operations.add("listConfigs:" + args[0] + ":" + args[1] + ":" + args[2]);
+                            yield configs;
+                        }
+                        case "countConfigs" -> {
+                            operations.add("countConfigs:" + args[0]);
+                            yield configCount;
+                        }
+                        case "findConfigByKey" -> {
+                            operations.add("findConfigByKey:" + args[0]);
+                            yield configByKey;
+                        }
                         case "listAllDepts" -> {
                             operations.add("listAllDepts");
                             yield allDepts;

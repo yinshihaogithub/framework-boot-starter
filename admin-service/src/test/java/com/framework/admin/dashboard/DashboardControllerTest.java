@@ -19,6 +19,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -437,8 +438,8 @@ class DashboardControllerTest {
         }
 
         @Override
-        public List<ConfigItem> listConfigs() {
-            return List.of(new ConfigItem()
+        public Optional<ConfigItem> findConfigByKey(String configKey) {
+            return Optional.of(new ConfigItem()
                     .setConfigKey("admin.default.password.changed")
                     .setConfigValue(String.valueOf(defaultPasswordChanged)));
         }

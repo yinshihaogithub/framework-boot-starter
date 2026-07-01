@@ -244,10 +244,8 @@ public class DashboardService {
             return new DashboardController.SecurityStatus(true);
         }
         try {
-            boolean changed = mapperSupport.listConfigs().stream()
-                    .filter(config -> "admin.default.password.changed".equals(config.getConfigKey()))
+            boolean changed = mapperSupport.findConfigByKey("admin.default.password.changed")
                     .map(ConfigItem::getConfigValue)
-                    .findFirst()
                     .map(Boolean::parseBoolean)
                     .orElse(false);
             return new DashboardController.SecurityStatus(changed);

@@ -918,6 +918,50 @@ class RepositoryEngineeringGuardTest {
     }
 
     @Test
+    void adminSystemConfigsArePagedAndDashboardUsesPointLookup() throws Exception {
+        String mapper = read(root.resolve(
+                "admin-service/src/main/java/com/framework/admin/system/AdminSystemMapper.java"));
+        String mapperSupport = read(root.resolve(
+                "admin-service/src/main/java/com/framework/admin/system/AdminSystemMapperSupport.java"));
+        String service = read(root.resolve(
+                "admin-service/src/main/java/com/framework/admin/system/AdminSystemService.java"));
+        String controller = read(root.resolve(
+                "admin-service/src/main/java/com/framework/admin/system/AdminSystemController.java"));
+        String dashboardService = read(root.resolve(
+                "admin-service/src/main/java/com/framework/admin/dashboard/DashboardService.java"));
+        String client = read(root.resolve("frontend/admin-web/src/api/client.ts"));
+        String app = read(root.resolve("frontend/admin-web/src/App.vue"));
+
+        assertThat(mapper)
+                .contains("LIMIT #{offset}, #{pageSize}")
+                .contains("long countConfigs")
+                .contains("ConfigItem findConfigByKey");
+        assertThat(mapperSupport)
+                .contains("listConfigs(String keyword, int pageNum, int pageSize)")
+                .contains("countConfigs(String keyword)")
+                .contains("findConfigByKey(String configKey)")
+                .doesNotContain("mapper.listConfigs().stream()");
+        assertThat(service)
+                .contains("PageResult<ConfigItem> configs")
+                .contains("AdminPageSupport.safePageNum")
+                .contains("mapperSupport.countConfigs");
+        assertThat(controller)
+                .contains("Result<PageResult<ConfigItem>> configs")
+                .contains("@RequestParam(defaultValue = \"20\") int pageSize")
+                .doesNotContain("Result<List<ConfigItem>> configs");
+        assertThat(dashboardService)
+                .contains("mapperSupport.findConfigByKey(\"admin.default.password.changed\")")
+                .doesNotContain("mapperSupport.listConfigs().stream()");
+        assertThat(client)
+                .contains("getData<PageResult<ConfigItem>>('/admin/system/configs', params)");
+        assertThat(app)
+                .contains("reactive<PageResult<ConfigItem>>")
+                .contains("configQuery")
+                .contains("configs.records")
+                .contains("configs.total");
+    }
+
+    @Test
     void smsCodeServiceRedisFailuresFailClosedBeforeSendingSms() throws Exception {
         String smsCodeService = read(root.resolve(
                 "framework-auth/src/main/java/com/framework/auth/service/SmsCodeService.java"));
@@ -1459,14 +1503,18 @@ class RepositoryEngineeringGuardTest {
         String app = read(root.resolve("frontend/admin-web/src/App.vue"));
 
         assertThat(repository)
-                .contains("public List<ConfigItem> listConfigs()")
+                .contains("public List<ConfigItem> listConfigs(String keyword, int pageNum, int pageSize)")
+                .contains("public Optional<ConfigItem> findConfigByKey(String configKey)")
                 .contains("Boolean.TRUE.equals(config.getSensitive())")
                 .contains("? \"******\"")
                 .contains("isMaskedSensitiveValue(request)");
         assertThat(mapper)
-                .contains("config_value = CASE WHEN #{preserveValue} = 1 THEN config_value ELSE #{config.configValue} END");
+                .contains("config_value = CASE WHEN #{preserveValue} = 1 THEN config_value ELSE #{config.configValue} END")
+                .contains("ConfigItem findConfigByKey");
         assertThat(repositoryTest)
                 .contains("listConfigsMasksSensitiveValues")
+                .contains("listConfigsUsesPagingAndKeywordThenCountsMatches")
+                .contains("findConfigByKeyReturnsMaskedValue")
                 .contains("updateConfigPreservesExistingSensitiveValueWhenMaskedPlaceholderIsSubmitted")
                 .contains("updateConfigStoresNewSensitiveValueWhenValueChanges");
         assertThat(app)

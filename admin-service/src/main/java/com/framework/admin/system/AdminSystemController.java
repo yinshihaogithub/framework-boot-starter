@@ -296,8 +296,10 @@ public class AdminSystemController {
     @Operation(summary = "系统参数")
     @GetMapping("/configs")
     @RequirePermission("system:config:view")
-    public Result<List<ConfigItem>> configs() {
-        return Result.success(systemService.configs());
+    public Result<PageResult<ConfigItem>> configs(@RequestParam(required = false) String keyword,
+                                                  @RequestParam(defaultValue = "1") int pageNum,
+                                                  @RequestParam(defaultValue = "20") int pageSize) {
+        return Result.success(systemService.configs(keyword, pageNum, pageSize));
     }
 
     @Operation(summary = "新增系统参数")

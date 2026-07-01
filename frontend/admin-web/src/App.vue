@@ -422,12 +422,14 @@
               <div class="section-head">
                 <span>参数配置</span>
                 <div class="actions">
-                  <el-tag size="small">{{ configs.length }}</el-tag>
+                  <el-tag size="small">{{ configs.total }}</el-tag>
+                  <el-input v-model="configQuery.keyword" clearable placeholder="Key / 名称" class="filter" />
+                  <el-button :icon="Search" circle type="primary" @click="loadConfigs" />
                   <el-button v-if="can('system:config:create')" :icon="Plus" circle @click="openCreateConfig" />
                 </div>
               </div>
             </template>
-            <el-table :data="configs" height="520" stripe>
+            <el-table :data="configs.records" height="520" stripe>
               <el-table-column prop="configKey" label="Key" min-width="220" />
               <el-table-column prop="configName" label="名称" min-width="180" />
               <el-table-column label="值" min-width="180" show-overflow-tooltip>
@@ -447,6 +449,7 @@
                 </template>
               </el-table-column>
             </el-table>
+            <el-pagination v-model:current-page="configQuery.pageNum" v-model:page-size="configQuery.pageSize" class="pager" layout="total, sizes, prev, pager, next" :total="configs.total" @change="loadConfigs" />
           </el-card>
         </section>
 
@@ -1540,7 +1543,7 @@ const roles = ref<Role[]>([])
 const menus = ref<MenuItem[]>([])
 const dictTypes = ref<DictType[]>([])
 const dictItems = ref<DictItem[]>([])
-const configs = ref<ConfigItem[]>([])
+const configs = reactive<PageResult<ConfigItem>>({ records: [], total: 0, pageNum: 1, pageSize: 20, pages: 0 })
 const jvm = ref<Record<string, unknown>>({})
 const detailVisible = ref(false)
 const detailRecord = ref<unknown>()
@@ -1635,6 +1638,7 @@ const logQuery = reactive<{ module: string; logType: string; operatorId?: number
 })
 const loginLogQuery = reactive<{ username: string; success: boolean | ''; pageNum: number; pageSize: number }>({ username: '', success: '', pageNum: 1, pageSize: 20 })
 const userQuery = reactive({ keyword: '', status: '', pageNum: 1, pageSize: 20 })
+const configQuery = reactive({ keyword: '', pageNum: 1, pageSize: 20 })
 const deptQuery = reactive({ tenantId: 1 as number | undefined })
 
 const viewTitle = computed(() => viewTitles[activeView.value])
@@ -1877,7 +1881,8 @@ async function loadDicts(dictCode?: string) {
 }
 
 async function loadConfigs() {
-  configs.value = await api.configs()
+  const page = await api.configs(configQuery)
+  Object.assign(configs, page)
 }
 
 async function loadMq() {

@@ -704,12 +704,16 @@ public class AdminSystemService {
         }
     }
 
-    public List<ConfigItem> configs() {
+    public PageResult<ConfigItem> configs(String keyword, int pageNum, int pageSize) {
+        int safePageNum = AdminPageSupport.safePageNum(pageNum);
+        int safePageSize = AdminPageSupport.safePageSize(pageSize);
+        String safeKeyword = text(keyword);
         try {
-            return mapperSupport.listConfigs();
+            List<ConfigItem> records = mapperSupport.listConfigs(safeKeyword, safePageNum, safePageSize);
+            return PageResult.of(records, mapperSupport.countConfigs(safeKeyword), safePageNum, safePageSize);
         } catch (RuntimeException e) {
             log.warn("[系统管理] 系统参数查询失败 error={}", e.getMessage());
-            return List.of();
+            return PageResult.empty(safePageNum, safePageSize);
         }
     }
 

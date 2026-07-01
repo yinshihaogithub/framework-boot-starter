@@ -416,12 +416,23 @@ public class AdminSystemMapperSupport {
         return mapper.deleteDictItem(id) > 0;
     }
 
-    public List<ConfigItem> listConfigs() {
-        return mapper.listConfigs().stream()
-                .map(config -> config.setConfigValue(Boolean.TRUE.equals(config.getSensitive())
-                        ? "******"
-                        : config.getConfigValue()))
+    public List<ConfigItem> listConfigs(String keyword, int pageNum, int pageSize) {
+        return mapper.listConfigs(like(keyword), offset(pageNum, pageSize), pageSize).stream()
+                .map(this::maskConfigValue)
                 .toList();
+    }
+
+    public long countConfigs(String keyword) {
+        return mapper.countConfigs(like(keyword));
+    }
+
+    public Optional<ConfigItem> findConfigByKey(String configKey) {
+        String safeConfigKey = text(configKey);
+        if (safeConfigKey == null) {
+            return Optional.empty();
+        }
+        return Optional.ofNullable(mapper.findConfigByKey(safeConfigKey))
+                .map(this::maskConfigValue);
     }
 
     public Long createConfig(ConfigRequest request) {
@@ -659,5 +670,11 @@ public class AdminSystemMapperSupport {
         }
         String configValue = text(request.getConfigValue());
         return configValue == null || "******".equals(configValue);
+    }
+
+    private ConfigItem maskConfigValue(ConfigItem config) {
+        return config.setConfigValue(Boolean.TRUE.equals(config.getSensitive())
+                ? "******"
+                : config.getConfigValue());
     }
 }

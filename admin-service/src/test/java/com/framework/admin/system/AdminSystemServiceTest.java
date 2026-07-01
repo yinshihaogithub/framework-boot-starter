@@ -132,7 +132,33 @@ class AdminSystemServiceTest {
         assertThat(service.menus()).isEmpty();
         assertThat(service.dictTypes()).isEmpty();
         assertThat(service.dictItems("sys_status")).isEmpty();
-        assertThat(service.configs()).isEmpty();
+        PageResult<ConfigItem> configs = service.configs(null, 0, 0);
+        assertThat(configs.getPageNum()).isEqualTo(1);
+        assertThat(configs.getPageSize()).isEqualTo(20);
+        assertThat(configs.getRecords()).isEmpty();
+        assertThat(configs.getTotal()).isZero();
+    }
+
+    @Test
+    void configsReturnsPagedResultAndNormalizesKeyword() {
+        mapperSupport.configs = List.of(new ConfigItem()
+                .setId(1L)
+                .setConfigKey("app.name")
+                .setConfigName("应用名称")
+                .setConfigValue("Framework")
+                .setSensitive(false));
+        mapperSupport.configCount = 12L;
+
+        PageResult<ConfigItem> configs = service.configs("\u00A0app\u3000", 2, 500);
+
+        assertThat(configs.getRecords()).hasSize(1);
+        assertThat(configs.getTotal()).isEqualTo(12L);
+        assertThat(configs.getPageNum()).isEqualTo(2);
+        assertThat(configs.getPageSize()).isEqualTo(200);
+        assertThat(mapperSupport.listConfigKeyword).isEqualTo("app");
+        assertThat(mapperSupport.listConfigPageNum).isEqualTo(2);
+        assertThat(mapperSupport.listConfigPageSize).isEqualTo(200);
+        assertThat(mapperSupport.countConfigKeyword).isEqualTo("app");
     }
 
     @Test
@@ -939,6 +965,12 @@ class AdminSystemServiceTest {
         private String listUserStatus;
         private String countUserKeyword;
         private String countUserStatus;
+        private List<ConfigItem> configs = List.of();
+        private long configCount;
+        private String listConfigKeyword;
+        private int listConfigPageNum;
+        private int listConfigPageSize;
+        private String countConfigKeyword;
         private Long nextUserId = 1L;
         private UserCreateRequest createdUser;
         private String createdPasswordHash;
@@ -1237,9 +1269,19 @@ class AdminSystemServiceTest {
         }
 
         @Override
-        public List<ConfigItem> listConfigs() {
+        public List<ConfigItem> listConfigs(String keyword, int pageNum, int pageSize) {
             failQueryIfNeeded();
-            return List.of();
+            this.listConfigKeyword = keyword;
+            this.listConfigPageNum = pageNum;
+            this.listConfigPageSize = pageSize;
+            return configs;
+        }
+
+        @Override
+        public long countConfigs(String keyword) {
+            failQueryIfNeeded();
+            this.countConfigKeyword = keyword;
+            return configCount;
         }
 
         @Override
