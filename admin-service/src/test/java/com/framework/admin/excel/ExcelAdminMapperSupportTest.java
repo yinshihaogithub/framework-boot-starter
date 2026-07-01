@@ -10,14 +10,13 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-class ExcelAdminRepositoryTest {
+class ExcelAdminMapperSupportTest {
 
     private final RecordingMapper mapper = new RecordingMapper();
-    private final ExcelAdminRepository repository = new ExcelAdminRepository(mapper);
 
     @Test
     void listTasksTrimsFiltersAndCalculatesOffset() {
-        repository.listTasks("\u00A0export\u3000", "\u3000success\u00A0", 3, 20);
+        ExcelAdminMapperSupport.listTasks(mapper, "\u00A0export\u3000", "\u3000success\u00A0", 3, 20);
 
         assertThat(mapper.taskType).isEqualTo("EXPORT");
         assertThat(mapper.status).isEqualTo("SUCCESS");
@@ -27,7 +26,7 @@ class ExcelAdminRepositoryTest {
 
     @Test
     void blankFiltersBecomeNull() {
-        repository.countTasks("\u00A0\u3000", "");
+        ExcelAdminMapperSupport.countTasks(mapper, "\u00A0\u3000", "");
 
         assertThat(mapper.taskType).isNull();
         assertThat(mapper.status).isNull();
@@ -37,7 +36,7 @@ class ExcelAdminRepositoryTest {
     void createTaskReturnsGeneratedIdFromMapper() {
         ExcelAdminModels.Task task = new ExcelAdminModels.Task().setTaskName("导出");
 
-        Long id = repository.createTask(task);
+        Long id = ExcelAdminMapperSupport.createTask(mapper, task);
 
         assertThat(id).isEqualTo(99L);
         assertThat(task.getId()).isEqualTo(99L);
@@ -48,7 +47,7 @@ class ExcelAdminRepositoryTest {
         mapper.insertTaskResult = 0;
         ExcelAdminModels.Task task = new ExcelAdminModels.Task().setTaskName("导出");
 
-        assertThatThrownBy(() -> repository.createTask(task))
+        assertThatThrownBy(() -> ExcelAdminMapperSupport.createTask(mapper, task))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("excel task insert failed");
     }
@@ -58,7 +57,7 @@ class ExcelAdminRepositoryTest {
         mapper.assignGeneratedId = false;
         ExcelAdminModels.Task task = new ExcelAdminModels.Task().setTaskName("导出");
 
-        assertThatThrownBy(() -> repository.createTask(task))
+        assertThatThrownBy(() -> ExcelAdminMapperSupport.createTask(mapper, task))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("excel task insert failed");
     }
@@ -67,7 +66,7 @@ class ExcelAdminRepositoryTest {
     void createErrorFailsWhenMapperDoesNotInsertRow() {
         mapper.insertErrorResult = 0;
 
-        assertThatThrownBy(() -> repository.createError(1L, 2, "错误", "{}"))
+        assertThatThrownBy(() -> ExcelAdminMapperSupport.createError(mapper, 1L, 2, "错误", "{}"))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("excel error insert failed");
     }
@@ -75,13 +74,12 @@ class ExcelAdminRepositoryTest {
     @Test
     void createTaskWithErrorsUsesManualLocalTransaction() {
         RecordingTransactionTemplate transactionTemplate = new RecordingTransactionTemplate();
-        ExcelAdminRepository transactionalRepository = new ExcelAdminRepository(mapper, transactionTemplate);
         ExcelAdminModels.Task task = new ExcelAdminModels.Task().setTaskName("导入失败");
 
-        Long taskId = transactionalRepository.createTaskWithErrors(task, List.of(
+        Long taskId = transactionTemplate.execute(status -> ExcelAdminMapperSupport.createTaskWithErrors(mapper, task, List.of(
                 new ExcelAdminModels.ErrorRecord().setRowIndex(2).setErrorMessage("空用户名").setRawData("{}"),
                 new ExcelAdminModels.ErrorRecord().setRowIndex(3).setErrorMessage("手机号错误").setRawData("{}")
-        ));
+        )));
 
         assertThat(taskId).isEqualTo(99L);
         assertThat(transactionTemplate.executions).isEqualTo(1);

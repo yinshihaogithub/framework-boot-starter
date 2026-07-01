@@ -1,6 +1,6 @@
 package com.framework.admin.dashboard;
 
-import com.framework.admin.excel.ExcelAdminRepository;
+import com.framework.admin.excel.ExcelAdminMapper;
 import com.framework.admin.file.FileAdminRepository;
 import com.framework.admin.notify.NotifyAdminMapper;
 import com.framework.admin.system.AdminSystemModels.ConfigItem;
@@ -54,7 +54,7 @@ class DashboardControllerTest {
                 provider(null),
                 provider(null),
                 provider(new FakeNotifyMapper()),
-                provider(new FakeExcelRepository()),
+                provider(new FakeExcelMapper()),
                 provider(new FakeFileRepository()),
                 provider(new FakeSystemRepository(false)));
         DashboardController controller = new DashboardController(service);
@@ -178,14 +178,48 @@ class DashboardControllerTest {
         }
     }
 
-    private static class FakeExcelRepository extends ExcelAdminRepository {
-        private FakeExcelRepository() {
-            super(null);
+    private static class FakeExcelMapper implements ExcelAdminMapper {
+        @Override
+        public List<com.framework.admin.excel.ExcelAdminModels.Task> listTasks(String taskType,
+                                                                               String status,
+                                                                               int offset,
+                                                                               int pageSize) {
+            return List.of();
         }
 
         @Override
-        public Map<String, Long> stats() {
-            return Map.of("total", 5L, "success", 4L, "failed", 1L, "import", 2L, "export", 3L);
+        public long countTasks(String taskType, String status) {
+            return 5L;
+        }
+
+        @Override
+        public long countAllTasks() {
+            return 5L;
+        }
+
+        @Override
+        public long countTasksByStatus(String status) {
+            return "FAILED".equals(status) ? 1L : 4L;
+        }
+
+        @Override
+        public long countTasksByType(String taskType) {
+            return "IMPORT".equals(taskType) ? 2L : 3L;
+        }
+
+        @Override
+        public int insertTask(com.framework.admin.excel.ExcelAdminModels.Task task) {
+            return 1;
+        }
+
+        @Override
+        public int insertError(Long taskId, int rowIndex, String errorMessage, String rawData) {
+            return 1;
+        }
+
+        @Override
+        public List<com.framework.admin.excel.ExcelAdminModels.ErrorRecord> listErrors(Long taskId) {
+            return List.of();
         }
     }
 

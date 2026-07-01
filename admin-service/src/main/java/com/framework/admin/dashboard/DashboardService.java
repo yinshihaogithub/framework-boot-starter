@@ -1,6 +1,6 @@
 package com.framework.admin.dashboard;
 
-import com.framework.admin.excel.ExcelAdminRepository;
+import com.framework.admin.excel.ExcelAdminMapper;
 import com.framework.admin.file.FileAdminRepository;
 import com.framework.admin.notify.NotifyAdminMapper;
 import com.framework.admin.system.AdminSystemModels.ConfigItem;
@@ -28,7 +28,7 @@ public class DashboardService {
     private final ObjectProvider<LocalMessageService> localMessageServiceProvider;
     private final ObjectProvider<OperationLogMapper> operationLogMapperProvider;
     private final ObjectProvider<NotifyAdminMapper> notifyAdminMapperProvider;
-    private final ObjectProvider<ExcelAdminRepository> excelAdminRepositoryProvider;
+    private final ObjectProvider<ExcelAdminMapper> excelAdminMapperProvider;
     private final ObjectProvider<FileAdminRepository> fileAdminRepositoryProvider;
     private final ObjectProvider<AdminSystemRepository> adminSystemRepositoryProvider;
 
@@ -36,14 +36,14 @@ public class DashboardService {
                             ObjectProvider<LocalMessageService> localMessageServiceProvider,
                             ObjectProvider<OperationLogMapper> operationLogMapperProvider,
                             ObjectProvider<NotifyAdminMapper> notifyAdminMapperProvider,
-                            ObjectProvider<ExcelAdminRepository> excelAdminRepositoryProvider,
+                            ObjectProvider<ExcelAdminMapper> excelAdminMapperProvider,
                             ObjectProvider<FileAdminRepository> fileAdminRepositoryProvider,
                             ObjectProvider<AdminSystemRepository> adminSystemRepositoryProvider) {
         this.deadLetterHandlerProvider = deadLetterHandlerProvider;
         this.localMessageServiceProvider = localMessageServiceProvider;
         this.operationLogMapperProvider = operationLogMapperProvider;
         this.notifyAdminMapperProvider = notifyAdminMapperProvider;
-        this.excelAdminRepositoryProvider = excelAdminRepositoryProvider;
+        this.excelAdminMapperProvider = excelAdminMapperProvider;
         this.fileAdminRepositoryProvider = fileAdminRepositoryProvider;
         this.adminSystemRepositoryProvider = adminSystemRepositoryProvider;
     }
@@ -160,12 +160,16 @@ public class DashboardService {
         metrics.put("failed", 0L);
         metrics.put("import", 0L);
         metrics.put("export", 0L);
-        ExcelAdminRepository repository = available(excelAdminRepositoryProvider);
-        if (repository == null) {
+        ExcelAdminMapper mapper = available(excelAdminMapperProvider);
+        if (mapper == null) {
             return metrics;
         }
         try {
-            metrics.putAll(repository.stats());
+            metrics.put("total", mapper.countAllTasks());
+            metrics.put("success", mapper.countTasksByStatus("SUCCESS"));
+            metrics.put("failed", mapper.countTasksByStatus("FAILED"));
+            metrics.put("import", mapper.countTasksByType("IMPORT"));
+            metrics.put("export", mapper.countTasksByType("EXPORT"));
         } catch (Exception ignored) {
             return zero(metrics);
         }

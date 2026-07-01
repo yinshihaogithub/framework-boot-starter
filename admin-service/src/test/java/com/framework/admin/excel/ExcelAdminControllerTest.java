@@ -11,7 +11,7 @@ class ExcelAdminControllerTest {
     @Test
     void exportTaskReportsServiceUnavailableWhenExportRuntimeIsMissing() {
         ExcelAdminController controller = new ExcelAdminController(
-                new ExcelAdminService(new ExcelAdminRepository(null), new EmptyObjectProvider<>(), null));
+                new ExcelAdminService(null, new EmptyObjectProvider<>(), null));
 
         Result<ExcelAdminModels.TaskResult> result = controller.createExportTask(null, null);
 

@@ -13,12 +13,15 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import lombok.NoArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.function.Supplier;
 import java.util.Set;
 
 @Slf4j
@@ -28,21 +31,31 @@ public class ExcelAdminService {
     private static final Set<String> SUPPORTED_TASK_TYPES = Set.of("IMPORT", "EXPORT");
     private static final Set<String> SUPPORTED_STATUSES = Set.of("SUCCESS", "FAILED", "PROCESSING");
 
-    private final ExcelAdminRepository repository;
+    private final ExcelAdminMapper mapper;
+    private final TransactionTemplate transactionTemplate;
     private final ObjectProvider<ExcelExportService> exportServiceProvider;
     private final AdminAuditService auditService;
 
-    public ExcelAdminService(ExcelAdminRepository repository,
+    @Autowired
+    public ExcelAdminService(ExcelAdminMapper mapper,
+                             TransactionTemplate transactionTemplate,
                              ObjectProvider<ExcelExportService> exportServiceProvider,
                              AdminAuditService auditService) {
-        this.repository = repository;
+        this.mapper = mapper;
+        this.transactionTemplate = transactionTemplate;
         this.exportServiceProvider = exportServiceProvider;
         this.auditService = auditService;
     }
 
+    public ExcelAdminService(ExcelAdminMapper mapper,
+                             ObjectProvider<ExcelExportService> exportServiceProvider,
+                             AdminAuditService auditService) {
+        this(mapper, null, exportServiceProvider, auditService);
+    }
+
     public Map<String, Long> stats() {
         try {
-            return repository.stats();
+            return ExcelAdminMapperSupport.stats(mapper);
         } catch (Exception ignored) {
             return zeroStats();
         }
@@ -57,9 +70,9 @@ public class ExcelAdminService {
             return PageResult.empty(safePageNum, safePageSize);
         }
         try {
-            List<ExcelAdminModels.Task> records = repository.listTasks(normalizedTaskType, normalizedStatus,
-                    safePageNum, safePageSize);
-            long total = repository.countTasks(normalizedTaskType, normalizedStatus);
+            List<ExcelAdminModels.Task> records = ExcelAdminMapperSupport.listTasks(mapper,
+                    normalizedTaskType, normalizedStatus, safePageNum, safePageSize);
+            long total = ExcelAdminMapperSupport.countTasks(mapper, normalizedTaskType, normalizedStatus);
             return PageResult.of(records, total, safePageNum, safePageSize);
         } catch (Exception ignored) {
             return PageResult.empty(safePageNum, safePageSize);
@@ -96,7 +109,7 @@ public class ExcelAdminService {
                     .setOperatorName(operatorName)
                     .setErrorMessage(errorMessage);
             try {
-                Long taskId = repository.createTask(failedTask);
+                Long taskId = ExcelAdminMapperSupport.createTask(mapper, failedTask);
                 auditFailure(servletRequest, "创建导出任务", "CREATE", e,
                         "taskId", taskId, "filename", filename, "rows", rows.size(), "operator", operatorName);
                 return ActionResult.success(new ExcelAdminModels.TaskResult()
@@ -124,7 +137,7 @@ public class ExcelAdminService {
                 .setFailureRows(0)
                 .setOperatorName(operatorName);
         try {
-            Long taskId = repository.createTask(task);
+            Long taskId = ExcelAdminMapperSupport.createTask(mapper, task);
             auditSuccess(servletRequest, "创建导出任务", "CREATE",
                     "taskId", taskId, "filename", filename, "rows", rows.size(), "operator", operatorName);
             return ActionResult.success(new ExcelAdminModels.TaskResult()
@@ -157,7 +170,7 @@ public class ExcelAdminService {
                 .setOperatorName(operatorName)
                 .setErrorMessage(errorMessage);
         try {
-            Long taskId = repository.createTaskWithErrors(task, List.of(
+            Long taskId = inTransaction(() -> ExcelAdminMapperSupport.createTaskWithErrors(mapper, task, List.of(
                     new ExcelAdminModels.ErrorRecord()
                             .setRowIndex(2)
                             .setErrorMessage(errorMessage)
@@ -166,7 +179,7 @@ public class ExcelAdminService {
                             .setRowIndex(3)
                             .setErrorMessage(errorMessage)
                             .setRawData("{\"username\":\"ops\",\"mobile\":\"123\"}")
-            ));
+            )));
             auditSuccess(servletRequest, "登记导入失败任务", "CREATE",
                     "taskId", taskId, "errorMessage", errorMessage, "operator", operatorName);
             return ActionResult.success(new ExcelAdminModels.TaskResult()
@@ -188,7 +201,7 @@ public class ExcelAdminService {
             return List.of();
         }
         try {
-            return repository.listErrors(taskId);
+            return ExcelAdminMapperSupport.listErrors(mapper, taskId);
         } catch (Exception ignored) {
             return List.of();
         }
@@ -257,6 +270,13 @@ public class ExcelAdminService {
 
     private Map<String, Long> zeroStats() {
         return Map.of("total", 0L, "success", 0L, "failed", 0L, "import", 0L, "export", 0L);
+    }
+
+    private <T> T inTransaction(Supplier<T> action) {
+        if (transactionTemplate == null) {
+            return action.get();
+        }
+        return transactionTemplate.execute(status -> action.get());
     }
 
     private <T> T available(ObjectProvider<T> provider) {

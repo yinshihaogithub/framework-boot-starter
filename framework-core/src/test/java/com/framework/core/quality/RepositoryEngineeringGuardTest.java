@@ -528,6 +528,10 @@ class RepositoryEngineeringGuardTest {
                 .as("multi-table admin writes must keep an explicit local transaction boundary")
                 .contains("TransactionTemplate")
                 .contains("inTransaction(");
+        assertThat(read(root.resolve("admin-service/src/main/java/com/framework/admin/excel/ExcelAdminService.java")))
+                .as("excel task and error writes must keep an explicit local transaction boundary")
+                .contains("TransactionTemplate")
+                .contains("inTransaction(");
     }
 
     @Test
@@ -1187,10 +1191,11 @@ class RepositoryEngineeringGuardTest {
                 .contains("defaultPasswordChanged");
         assertThat(service)
                 .contains("ObjectProvider<NotifyAdminMapper>")
-                .contains("ObjectProvider<ExcelAdminRepository>")
+                .contains("ObjectProvider<ExcelAdminMapper>")
                 .contains("ObjectProvider<FileAdminRepository>")
                 .contains("ObjectProvider<AdminSystemRepository>")
                 .doesNotContain("NotifyAdminRepository")
+                .doesNotContain("ExcelAdminRepository")
                 .contains("admin.default.password.changed")
                 .contains("notifyMetrics()")
                 .contains("excelMetrics()")

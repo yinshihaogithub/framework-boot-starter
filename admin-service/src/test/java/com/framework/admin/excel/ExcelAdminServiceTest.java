@@ -29,7 +29,7 @@ class ExcelAdminServiceTest {
 
     @Test
     void exportTaskReturnsEmptyWhenExportServiceIsMissing() {
-        ExcelAdminService service = service(new InMemoryExcelAdminRepository(), null);
+        ExcelAdminService service = service(new InMemoryExcelAdminMapper(), null);
 
         ExcelAdminService.ActionResult<ExcelAdminModels.TaskResult> result = service.createExportTask(null, null);
 
@@ -41,7 +41,7 @@ class ExcelAdminServiceTest {
     @Test
     void exportTaskReturnsEmptyWhenExportProviderFails() {
         ExcelAdminService service = new ExcelAdminService(
-                new InMemoryExcelAdminRepository(), failingProvider(), auditService());
+                new InMemoryExcelAdminMapper(), failingProvider(), auditService());
 
         ExcelAdminService.ActionResult<ExcelAdminModels.TaskResult> result = service.createExportTask(null, null);
 
@@ -52,7 +52,7 @@ class ExcelAdminServiceTest {
 
     @Test
     void exportTaskCreatesSuccessTask() {
-        InMemoryExcelAdminRepository repository = new InMemoryExcelAdminRepository();
+        InMemoryExcelAdminMapper repository = new InMemoryExcelAdminMapper();
         CapturingExcelExportService exportService = new CapturingExcelExportService();
         ExcelAdminModels.ExportRequest request = new ExcelAdminModels.ExportRequest();
         request.setTaskName("\u00A0用户导出\u3000");
@@ -77,7 +77,7 @@ class ExcelAdminServiceTest {
     @Test
     void exportTaskRecordsCurrentUserAsOperatorAndAuditsIt() {
         UserContextHolder.set(new LoginUser().setUserId(7L).setUsername("alice"));
-        InMemoryExcelAdminRepository repository = new InMemoryExcelAdminRepository();
+        InMemoryExcelAdminMapper repository = new InMemoryExcelAdminMapper();
         RecordingAuditService auditService = new RecordingAuditService();
         ExcelAdminService service = service(repository, new CapturingExcelExportService(), auditService);
 
@@ -91,7 +91,7 @@ class ExcelAdminServiceTest {
 
     @Test
     void exportTaskDefaultsOperatorWhenUserContextIsMissing() {
-        InMemoryExcelAdminRepository repository = new InMemoryExcelAdminRepository();
+        InMemoryExcelAdminMapper repository = new InMemoryExcelAdminMapper();
         ExcelAdminService service = service(repository, new CapturingExcelExportService());
 
         ExcelAdminService.ActionResult<ExcelAdminModels.TaskResult> result = service.createExportTask(null, null);
@@ -102,7 +102,7 @@ class ExcelAdminServiceTest {
 
     @Test
     void exportTaskSucceedsWhenSuccessAuditFails() {
-        InMemoryExcelAdminRepository repository = new InMemoryExcelAdminRepository();
+        InMemoryExcelAdminMapper repository = new InMemoryExcelAdminMapper();
         ExcelAdminService service = service(repository, new CapturingExcelExportService(), new ThrowingAuditService());
 
         ExcelAdminService.ActionResult<ExcelAdminModels.TaskResult> result = service.createExportTask(null, null);
@@ -114,7 +114,7 @@ class ExcelAdminServiceTest {
 
     @Test
     void exportTaskPersistsFailedTaskWhenExportThrows() {
-        InMemoryExcelAdminRepository repository = new InMemoryExcelAdminRepository();
+        InMemoryExcelAdminMapper repository = new InMemoryExcelAdminMapper();
         CapturingExcelExportService exportService = new CapturingExcelExportService();
         exportService.failure = new IllegalStateException("template broken");
         RecordingAuditService auditService = new RecordingAuditService();
@@ -138,7 +138,7 @@ class ExcelAdminServiceTest {
 
     @Test
     void exportTaskPersistsFailedTaskWhenFailureAuditFails() {
-        InMemoryExcelAdminRepository repository = new InMemoryExcelAdminRepository();
+        InMemoryExcelAdminMapper repository = new InMemoryExcelAdminMapper();
         CapturingExcelExportService exportService = new CapturingExcelExportService();
         exportService.failure = new IllegalStateException("template broken");
         ExcelAdminService service = service(repository, exportService, new ThrowingAuditService());
@@ -155,7 +155,7 @@ class ExcelAdminServiceTest {
 
     @Test
     void importFailureTaskCreatesFailedTaskAndErrors() {
-        InMemoryExcelAdminRepository repository = new InMemoryExcelAdminRepository();
+        InMemoryExcelAdminMapper repository = new InMemoryExcelAdminMapper();
         ExcelAdminModels.FailureRequest request = new ExcelAdminModels.FailureRequest();
         request.setErrorMessage("手机号格式错误");
         ExcelAdminService service = service(repository, null);
@@ -177,7 +177,7 @@ class ExcelAdminServiceTest {
     @Test
     void importFailureTaskRecordsCurrentUserAsOperatorAndAuditsIt() {
         UserContextHolder.set(new LoginUser().setUserId(7L).setUsername("alice"));
-        InMemoryExcelAdminRepository repository = new InMemoryExcelAdminRepository();
+        InMemoryExcelAdminMapper repository = new InMemoryExcelAdminMapper();
         RecordingAuditService auditService = new RecordingAuditService();
         ExcelAdminService service = service(repository, null, auditService);
 
@@ -191,7 +191,7 @@ class ExcelAdminServiceTest {
 
     @Test
     void importFailureTaskNormalizesRequestAndUsesSameErrorMessageForAllErrorRows() {
-        InMemoryExcelAdminRepository repository = new InMemoryExcelAdminRepository();
+        InMemoryExcelAdminMapper repository = new InMemoryExcelAdminMapper();
         ExcelAdminModels.FailureRequest request = new ExcelAdminModels.FailureRequest();
         request.setTaskName("\u00A0用户导入失败\u3000");
         request.setBizType("\u3000system-user\u00A0");
@@ -213,7 +213,7 @@ class ExcelAdminServiceTest {
 
     @Test
     void importFailureTaskSucceedsWhenAuditFails() {
-        InMemoryExcelAdminRepository repository = new InMemoryExcelAdminRepository();
+        InMemoryExcelAdminMapper repository = new InMemoryExcelAdminMapper();
         ExcelAdminService service = service(repository, null, new ThrowingAuditService());
 
         ExcelAdminService.ActionResult<ExcelAdminModels.TaskResult> result = service.createImportFailureTask(null, null);
@@ -226,7 +226,7 @@ class ExcelAdminServiceTest {
 
     @Test
     void writeTasksReturnServiceErrorWhenRepositoryFails() {
-        InMemoryExcelAdminRepository repository = new InMemoryExcelAdminRepository();
+        InMemoryExcelAdminMapper repository = new InMemoryExcelAdminMapper();
         repository.commandFailure = new RuntimeException("database down");
         ExcelAdminService exportService = service(repository, new CapturingExcelExportService());
         ExcelAdminService importService = service(repository, null);
@@ -246,7 +246,7 @@ class ExcelAdminServiceTest {
 
     @Test
     void tasksUseSafePaging() {
-        InMemoryExcelAdminRepository repository = new InMemoryExcelAdminRepository();
+        InMemoryExcelAdminMapper repository = new InMemoryExcelAdminMapper();
         repository.createTask(new ExcelAdminModels.Task().setTaskName("导出").setTaskType("EXPORT").setStatus("SUCCESS"));
         ExcelAdminService service = service(repository, null);
 
@@ -259,7 +259,7 @@ class ExcelAdminServiceTest {
 
     @Test
     void tasksNormalizeTypeAndStatusFilters() {
-        InMemoryExcelAdminRepository repository = new InMemoryExcelAdminRepository();
+        InMemoryExcelAdminMapper repository = new InMemoryExcelAdminMapper();
         repository.createTask(new ExcelAdminModels.Task().setTaskName("导出").setTaskType("EXPORT").setStatus("SUCCESS"));
         ExcelAdminService service = service(repository, null);
 
@@ -273,7 +273,7 @@ class ExcelAdminServiceTest {
 
     @Test
     void tasksKeepProcessingStatusAsValidFilter() {
-        InMemoryExcelAdminRepository repository = new InMemoryExcelAdminRepository();
+        InMemoryExcelAdminMapper repository = new InMemoryExcelAdminMapper();
         repository.createTask(new ExcelAdminModels.Task()
                 .setTaskName("导入中")
                 .setTaskType("IMPORT")
@@ -294,7 +294,7 @@ class ExcelAdminServiceTest {
 
     @Test
     void tasksReturnEmptyPageForInvalidTypeOrStatusFilter() {
-        InMemoryExcelAdminRepository repository = new InMemoryExcelAdminRepository();
+        InMemoryExcelAdminMapper repository = new InMemoryExcelAdminMapper();
         repository.createTask(new ExcelAdminModels.Task().setTaskName("导出").setTaskType("EXPORT").setStatus("SUCCESS"));
         ExcelAdminService service = service(repository, null);
 
@@ -309,7 +309,7 @@ class ExcelAdminServiceTest {
 
     @Test
     void queryEndpointsFallBackWhenRepositoryFails() {
-        ExcelAdminService service = service(new FailingExcelAdminRepository(), null);
+        ExcelAdminService service = service(new FailingExcelAdminMapper(), null);
 
         Map<String, Long> stats = service.stats();
         PageResult<ExcelAdminModels.Task> page = service.tasks(null, null, -1, 500);
@@ -329,7 +329,7 @@ class ExcelAdminServiceTest {
 
     @Test
     void errorsRejectInvalidTaskIdBeforeRepositoryLookup() {
-        InMemoryExcelAdminRepository repository = new InMemoryExcelAdminRepository();
+        InMemoryExcelAdminMapper repository = new InMemoryExcelAdminMapper();
         ExcelAdminService service = service(repository, null);
 
         assertThat(service.errors(0L)).isEmpty();
@@ -338,13 +338,13 @@ class ExcelAdminServiceTest {
         assertThat(repository.listErrorsTaskId).isNull();
     }
 
-    private static ExcelAdminService service(ExcelAdminRepository repository, ExcelExportService exportService) {
-        return service(repository, exportService, auditService());
+    private static ExcelAdminService service(ExcelAdminMapper mapper, ExcelExportService exportService) {
+        return service(mapper, exportService, auditService());
     }
 
-    private static ExcelAdminService service(ExcelAdminRepository repository, ExcelExportService exportService,
+    private static ExcelAdminService service(ExcelAdminMapper mapper, ExcelExportService exportService,
                                              AdminAuditService auditService) {
-        return new ExcelAdminService(repository, provider(exportService), auditService);
+        return new ExcelAdminService(mapper, provider(exportService), auditService);
     }
 
     private static <T> ObjectProvider<T> provider(T value) {
@@ -480,7 +480,7 @@ class ExcelAdminServiceTest {
         }
     }
 
-    private static class InMemoryExcelAdminRepository extends ExcelAdminRepository {
+    private static class InMemoryExcelAdminMapper implements ExcelAdminMapper {
         private final List<ExcelAdminModels.Task> tasks = new ArrayList<>();
         private final List<ExcelAdminModels.ErrorRecord> errorRecords = new ArrayList<>();
         private long nextTaskId = 1;
@@ -488,45 +488,58 @@ class ExcelAdminServiceTest {
         private Long listErrorsTaskId;
         private RuntimeException commandFailure;
 
-        private InMemoryExcelAdminRepository() {
-            super(null);
+        Long createTask(ExcelAdminModels.Task task) {
+            insertTask(task);
+            return task.getId();
+        }
+
+        List<ExcelAdminModels.ErrorRecord> errors(Long taskId) {
+            return errorRecords.stream()
+                    .filter(error -> taskId.equals(error.getTaskId()))
+                    .toList();
         }
 
         @Override
-        public List<ExcelAdminModels.Task> listTasks(String taskType, String status, int pageNum, int pageSize) {
+        public List<ExcelAdminModels.Task> listTasks(String taskType, String status, int offset, int pageSize) {
             return tasks.stream()
                     .filter(task -> taskType == null || taskType.equals(task.getTaskType()))
                     .filter(task -> status == null || status.equals(task.getStatus()))
+                    .skip(offset)
+                    .limit(pageSize)
                     .toList();
         }
 
         @Override
         public long countTasks(String taskType, String status) {
-            return listTasks(taskType, status, 1, Integer.MAX_VALUE).size();
+            return listTasks(taskType, status, 0, Integer.MAX_VALUE).size();
         }
 
         @Override
-        public Map<String, Long> stats() {
-            Map<String, Long> stats = new LinkedHashMap<>();
-            stats.put("total", (long) tasks.size());
-            stats.put("success", tasks.stream().filter(task -> "SUCCESS".equals(task.getStatus())).count());
-            stats.put("failed", tasks.stream().filter(task -> "FAILED".equals(task.getStatus())).count());
-            stats.put("import", tasks.stream().filter(task -> "IMPORT".equals(task.getTaskType())).count());
-            stats.put("export", tasks.stream().filter(task -> "EXPORT".equals(task.getTaskType())).count());
-            return stats;
+        public long countAllTasks() {
+            return tasks.size();
         }
 
         @Override
-        public Long createTask(ExcelAdminModels.Task task) {
+        public long countTasksByStatus(String status) {
+            return tasks.stream().filter(task -> status.equals(task.getStatus())).count();
+        }
+
+        @Override
+        public long countTasksByType(String taskType) {
+            return tasks.stream().filter(task -> taskType.equals(task.getTaskType())).count();
+        }
+
+        @Override
+        public int insertTask(ExcelAdminModels.Task task) {
             failCommandIfNeeded();
             long id = nextTaskId++;
             task.setId(id);
             tasks.add(task);
-            return id;
+            return 1;
         }
 
         @Override
-        public void createError(Long taskId, int rowIndex, String errorMessage, String rawData) {
+        public int insertError(Long taskId, int rowIndex, String errorMessage, String rawData) {
             failCommandIfNeeded();
             errorRecords.add(new ExcelAdminModels.ErrorRecord()
                     .setId(nextErrorId++)
@@ -534,18 +547,13 @@ class ExcelAdminServiceTest {
                     .setRowIndex(rowIndex)
                     .setErrorMessage(errorMessage)
                     .setRawData(rawData));
+            return 1;
         }
 
         @Override
         public List<ExcelAdminModels.ErrorRecord> listErrors(Long taskId) {
             this.listErrorsTaskId = taskId;
             return errors(taskId);
-        }
-
-        private List<ExcelAdminModels.ErrorRecord> errors(Long taskId) {
-            return errorRecords.stream()
-                    .filter(error -> taskId.equals(error.getTaskId()))
-                    .toList();
         }
 
         private void failCommandIfNeeded() {
@@ -555,29 +563,49 @@ class ExcelAdminServiceTest {
         }
     }
 
-    private static class FailingExcelAdminRepository extends ExcelAdminRepository {
-        private FailingExcelAdminRepository() {
-            super(null);
-        }
-
+    private static class FailingExcelAdminMapper implements ExcelAdminMapper {
         @Override
-        public List<ExcelAdminModels.Task> listTasks(String taskType, String status, int pageNum, int pageSize) {
-            throw new IllegalStateException("excel repository unavailable");
+        public List<ExcelAdminModels.Task> listTasks(String taskType, String status, int offset, int pageSize) {
+            throw unavailable();
         }
 
         @Override
         public long countTasks(String taskType, String status) {
-            throw new IllegalStateException("excel repository unavailable");
+            throw unavailable();
         }
 
         @Override
-        public Map<String, Long> stats() {
-            throw new IllegalStateException("excel repository unavailable");
+        public long countAllTasks() {
+            throw unavailable();
+        }
+
+        @Override
+        public long countTasksByStatus(String status) {
+            throw unavailable();
+        }
+
+        @Override
+        public long countTasksByType(String taskType) {
+            throw unavailable();
+        }
+
+        @Override
+        public int insertTask(ExcelAdminModels.Task task) {
+            throw unavailable();
+        }
+
+        @Override
+        public int insertError(Long taskId, int rowIndex, String errorMessage, String rawData) {
+            throw unavailable();
         }
 
         @Override
         public List<ExcelAdminModels.ErrorRecord> listErrors(Long taskId) {
-            throw new IllegalStateException("excel repository unavailable");
+            throw unavailable();
+        }
+
+        private IllegalStateException unavailable() {
+            return new IllegalStateException("excel mapper unavailable");
         }
     }
 }
