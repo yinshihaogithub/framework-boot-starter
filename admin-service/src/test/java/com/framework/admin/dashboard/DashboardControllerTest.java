@@ -2,7 +2,7 @@ package com.framework.admin.dashboard;
 
 import com.framework.admin.excel.ExcelAdminRepository;
 import com.framework.admin.file.FileAdminRepository;
-import com.framework.admin.notify.NotifyAdminRepository;
+import com.framework.admin.notify.NotifyAdminMapper;
 import com.framework.admin.system.AdminSystemModels.ConfigItem;
 import com.framework.admin.system.AdminSystemRepository;
 import com.framework.core.result.Result;
@@ -53,7 +53,7 @@ class DashboardControllerTest {
                 provider(null),
                 provider(null),
                 provider(null),
-                provider(new FakeNotifyRepository()),
+                provider(new FakeNotifyMapper()),
                 provider(new FakeExcelRepository()),
                 provider(new FakeFileRepository()),
                 provider(new FakeSystemRepository(false)));
@@ -117,24 +117,59 @@ class DashboardControllerTest {
         assertThat(result.getData().security().defaultPasswordChanged()).isTrue();
     }
 
-    private static class FakeNotifyRepository extends NotifyAdminRepository {
-        private FakeNotifyRepository() {
-            super(null);
+    private static class FakeNotifyMapper implements NotifyAdminMapper {
+        @Override
+        public java.util.List<TemplateRow> listTemplates(String keywordLike,
+                                                         String channel,
+                                                         String status,
+                                                         int offset,
+                                                         int pageSize) {
+            return java.util.List.of();
         }
 
         @Override
-        public long countTemplates(String keyword, String channel, String status) {
+        public long countTemplates(String keywordLike, String channel, String status) {
             return 3L;
         }
 
         @Override
-        public long countTemplatesByStatus(String status) {
-            return 2L;
+        public TemplateRow findTemplate(Long id) {
+            return null;
+        }
+
+        @Override
+        public int insertTemplate(TemplateRow row) {
+            return 1;
+        }
+
+        @Override
+        public int updateTemplate(TemplateRow row) {
+            return 1;
+        }
+
+        @Override
+        public int deleteTemplate(Long id) {
+            return 1;
+        }
+
+        @Override
+        public int insertRecord(RecordRow row) {
+            return 1;
+        }
+
+        @Override
+        public java.util.List<RecordRow> listRecords(String channel, Boolean success, int offset, int pageSize) {
+            return java.util.List.of();
         }
 
         @Override
         public long countRecords(String channel, Boolean success) {
             return 9L;
+        }
+
+        @Override
+        public long countTemplatesByStatus(String status) {
+            return 2L;
         }
 
         @Override

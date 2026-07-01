@@ -2,79 +2,81 @@ package com.framework.admin.notify;
 
 import com.framework.admin.support.AdminTextSupport;
 
-import org.springframework.stereotype.Repository;
-
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 
-@Repository
-public class NotifyAdminRepository {
+final class NotifyAdminMapperSupport {
 
-    private final NotifyAdminMapper mapper;
-
-    public NotifyAdminRepository(NotifyAdminMapper mapper) {
-        this.mapper = mapper;
+    private NotifyAdminMapperSupport() {
     }
 
-    public List<NotifyAdminModels.Template> listTemplates(String keyword, String channel, String status,
-                                                          int pageNum, int pageSize) {
+    static List<NotifyAdminModels.Template> listTemplates(NotifyAdminMapper mapper,
+                                                          String keyword,
+                                                          String channel,
+                                                          String status,
+                                                          int pageNum,
+                                                          int pageSize) {
         return mapper.listTemplates(like(keyword), normalize(channel), normalize(status),
                         offset(pageNum, pageSize), pageSize)
                 .stream()
-                .map(this::toTemplate)
+                .map(NotifyAdminMapperSupport::toTemplate)
                 .toList();
     }
 
-    public long countTemplates(String keyword, String channel, String status) {
+    static long countTemplates(NotifyAdminMapper mapper, String keyword, String channel, String status) {
         return mapper.countTemplates(like(keyword), normalize(channel), normalize(status));
     }
 
-    public Optional<NotifyAdminModels.Template> findTemplate(Long id) {
-        return Optional.ofNullable(mapper.findTemplate(id)).map(this::toTemplate);
+    static Optional<NotifyAdminModels.Template> findTemplate(NotifyAdminMapper mapper, Long id) {
+        return Optional.ofNullable(mapper.findTemplate(id)).map(NotifyAdminMapperSupport::toTemplate);
     }
 
-    public Long createTemplate(NotifyAdminModels.TemplateRequest request) {
+    static Long createTemplate(NotifyAdminMapper mapper, NotifyAdminModels.TemplateRequest request) {
         NotifyAdminMapper.TemplateRow row = toTemplateRow(request);
         mapper.insertTemplate(row);
         return row.getId();
     }
 
-    public boolean updateTemplate(Long id, NotifyAdminModels.TemplateRequest request) {
+    static boolean updateTemplate(NotifyAdminMapper mapper, Long id, NotifyAdminModels.TemplateRequest request) {
         return mapper.updateTemplate(toTemplateRow(request).setId(id)) > 0;
     }
 
-    public boolean deleteTemplate(Long id) {
+    static boolean deleteTemplate(NotifyAdminMapper mapper, Long id) {
         return mapper.deleteTemplate(id) > 0;
     }
 
-    public Long createRecord(NotifyAdminModels.Record record) {
+    static Long createRecord(NotifyAdminMapper mapper, NotifyAdminModels.Record record) {
         NotifyAdminMapper.RecordRow row = toRecordRow(record);
         mapper.insertRecord(row);
         return row.getId();
     }
 
-    public List<NotifyAdminModels.Record> listRecords(String channel, Boolean success, int pageNum, int pageSize) {
+    static List<NotifyAdminModels.Record> listRecords(NotifyAdminMapper mapper,
+                                                      String channel,
+                                                      Boolean success,
+                                                      int pageNum,
+                                                      int pageSize) {
         return mapper.listRecords(normalize(channel), success, offset(pageNum, pageSize), pageSize)
                 .stream()
-                .map(this::toRecord)
+                .map(NotifyAdminMapperSupport::toRecord)
                 .toList();
     }
 
-    public long countRecords(String channel, Boolean success) {
+    static long countRecords(NotifyAdminMapper mapper, String channel, Boolean success) {
         return mapper.countRecords(normalize(channel), success);
     }
 
-    public long countRecordsBySuccess(boolean success) {
+    static long countRecordsBySuccess(NotifyAdminMapper mapper, boolean success) {
         return mapper.countRecordsBySuccess(success);
     }
 
-    public long countTemplatesByStatus(String status) {
+    static long countTemplatesByStatus(NotifyAdminMapper mapper, String status) {
         return mapper.countTemplatesByStatus(normalize(status));
     }
 
-    private NotifyAdminMapper.TemplateRow toTemplateRow(NotifyAdminModels.TemplateRequest request) {
+    static NotifyAdminMapper.TemplateRow toTemplateRow(NotifyAdminModels.TemplateRequest request) {
         return new NotifyAdminMapper.TemplateRow()
                 .setTemplateCode(text(request.getTemplateCode()))
                 .setTemplateName(text(request.getTemplateName()))
@@ -86,7 +88,7 @@ public class NotifyAdminRepository {
                 .setStatus(defaultStatus(request.getStatus()));
     }
 
-    private NotifyAdminMapper.RecordRow toRecordRow(NotifyAdminModels.Record record) {
+    static NotifyAdminMapper.RecordRow toRecordRow(NotifyAdminModels.Record record) {
         return new NotifyAdminMapper.RecordRow()
                 .setTemplateCode(record.getTemplateCode())
                 .setChannel(record.getChannel())
@@ -100,7 +102,7 @@ public class NotifyAdminRepository {
                 .setOperatorName(record.getOperatorName());
     }
 
-    private NotifyAdminModels.Template toTemplate(NotifyAdminMapper.TemplateRow row) {
+    static NotifyAdminModels.Template toTemplate(NotifyAdminMapper.TemplateRow row) {
         return new NotifyAdminModels.Template()
                 .setId(row.getId())
                 .setTemplateCode(row.getTemplateCode())
@@ -115,7 +117,7 @@ public class NotifyAdminRepository {
                 .setUpdateTime(row.getUpdateTime());
     }
 
-    private NotifyAdminModels.Record toRecord(NotifyAdminMapper.RecordRow row) {
+    static NotifyAdminModels.Record toRecord(NotifyAdminMapper.RecordRow row) {
         return new NotifyAdminModels.Record()
                 .setId(row.getId())
                 .setTemplateCode(row.getTemplateCode())
@@ -174,5 +176,4 @@ public class NotifyAdminRepository {
                 .filter(AdminTextSupport::hasText)
                 .toList();
     }
-
 }

@@ -1186,10 +1186,11 @@ class RepositoryEngineeringGuardTest {
                 .contains("SecurityStatus")
                 .contains("defaultPasswordChanged");
         assertThat(service)
-                .contains("ObjectProvider<NotifyAdminRepository>")
+                .contains("ObjectProvider<NotifyAdminMapper>")
                 .contains("ObjectProvider<ExcelAdminRepository>")
                 .contains("ObjectProvider<FileAdminRepository>")
                 .contains("ObjectProvider<AdminSystemRepository>")
+                .doesNotContain("NotifyAdminRepository")
                 .contains("admin.default.password.changed")
                 .contains("notifyMetrics()")
                 .contains("excelMetrics()")

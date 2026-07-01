@@ -2,7 +2,7 @@ package com.framework.admin.dashboard;
 
 import com.framework.admin.excel.ExcelAdminRepository;
 import com.framework.admin.file.FileAdminRepository;
-import com.framework.admin.notify.NotifyAdminRepository;
+import com.framework.admin.notify.NotifyAdminMapper;
 import com.framework.admin.system.AdminSystemModels.ConfigItem;
 import com.framework.admin.system.AdminSystemRepository;
 import com.framework.localmessage.model.LocalMessageStatus;
@@ -27,7 +27,7 @@ public class DashboardService {
     private final ObjectProvider<DeadLetterHandler> deadLetterHandlerProvider;
     private final ObjectProvider<LocalMessageService> localMessageServiceProvider;
     private final ObjectProvider<OperationLogMapper> operationLogMapperProvider;
-    private final ObjectProvider<NotifyAdminRepository> notifyAdminRepositoryProvider;
+    private final ObjectProvider<NotifyAdminMapper> notifyAdminMapperProvider;
     private final ObjectProvider<ExcelAdminRepository> excelAdminRepositoryProvider;
     private final ObjectProvider<FileAdminRepository> fileAdminRepositoryProvider;
     private final ObjectProvider<AdminSystemRepository> adminSystemRepositoryProvider;
@@ -35,14 +35,14 @@ public class DashboardService {
     public DashboardService(ObjectProvider<DeadLetterHandler> deadLetterHandlerProvider,
                             ObjectProvider<LocalMessageService> localMessageServiceProvider,
                             ObjectProvider<OperationLogMapper> operationLogMapperProvider,
-                            ObjectProvider<NotifyAdminRepository> notifyAdminRepositoryProvider,
+                            ObjectProvider<NotifyAdminMapper> notifyAdminMapperProvider,
                             ObjectProvider<ExcelAdminRepository> excelAdminRepositoryProvider,
                             ObjectProvider<FileAdminRepository> fileAdminRepositoryProvider,
                             ObjectProvider<AdminSystemRepository> adminSystemRepositoryProvider) {
         this.deadLetterHandlerProvider = deadLetterHandlerProvider;
         this.localMessageServiceProvider = localMessageServiceProvider;
         this.operationLogMapperProvider = operationLogMapperProvider;
-        this.notifyAdminRepositoryProvider = notifyAdminRepositoryProvider;
+        this.notifyAdminMapperProvider = notifyAdminMapperProvider;
         this.excelAdminRepositoryProvider = excelAdminRepositoryProvider;
         this.fileAdminRepositoryProvider = fileAdminRepositoryProvider;
         this.adminSystemRepositoryProvider = adminSystemRepositoryProvider;
@@ -137,16 +137,16 @@ public class DashboardService {
         metrics.put("records", 0L);
         metrics.put("successRecords", 0L);
         metrics.put("failedRecords", 0L);
-        NotifyAdminRepository repository = available(notifyAdminRepositoryProvider);
-        if (repository == null) {
+        NotifyAdminMapper mapper = available(notifyAdminMapperProvider);
+        if (mapper == null) {
             return metrics;
         }
         try {
-            metrics.put("templates", repository.countTemplates(null, null, null));
-            metrics.put("enabledTemplates", repository.countTemplatesByStatus("ENABLED"));
-            metrics.put("records", repository.countRecords(null, null));
-            metrics.put("successRecords", repository.countRecordsBySuccess(true));
-            metrics.put("failedRecords", repository.countRecordsBySuccess(false));
+            metrics.put("templates", mapper.countTemplates(null, null, null));
+            metrics.put("enabledTemplates", mapper.countTemplatesByStatus("ENABLED"));
+            metrics.put("records", mapper.countRecords(null, null));
+            metrics.put("successRecords", mapper.countRecordsBySuccess(true));
+            metrics.put("failedRecords", mapper.countRecordsBySuccess(false));
         } catch (Exception ignored) {
             return zero(metrics);
         }

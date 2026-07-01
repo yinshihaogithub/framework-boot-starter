@@ -28,14 +28,14 @@ public class NotifyAdminService {
 
     private static final Set<String> SUPPORTED_STATUSES = Set.of("ENABLED", "DISABLED");
 
-    private final NotifyAdminRepository repository;
+    private final NotifyAdminMapper mapper;
     private final ObjectProvider<NotifyService> notifyServiceProvider;
     private final AdminAuditService auditService;
 
-    public NotifyAdminService(NotifyAdminRepository repository,
+    public NotifyAdminService(NotifyAdminMapper mapper,
                               ObjectProvider<NotifyService> notifyServiceProvider,
                               AdminAuditService auditService) {
-        this.repository = repository;
+        this.mapper = mapper;
         this.notifyServiceProvider = notifyServiceProvider;
         this.auditService = auditService;
     }
@@ -43,10 +43,10 @@ public class NotifyAdminService {
     public Map<String, Long> stats() {
         try {
             Map<String, Long> stats = new LinkedHashMap<>();
-            stats.put("enabledTemplates", repository.countTemplatesByStatus("ENABLED"));
-            stats.put("disabledTemplates", repository.countTemplatesByStatus("DISABLED"));
-            stats.put("successRecords", repository.countRecordsBySuccess(true));
-            stats.put("failedRecords", repository.countRecordsBySuccess(false));
+            stats.put("enabledTemplates", NotifyAdminMapperSupport.countTemplatesByStatus(mapper, "ENABLED"));
+            stats.put("disabledTemplates", NotifyAdminMapperSupport.countTemplatesByStatus(mapper, "DISABLED"));
+            stats.put("successRecords", NotifyAdminMapperSupport.countRecordsBySuccess(mapper, true));
+            stats.put("failedRecords", NotifyAdminMapperSupport.countRecordsBySuccess(mapper, false));
             return stats;
         } catch (RuntimeException e) {
             log.warn("[通知中心] 统计查询失败 error={}", e.getMessage());
@@ -65,9 +65,9 @@ public class NotifyAdminService {
             return PageResult.empty(safePageNum, safePageSize);
         }
         try {
-            List<NotifyAdminModels.Template> records = repository.listTemplates(
-                    safeKeyword, safeChannel, safeStatus, safePageNum, safePageSize);
-            long total = repository.countTemplates(safeKeyword, safeChannel, safeStatus);
+            List<NotifyAdminModels.Template> records = NotifyAdminMapperSupport.listTemplates(
+                    mapper, safeKeyword, safeChannel, safeStatus, safePageNum, safePageSize);
+            long total = NotifyAdminMapperSupport.countTemplates(mapper, safeKeyword, safeChannel, safeStatus);
             return PageResult.of(records, total, safePageNum, safePageSize);
         } catch (RuntimeException e) {
             log.warn("[通知中心] 模板列表查询失败 error={}", e.getMessage());
@@ -78,7 +78,7 @@ public class NotifyAdminService {
     public ActionResult<Long> createTemplate(NotifyAdminModels.TemplateRequest request, HttpServletRequest servletRequest) {
         try {
             validateTemplate(request);
-            Long id = repository.createTemplate(request);
+            Long id = NotifyAdminMapperSupport.createTemplate(mapper, request);
             auditSuccess(servletRequest, "新增通知模板", "CREATE",
                     "id", id, "templateCode", request.getTemplateCode(), "channel", request.getChannel());
             return ActionResult.success(id);
@@ -98,10 +98,10 @@ public class NotifyAdminService {
         }
         try {
             validateTemplate(request);
-            if (repository.findTemplate(id).isEmpty()) {
+            if (NotifyAdminMapperSupport.findTemplate(mapper, id).isEmpty()) {
                 return ActionResult.fail(ResultCode.NOT_FOUND, "模板不存在");
             }
-            if (!repository.updateTemplate(id, request)) {
+            if (!NotifyAdminMapperSupport.updateTemplate(mapper, id, request)) {
                 return ActionResult.fail(ResultCode.NOT_FOUND, "模板不存在");
             }
             auditSuccess(servletRequest, "更新通知模板", "UPDATE",
@@ -121,10 +121,10 @@ public class NotifyAdminService {
             return invalidId;
         }
         try {
-            if (repository.findTemplate(id).isEmpty()) {
+            if (NotifyAdminMapperSupport.findTemplate(mapper, id).isEmpty()) {
                 return ActionResult.fail(ResultCode.NOT_FOUND, "模板不存在");
             }
-            if (!repository.deleteTemplate(id)) {
+            if (!NotifyAdminMapperSupport.deleteTemplate(mapper, id)) {
                 return ActionResult.fail(ResultCode.NOT_FOUND, "模板不存在");
             }
             auditSuccess(servletRequest, "删除通知模板", "DELETE", "id", id);
@@ -144,7 +144,7 @@ public class NotifyAdminService {
         }
         NotifyAdminModels.Template template;
         try {
-            template = repository.findTemplate(id).orElse(null);
+            template = NotifyAdminMapperSupport.findTemplate(mapper, id).orElse(null);
         } catch (RuntimeException e) {
             log.warn("[通知中心] 测试发送查询模板失败 id={}, error={}", id, e.getMessage());
             return ActionResult.fail(ResultCode.SERVICE_ERROR, "通知模板查询失败");
@@ -169,7 +169,7 @@ public class NotifyAdminService {
                     .setResultMessage(result.getMessage())
                     .setTraceId(TraceContext.ensureTraceId())
                     .setOperatorName(operator);
-            Long recordId = repository.createRecord(record);
+            Long recordId = NotifyAdminMapperSupport.createRecord(mapper, record);
             record.setId(recordId);
             auditSuccess(servletRequest, "发送测试通知", "CREATE",
                     "templateId", id, "recordId", recordId, "operator", operator, "success", record.getSuccess());
@@ -190,8 +190,9 @@ public class NotifyAdminService {
             return PageResult.empty(safePageNum, safePageSize);
         }
         try {
-            List<NotifyAdminModels.Record> records = repository.listRecords(safeChannel, success, safePageNum, safePageSize);
-            long total = repository.countRecords(safeChannel, success);
+            List<NotifyAdminModels.Record> records =
+                    NotifyAdminMapperSupport.listRecords(mapper, safeChannel, success, safePageNum, safePageSize);
+            long total = NotifyAdminMapperSupport.countRecords(mapper, safeChannel, success);
             return PageResult.of(records, total, safePageNum, safePageSize);
         } catch (RuntimeException e) {
             log.warn("[通知中心] 发送记录查询失败 error={}", e.getMessage());

@@ -32,7 +32,7 @@ class NotifyAdminServiceTest {
 
     @Test
     void validatesRequiredTemplateFields() {
-        NotifyAdminService service = service(new InMemoryNotifyAdminRepository(), null);
+        NotifyAdminService service = service(new InMemoryNotifyAdminMapper(), null);
         NotifyAdminModels.TemplateRequest request = templateRequest();
         request.setTemplateCode("\u00A0\u3000");
 
@@ -45,7 +45,7 @@ class NotifyAdminServiceTest {
 
     @Test
     void rejectsUnsupportedTemplateChannel() {
-        NotifyAdminService service = service(new InMemoryNotifyAdminRepository(), null);
+        NotifyAdminService service = service(new InMemoryNotifyAdminMapper(), null);
         NotifyAdminModels.TemplateRequest request = templateRequest();
         request.setChannel("ding-talk");
 
@@ -58,7 +58,7 @@ class NotifyAdminServiceTest {
 
     @Test
     void rejectsUnsupportedTemplateStatus() {
-        NotifyAdminService service = service(new InMemoryNotifyAdminRepository(), null);
+        NotifyAdminService service = service(new InMemoryNotifyAdminMapper(), null);
         NotifyAdminModels.TemplateRequest request = templateRequest();
         request.setStatus("ARCHIVED");
 
@@ -71,7 +71,7 @@ class NotifyAdminServiceTest {
 
     @Test
     void listsTemplatesWithSafePaging() {
-        InMemoryNotifyAdminRepository repository = new InMemoryNotifyAdminRepository();
+        InMemoryNotifyAdminMapper repository = new InMemoryNotifyAdminMapper();
         repository.createTemplate(templateRequest());
         NotifyAdminService service = service(repository, null);
 
@@ -84,7 +84,7 @@ class NotifyAdminServiceTest {
 
     @Test
     void templatesNormalizeFiltersBeforeQueryingRepository() {
-        InMemoryNotifyAdminRepository repository = new InMemoryNotifyAdminRepository();
+        InMemoryNotifyAdminMapper repository = new InMemoryNotifyAdminMapper();
         repository.createTemplate(templateRequest());
         NotifyAdminModels.TemplateRequest otherTemplate = templateRequest();
         otherTemplate.setTemplateCode("alert");
@@ -105,7 +105,7 @@ class NotifyAdminServiceTest {
 
     @Test
     void templatesReturnEmptyPageForInvalidChannelOrStatusFilter() {
-        InMemoryNotifyAdminRepository repository = new InMemoryNotifyAdminRepository();
+        InMemoryNotifyAdminMapper repository = new InMemoryNotifyAdminMapper();
         repository.createTemplate(templateRequest());
         NotifyAdminService service = service(repository, null);
 
@@ -120,7 +120,7 @@ class NotifyAdminServiceTest {
 
     @Test
     void recordsNormalizeChannelFilterBeforeQueryingRepository() {
-        InMemoryNotifyAdminRepository repository = new InMemoryNotifyAdminRepository();
+        InMemoryNotifyAdminMapper repository = new InMemoryNotifyAdminMapper();
         repository.createRecord(record("LOG", true));
         repository.createRecord(record("EMAIL", true));
         NotifyAdminService service = service(repository, null);
@@ -134,7 +134,7 @@ class NotifyAdminServiceTest {
 
     @Test
     void recordsReturnEmptyPageForInvalidChannelFilter() {
-        InMemoryNotifyAdminRepository repository = new InMemoryNotifyAdminRepository();
+        InMemoryNotifyAdminMapper repository = new InMemoryNotifyAdminMapper();
         repository.createRecord(record("LOG", true));
         NotifyAdminService service = service(repository, null);
 
@@ -146,7 +146,7 @@ class NotifyAdminServiceTest {
 
     @Test
     void queryEndpointsFallBackWhenRepositoryFails() {
-        InMemoryNotifyAdminRepository repository = new InMemoryNotifyAdminRepository();
+        InMemoryNotifyAdminMapper repository = new InMemoryNotifyAdminMapper();
         repository.queryFailure = new RuntimeException("database down");
         NotifyAdminService service = service(repository, null);
 
@@ -168,7 +168,7 @@ class NotifyAdminServiceTest {
 
     @Test
     void sendTestRendersTemplateAndPersistsRecord() {
-        InMemoryNotifyAdminRepository repository = new InMemoryNotifyAdminRepository();
+        InMemoryNotifyAdminMapper repository = new InMemoryNotifyAdminMapper();
         Long templateId = repository.createTemplate(templateRequest());
         CapturingNotifyService notifyService = new CapturingNotifyService(true, "sent");
         NotifyAdminService service = service(repository, notifyService);
@@ -195,7 +195,7 @@ class NotifyAdminServiceTest {
     @Test
     void sendTestRecordsCurrentUserAsOperatorAndAuditsIt() {
         UserContextHolder.set(new LoginUser().setUserId(7L).setUsername("alice"));
-        InMemoryNotifyAdminRepository repository = new InMemoryNotifyAdminRepository();
+        InMemoryNotifyAdminMapper repository = new InMemoryNotifyAdminMapper();
         Long templateId = repository.createTemplate(templateRequest());
         CapturingNotifyService notifyService = new CapturingNotifyService(true, "sent");
         RecordingAuditService auditService = new RecordingAuditService();
@@ -214,7 +214,7 @@ class NotifyAdminServiceTest {
 
     @Test
     void sendTestDefaultsOperatorWhenUserContextIsMissing() {
-        InMemoryNotifyAdminRepository repository = new InMemoryNotifyAdminRepository();
+        InMemoryNotifyAdminMapper repository = new InMemoryNotifyAdminMapper();
         Long templateId = repository.createTemplate(templateRequest());
         NotifyAdminService service = service(repository, new CapturingNotifyService(true, "sent"));
 
@@ -228,7 +228,7 @@ class NotifyAdminServiceTest {
     @Test
     void createTemplateAuditsCurrentUserAsOperator() {
         UserContextHolder.set(new LoginUser().setUserId(7L).setUsername("alice"));
-        InMemoryNotifyAdminRepository repository = new InMemoryNotifyAdminRepository();
+        InMemoryNotifyAdminMapper repository = new InMemoryNotifyAdminMapper();
         RecordingAuditService auditService = new RecordingAuditService();
         NotifyAdminService service = service(repository, null, auditService);
 
@@ -244,7 +244,7 @@ class NotifyAdminServiceTest {
     @Test
     void updateTemplateAuditsCurrentUserAsOperator() {
         UserContextHolder.set(new LoginUser().setUserId(8L).setUsername("bob"));
-        InMemoryNotifyAdminRepository repository = new InMemoryNotifyAdminRepository();
+        InMemoryNotifyAdminMapper repository = new InMemoryNotifyAdminMapper();
         Long templateId = repository.createTemplate(templateRequest());
         RecordingAuditService auditService = new RecordingAuditService();
         NotifyAdminService service = service(repository, null, auditService);
@@ -260,7 +260,7 @@ class NotifyAdminServiceTest {
 
     @Test
     void deleteTemplateDefaultsAuditOperatorWhenUserContextIsMissing() {
-        InMemoryNotifyAdminRepository repository = new InMemoryNotifyAdminRepository();
+        InMemoryNotifyAdminMapper repository = new InMemoryNotifyAdminMapper();
         Long templateId = repository.createTemplate(templateRequest());
         RecordingAuditService auditService = new RecordingAuditService();
         NotifyAdminService service = service(repository, null, auditService);
@@ -276,7 +276,7 @@ class NotifyAdminServiceTest {
 
     @Test
     void sendTestNormalizesReceiverAndWebhookOverridesBeforeSendingAndRecording() {
-        InMemoryNotifyAdminRepository repository = new InMemoryNotifyAdminRepository();
+        InMemoryNotifyAdminMapper repository = new InMemoryNotifyAdminMapper();
         Long templateId = repository.createTemplate(templateRequest());
         CapturingNotifyService notifyService = new CapturingNotifyService(true, "sent");
         NotifyAdminService service = service(repository, notifyService);
@@ -291,12 +291,12 @@ class NotifyAdminServiceTest {
         assertThat(record.data().getWebhookUrl()).isEqualTo("https://callback.example.com/hook");
         assertThat(notifyService.message.getReceivers()).containsExactly("ops@example.com", "dev@example.com");
         assertThat(notifyService.message.getWebhookUrl()).isEqualTo("https://callback.example.com/hook");
-        assertThat(repository.records.get(0).getReceivers()).containsExactly("ops@example.com", "dev@example.com");
+        assertThat(repository.records.get(0).getReceivers()).isEqualTo("ops@example.com,dev@example.com");
     }
 
     @Test
     void sendTestFallsBackToTemplateReceiversWhenOverrideReceiversAreBlank() {
-        InMemoryNotifyAdminRepository repository = new InMemoryNotifyAdminRepository();
+        InMemoryNotifyAdminMapper repository = new InMemoryNotifyAdminMapper();
         Long templateId = repository.createTemplate(templateRequest());
         CapturingNotifyService notifyService = new CapturingNotifyService(true, "sent");
         NotifyAdminService service = service(repository, notifyService);
@@ -312,7 +312,7 @@ class NotifyAdminServiceTest {
 
     @Test
     void createTemplateSucceedsWhenAuditFails() {
-        InMemoryNotifyAdminRepository repository = new InMemoryNotifyAdminRepository();
+        InMemoryNotifyAdminMapper repository = new InMemoryNotifyAdminMapper();
         NotifyAdminService service = service(repository, null, new ThrowingAuditService());
 
         NotifyAdminService.ActionResult<Long> result = service.createTemplate(templateRequest(), null);
@@ -324,7 +324,7 @@ class NotifyAdminServiceTest {
 
     @Test
     void updateTemplateSucceedsWhenAuditFails() {
-        InMemoryNotifyAdminRepository repository = new InMemoryNotifyAdminRepository();
+        InMemoryNotifyAdminMapper repository = new InMemoryNotifyAdminMapper();
         Long templateId = repository.createTemplate(templateRequest());
         NotifyAdminModels.TemplateRequest request = templateRequest();
         request.setTitle("updated");
@@ -334,12 +334,12 @@ class NotifyAdminServiceTest {
 
         assertThat(result.success()).isTrue();
         assertThat(result.data()).isEqualTo("已更新");
-        assertThat(repository.findTemplate(templateId).orElseThrow().getTitle()).isEqualTo("updated");
+        assertThat(repository.findStoredTemplate(templateId).orElseThrow().getTitle()).isEqualTo("updated");
     }
 
     @Test
     void deleteTemplateSucceedsWhenAuditFails() {
-        InMemoryNotifyAdminRepository repository = new InMemoryNotifyAdminRepository();
+        InMemoryNotifyAdminMapper repository = new InMemoryNotifyAdminMapper();
         Long templateId = repository.createTemplate(templateRequest());
         NotifyAdminService service = service(repository, null, new ThrowingAuditService());
 
@@ -352,7 +352,7 @@ class NotifyAdminServiceTest {
 
     @Test
     void sendTestSucceedsWhenAuditFails() {
-        InMemoryNotifyAdminRepository repository = new InMemoryNotifyAdminRepository();
+        InMemoryNotifyAdminMapper repository = new InMemoryNotifyAdminMapper();
         Long templateId = repository.createTemplate(templateRequest());
         NotifyAdminService service = service(repository, new CapturingNotifyService(true, "sent"),
                 new ThrowingAuditService());
@@ -366,7 +366,7 @@ class NotifyAdminServiceTest {
 
     @Test
     void sendTestAcceptsLowercaseTemplateChannel() {
-        InMemoryNotifyAdminRepository repository = new InMemoryNotifyAdminRepository();
+        InMemoryNotifyAdminMapper repository = new InMemoryNotifyAdminMapper();
         NotifyAdminModels.TemplateRequest templateRequest = templateRequest();
         templateRequest.setChannel("webhook");
         Long templateId = repository.createTemplate(templateRequest);
@@ -381,7 +381,7 @@ class NotifyAdminServiceTest {
 
     @Test
     void sendTestRecordsFailureWhenNotifyServiceIsMissing() {
-        InMemoryNotifyAdminRepository repository = new InMemoryNotifyAdminRepository();
+        InMemoryNotifyAdminMapper repository = new InMemoryNotifyAdminMapper();
         Long templateId = repository.createTemplate(templateRequest());
         NotifyAdminService service = service(repository, null);
 
@@ -395,7 +395,7 @@ class NotifyAdminServiceTest {
 
     @Test
     void sendTestRecordsFailureWhenNotifyProviderFails() {
-        InMemoryNotifyAdminRepository repository = new InMemoryNotifyAdminRepository();
+        InMemoryNotifyAdminMapper repository = new InMemoryNotifyAdminMapper();
         Long templateId = repository.createTemplate(templateRequest());
         NotifyAdminService service = new NotifyAdminService(repository, failingProvider(), auditService());
 
@@ -409,7 +409,7 @@ class NotifyAdminServiceTest {
 
     @Test
     void sendTestRecordsFailureWhenNotifySendThrows() {
-        InMemoryNotifyAdminRepository repository = new InMemoryNotifyAdminRepository();
+        InMemoryNotifyAdminMapper repository = new InMemoryNotifyAdminMapper();
         Long templateId = repository.createTemplate(templateRequest());
         NotifyAdminService service = service(repository, message -> {
             throw new IllegalStateException("webhook unavailable");
@@ -425,7 +425,7 @@ class NotifyAdminServiceTest {
 
     @Test
     void sendTestDoesNotDispatchDisabledTemplateAndPersistsFailureRecord() {
-        InMemoryNotifyAdminRepository repository = new InMemoryNotifyAdminRepository();
+        InMemoryNotifyAdminMapper repository = new InMemoryNotifyAdminMapper();
         NotifyAdminModels.TemplateRequest templateRequest = templateRequest();
         templateRequest.setStatus("DISABLED");
         Long templateId = repository.createTemplate(templateRequest);
@@ -443,7 +443,7 @@ class NotifyAdminServiceTest {
 
     @Test
     void templateIdOperationsRejectInvalidIdBeforeRepositoryLookup() {
-        InMemoryNotifyAdminRepository repository = new InMemoryNotifyAdminRepository();
+        InMemoryNotifyAdminMapper repository = new InMemoryNotifyAdminMapper();
         repository.queryFailure = new RuntimeException("database down");
         NotifyAdminService service = service(repository, null);
 
@@ -454,7 +454,7 @@ class NotifyAdminServiceTest {
 
     @Test
     void updateTemplateReturnsFalseWhenTemplateDoesNotExist() {
-        NotifyAdminService service = service(new InMemoryNotifyAdminRepository(), null);
+        NotifyAdminService service = service(new InMemoryNotifyAdminMapper(), null);
 
         NotifyAdminService.ActionResult<String> updated = service.updateTemplate(404L, templateRequest(), null);
 
@@ -465,7 +465,7 @@ class NotifyAdminServiceTest {
 
     @Test
     void deleteTemplateReturnsNotFoundWhenTemplateDoesNotExist() {
-        NotifyAdminService service = service(new InMemoryNotifyAdminRepository(), null);
+        NotifyAdminService service = service(new InMemoryNotifyAdminMapper(), null);
 
         NotifyAdminService.ActionResult<String> deleted = service.deleteTemplate(404L, null);
 
@@ -476,7 +476,7 @@ class NotifyAdminServiceTest {
 
     @Test
     void updateTemplateReturnsNotFoundWhenTemplateDisappearsBeforeUpdate() {
-        InMemoryNotifyAdminRepository repository = new InMemoryNotifyAdminRepository();
+        InMemoryNotifyAdminMapper repository = new InMemoryNotifyAdminMapper();
         Long templateId = repository.createTemplate(templateRequest());
         repository.updateTemplateAffected = false;
         NotifyAdminService service = service(repository, null);
@@ -490,7 +490,7 @@ class NotifyAdminServiceTest {
 
     @Test
     void deleteTemplateReturnsNotFoundWhenTemplateDisappearsBeforeDelete() {
-        InMemoryNotifyAdminRepository repository = new InMemoryNotifyAdminRepository();
+        InMemoryNotifyAdminMapper repository = new InMemoryNotifyAdminMapper();
         Long templateId = repository.createTemplate(templateRequest());
         repository.deleteTemplateAffected = false;
         NotifyAdminService service = service(repository, null);
@@ -505,7 +505,7 @@ class NotifyAdminServiceTest {
 
     @Test
     void writeOperationsReturnServiceErrorWhenRepositoryFails() {
-        InMemoryNotifyAdminRepository repository = new InMemoryNotifyAdminRepository();
+        InMemoryNotifyAdminMapper repository = new InMemoryNotifyAdminMapper();
         Long templateId = repository.createTemplate(templateRequest());
         repository.commandFailure = new RuntimeException("database down");
         NotifyAdminService service = service(repository, null);
@@ -523,7 +523,7 @@ class NotifyAdminServiceTest {
 
     @Test
     void sendTestReturnsServiceErrorWhenRecordSaveFails() {
-        InMemoryNotifyAdminRepository repository = new InMemoryNotifyAdminRepository();
+        InMemoryNotifyAdminMapper repository = new InMemoryNotifyAdminMapper();
         Long templateId = repository.createTemplate(templateRequest());
         repository.commandFailure = new RuntimeException("database down");
         NotifyAdminService service = service(repository, null);
@@ -535,11 +535,11 @@ class NotifyAdminServiceTest {
         assertThat(result.message()).isEqualTo("通知测试发送失败");
     }
 
-    private static NotifyAdminService service(InMemoryNotifyAdminRepository repository, NotifyService notifyService) {
+    private static NotifyAdminService service(InMemoryNotifyAdminMapper repository, NotifyService notifyService) {
         return new NotifyAdminService(repository, provider(notifyService), auditService());
     }
 
-    private static NotifyAdminService service(InMemoryNotifyAdminRepository repository, NotifyService notifyService,
+    private static NotifyAdminService service(InMemoryNotifyAdminMapper repository, NotifyService notifyService,
                                              AdminAuditService auditService) {
         return new NotifyAdminService(repository, provider(notifyService), auditService);
     }
@@ -690,9 +690,9 @@ class NotifyAdminServiceTest {
         }
     }
 
-    private static class InMemoryNotifyAdminRepository extends NotifyAdminRepository {
-        private final List<NotifyAdminModels.Template> templates = new ArrayList<>();
-        private final List<NotifyAdminModels.Record> records = new ArrayList<>();
+    private static class InMemoryNotifyAdminMapper implements NotifyAdminMapper {
+        private final List<NotifyAdminMapper.TemplateRow> templates = new ArrayList<>();
+        private final List<NotifyAdminMapper.RecordRow> records = new ArrayList<>();
         private long nextTemplateId = 1;
         private long nextRecordId = 1;
         private boolean updateTemplateAffected = true;
@@ -700,102 +700,116 @@ class NotifyAdminServiceTest {
         private RuntimeException queryFailure;
         private RuntimeException commandFailure;
 
-        private InMemoryNotifyAdminRepository() {
-            super(null);
+        Long createTemplate(NotifyAdminModels.TemplateRequest request) {
+            NotifyAdminMapper.TemplateRow row = NotifyAdminMapperSupport.toTemplateRow(request);
+            insertTemplate(row);
+            return row.getId();
+        }
+
+        Long createRecord(NotifyAdminModels.Record record) {
+            NotifyAdminMapper.RecordRow row = NotifyAdminMapperSupport.toRecordRow(record);
+            insertRecord(row);
+            return row.getId();
+        }
+
+        Optional<NotifyAdminModels.Template> findStoredTemplate(Long id) {
+            return Optional.ofNullable(findTemplate(id)).map(NotifyAdminMapperSupport::toTemplate);
         }
 
         @Override
-        public List<NotifyAdminModels.Template> listTemplates(String keyword, String channel, String status,
-                                                              int pageNum, int pageSize) {
+        public List<NotifyAdminMapper.TemplateRow> listTemplates(String keywordLike,
+                                                                 String channel,
+                                                                 String status,
+                                                                 int offset,
+                                                                 int pageSize) {
             failQueryIfNeeded();
+            String keyword = keyword(keywordLike);
             return templates.stream()
-                    .filter(template -> keyword == null || template.getTemplateCode().contains(keyword)
-                            || template.getTemplateName().contains(keyword)
-                            || template.getTitle().contains(keyword))
+                    .filter(template -> keyword == null || contains(template.getTemplateCode(), keyword)
+                            || contains(template.getTemplateName(), keyword)
+                            || contains(template.getTitle(), keyword))
                     .filter(template -> channel == null || channel.equals(template.getChannel()))
                     .filter(template -> status == null || status.equals(template.getStatus()))
+                    .skip(offset)
+                    .limit(pageSize)
+                    .map(this::copy)
                     .toList();
         }
 
         @Override
-        public long countTemplates(String keyword, String channel, String status) {
+        public long countTemplates(String keywordLike, String channel, String status) {
             failQueryIfNeeded();
-            return listTemplates(keyword, channel, status, 1, Integer.MAX_VALUE).size();
+            return listTemplates(keywordLike, channel, status, 0, Integer.MAX_VALUE).size();
         }
 
         @Override
-        public Optional<NotifyAdminModels.Template> findTemplate(Long id) {
+        public NotifyAdminMapper.TemplateRow findTemplate(Long id) {
             failQueryIfNeeded();
-            return templates.stream().filter(template -> id.equals(template.getId())).findFirst();
+            return templates.stream()
+                    .filter(template -> id.equals(template.getId()))
+                    .findFirst()
+                    .map(this::copy)
+                    .orElse(null);
         }
 
         @Override
-        public Long createTemplate(NotifyAdminModels.TemplateRequest request) {
+        public int insertTemplate(NotifyAdminMapper.TemplateRow row) {
             failCommandIfNeeded();
-            long id = nextTemplateId++;
-            templates.add(new NotifyAdminModels.Template()
-                    .setId(id)
-                    .setTemplateCode(request.getTemplateCode())
-                    .setTemplateName(request.getTemplateName())
-                    .setChannel(request.getChannel())
-                    .setTitle(request.getTitle())
-                    .setContent(request.getContent())
-                    .setReceivers(request.getReceivers())
-                    .setWebhookUrl(request.getWebhookUrl())
-                    .setStatus(request.getStatus() == null ? "ENABLED" : request.getStatus()));
-            return id;
+            row.setId(nextTemplateId++);
+            templates.add(copy(row));
+            return 1;
         }
 
         @Override
-        public boolean updateTemplate(Long id, NotifyAdminModels.TemplateRequest request) {
+        public int updateTemplate(NotifyAdminMapper.TemplateRow row) {
             failCommandIfNeeded();
             if (!updateTemplateAffected) {
-                return false;
+                return 0;
             }
-            findTemplate(id).ifPresent(template -> template
-                    .setTemplateCode(request.getTemplateCode())
-                    .setTemplateName(request.getTemplateName())
-                    .setChannel(request.getChannel())
-                    .setTitle(request.getTitle())
-                    .setContent(request.getContent())
-                    .setReceivers(request.getReceivers())
-                    .setWebhookUrl(request.getWebhookUrl())
-                    .setStatus(request.getStatus()));
-            return true;
+            for (int i = 0; i < templates.size(); i++) {
+                if (row.getId().equals(templates.get(i).getId())) {
+                    templates.set(i, copy(row));
+                    return 1;
+                }
+            }
+            return 0;
         }
 
         @Override
-        public boolean deleteTemplate(Long id) {
+        public int deleteTemplate(Long id) {
             failCommandIfNeeded();
             if (!deleteTemplateAffected) {
-                return false;
+                return 0;
             }
+            int sizeBefore = templates.size();
             templates.removeIf(template -> id.equals(template.getId()));
-            return true;
+            return templates.size() < sizeBefore ? 1 : 0;
         }
 
         @Override
-        public Long createRecord(NotifyAdminModels.Record record) {
+        public int insertRecord(NotifyAdminMapper.RecordRow row) {
             failCommandIfNeeded();
-            long id = nextRecordId++;
-            record.setId(id);
-            records.add(record);
-            return id;
+            row.setId(nextRecordId++);
+            records.add(copy(row));
+            return 1;
         }
 
         @Override
-        public List<NotifyAdminModels.Record> listRecords(String channel, Boolean success, int pageNum, int pageSize) {
+        public List<NotifyAdminMapper.RecordRow> listRecords(String channel, Boolean success, int offset, int pageSize) {
             failQueryIfNeeded();
             return records.stream()
                     .filter(record -> channel == null || channel.equals(record.getChannel()))
                     .filter(record -> success == null || success.equals(record.getSuccess()))
+                    .skip(offset)
+                    .limit(pageSize)
+                    .map(this::copy)
                     .toList();
         }
 
         @Override
         public long countRecords(String channel, Boolean success) {
             failQueryIfNeeded();
-            return listRecords(channel, success, 1, Integer.MAX_VALUE).size();
+            return listRecords(channel, success, 0, Integer.MAX_VALUE).size();
         }
 
         @Override
@@ -808,6 +822,48 @@ class NotifyAdminServiceTest {
         public long countTemplatesByStatus(String status) {
             failQueryIfNeeded();
             return templates.stream().filter(template -> status.equals(template.getStatus())).count();
+        }
+
+        private String keyword(String keywordLike) {
+            if (keywordLike == null) {
+                return null;
+            }
+            return keywordLike.replace("%", "");
+        }
+
+        private boolean contains(String value, String keyword) {
+            return value != null && value.contains(keyword);
+        }
+
+        private NotifyAdminMapper.TemplateRow copy(NotifyAdminMapper.TemplateRow row) {
+            return new NotifyAdminMapper.TemplateRow()
+                    .setId(row.getId())
+                    .setTemplateCode(row.getTemplateCode())
+                    .setTemplateName(row.getTemplateName())
+                    .setChannel(row.getChannel())
+                    .setTitle(row.getTitle())
+                    .setContent(row.getContent())
+                    .setReceivers(row.getReceivers())
+                    .setWebhookUrl(row.getWebhookUrl())
+                    .setStatus(row.getStatus())
+                    .setCreateTime(row.getCreateTime())
+                    .setUpdateTime(row.getUpdateTime());
+        }
+
+        private NotifyAdminMapper.RecordRow copy(NotifyAdminMapper.RecordRow row) {
+            return new NotifyAdminMapper.RecordRow()
+                    .setId(row.getId())
+                    .setTemplateCode(row.getTemplateCode())
+                    .setChannel(row.getChannel())
+                    .setTitle(row.getTitle())
+                    .setContent(row.getContent())
+                    .setReceivers(row.getReceivers())
+                    .setWebhookUrl(row.getWebhookUrl())
+                    .setSuccess(row.getSuccess())
+                    .setResultMessage(row.getResultMessage())
+                    .setTraceId(row.getTraceId())
+                    .setOperatorName(row.getOperatorName())
+                    .setCreateTime(row.getCreateTime());
         }
 
         private void failQueryIfNeeded() {

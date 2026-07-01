@@ -7,14 +7,14 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-class NotifyAdminRepositoryTest {
+class NotifyAdminMapperSupportTest {
 
     private final RecordingMapper mapper = new RecordingMapper();
-    private final NotifyAdminRepository repository = new NotifyAdminRepository(mapper);
 
     @Test
     void listTemplatesTrimsFiltersAndCalculatesOffset() {
-        repository.listTemplates("\u00A0alarm\u3000", "\u3000email\u00A0", "\u00A0enabled\u3000", 2, 10);
+        NotifyAdminMapperSupport.listTemplates(mapper, "\u00A0alarm\u3000", "\u3000email\u00A0",
+                "\u00A0enabled\u3000", 2, 10);
 
         assertThat(mapper.keywordLike).isEqualTo("%alarm%");
         assertThat(mapper.channel).isEqualTo("EMAIL");
@@ -34,7 +34,7 @@ class NotifyAdminRepositoryTest {
         request.setReceivers(Arrays.asList("\u00A0admin@example.com\u3000", "\u3000", null, "ops@example.com"));
         request.setStatus("\u3000disabled\u00A0");
 
-        Long id = repository.createTemplate(request);
+        Long id = NotifyAdminMapperSupport.createTemplate(mapper, request);
 
         assertThat(id).isEqualTo(7L);
         assertThat(mapper.templateRow.getTemplateCode()).isEqualTo("welcome");
@@ -55,7 +55,7 @@ class NotifyAdminRepositoryTest {
         request.setReceivers(Arrays.asList("\u00A0\u3000", null));
         request.setStatus("\u00A0\u3000");
 
-        Long id = repository.createTemplate(request);
+        Long id = NotifyAdminMapperSupport.createTemplate(mapper, request);
 
         assertThat(id).isEqualTo(7L);
         assertThat(mapper.templateRow.getReceivers()).isNull();
@@ -69,7 +69,7 @@ class NotifyAdminRepositoryTest {
                 .setTemplateCode("welcome")
                 .setReceivers("\u00A0admin@example.com\u3000,\u00A0\u3000,ops@example.com\u00A0");
 
-        NotifyAdminModels.Template template = repository.findTemplate(1L).orElseThrow();
+        NotifyAdminModels.Template template = NotifyAdminMapperSupport.findTemplate(mapper, 1L).orElseThrow();
 
         assertThat(template.getReceivers()).containsExactly("admin@example.com", "ops@example.com");
     }
@@ -82,7 +82,7 @@ class NotifyAdminRepositoryTest {
                 .setReceivers(List.of("a@example.com", "\u3000b@example.com\u00A0"))
                 .setSuccess(true);
 
-        Long id = repository.createRecord(record);
+        Long id = NotifyAdminMapperSupport.createRecord(mapper, record);
 
         assertThat(id).isEqualTo(9L);
         assertThat(mapper.recordRow.getReceivers()).isEqualTo("a@example.com,b@example.com");
@@ -105,7 +105,8 @@ class NotifyAdminRepositoryTest {
                 .setOperatorName("admin")
                 .setCreateTime("2026-01-01 10:00:00"));
 
-        List<NotifyAdminModels.Record> records = repository.listRecords("\u3000email\u00A0", false, 3, 15);
+        List<NotifyAdminModels.Record> records =
+                NotifyAdminMapperSupport.listRecords(mapper, "\u3000email\u00A0", false, 3, 15);
 
         assertThat(mapper.channel).isEqualTo("EMAIL");
         assertThat(mapper.success).isFalse();
@@ -125,18 +126,19 @@ class NotifyAdminRepositoryTest {
 
     @Test
     void countQueriesNormalizeArguments() {
-        assertThat(repository.countTemplates("\u00A0welcome\u3000", "\u3000log\u00A0", "\u00A0enabled\u3000")).isEqualTo(11L);
+        assertThat(NotifyAdminMapperSupport.countTemplates(mapper, "\u00A0welcome\u3000", "\u3000log\u00A0",
+                "\u00A0enabled\u3000")).isEqualTo(11L);
         assertThat(mapper.keywordLike).isEqualTo("%welcome%");
         assertThat(mapper.channel).isEqualTo("LOG");
         assertThat(mapper.status).isEqualTo("ENABLED");
 
-        assertThat(repository.countRecords("\u3000email\u00A0", false)).isEqualTo(12L);
+        assertThat(NotifyAdminMapperSupport.countRecords(mapper, "\u3000email\u00A0", false)).isEqualTo(12L);
         assertThat(mapper.channel).isEqualTo("EMAIL");
         assertThat(mapper.success).isFalse();
 
-        assertThat(repository.countTemplatesByStatus("\u00A0disabled\u3000")).isEqualTo(13L);
+        assertThat(NotifyAdminMapperSupport.countTemplatesByStatus(mapper, "\u00A0disabled\u3000")).isEqualTo(13L);
         assertThat(mapper.status).isEqualTo("DISABLED");
-        assertThat(repository.countRecordsBySuccess(true)).isEqualTo(14L);
+        assertThat(NotifyAdminMapperSupport.countRecordsBySuccess(mapper, true)).isEqualTo(14L);
         assertThat(mapper.success).isTrue();
     }
 
@@ -149,14 +151,14 @@ class NotifyAdminRepositoryTest {
         request.setTitle("hello");
         request.setContent("content");
 
-        assertThat(repository.updateTemplate(9L, request)).isTrue();
-        assertThat(repository.deleteTemplate(9L)).isTrue();
+        assertThat(NotifyAdminMapperSupport.updateTemplate(mapper, 9L, request)).isTrue();
+        assertThat(NotifyAdminMapperSupport.deleteTemplate(mapper, 9L)).isTrue();
 
         mapper.updateTemplateResult = 0;
         mapper.deleteTemplateResult = 0;
 
-        assertThat(repository.updateTemplate(9L, request)).isFalse();
-        assertThat(repository.deleteTemplate(9L)).isFalse();
+        assertThat(NotifyAdminMapperSupport.updateTemplate(mapper, 9L, request)).isFalse();
+        assertThat(NotifyAdminMapperSupport.deleteTemplate(mapper, 9L)).isFalse();
     }
 
     private static class RecordingMapper implements NotifyAdminMapper {
