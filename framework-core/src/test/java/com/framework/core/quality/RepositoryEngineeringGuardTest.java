@@ -918,6 +918,52 @@ class RepositoryEngineeringGuardTest {
     }
 
     @Test
+    void adminSystemTenantsArePagedAndOptionsAreBounded() throws Exception {
+        String mapper = read(root.resolve(
+                "admin-service/src/main/java/com/framework/admin/system/AdminSystemMapper.java"));
+        String mapperSupport = read(root.resolve(
+                "admin-service/src/main/java/com/framework/admin/system/AdminSystemMapperSupport.java"));
+        String service = read(root.resolve(
+                "admin-service/src/main/java/com/framework/admin/system/AdminSystemService.java"));
+        String controller = read(root.resolve(
+                "admin-service/src/main/java/com/framework/admin/system/AdminSystemController.java"));
+        String client = read(root.resolve("frontend/admin-web/src/api/client.ts"));
+        String app = read(root.resolve("frontend/admin-web/src/App.vue"));
+
+        assertThat(mapper)
+                .contains("List<Tenant> listTenants")
+                .contains("LIMIT #{offset}, #{pageSize}")
+                .contains("long countTenants")
+                .contains("List<Tenant> listTenantOptions")
+                .contains("LIMIT #{limit}");
+        assertThat(mapperSupport)
+                .contains("listTenants(String keyword, String status, int pageNum, int pageSize)")
+                .contains("countTenants(String keyword, String status)")
+                .contains("listTenantOptions(String keyword, int limit)")
+                .contains("optionLimit(limit)");
+        assertThat(service)
+                .contains("PageResult<Tenant> tenants")
+                .contains("AdminPageSupport.safePageNum")
+                .contains("mapperSupport.countTenants")
+                .contains("List<Tenant> tenantOptions")
+                .contains("AdminPageSupport.safePageSize(limit)");
+        assertThat(controller)
+                .contains("Result<PageResult<Tenant>> tenants")
+                .contains("@RequestParam(defaultValue = \"20\") int pageSize")
+                .contains("@GetMapping(\"/tenant-options\")")
+                .doesNotContain("Result<List<Tenant>> tenants");
+        assertThat(client)
+                .contains("getData<PageResult<Tenant>>('/admin/system/tenants', params)")
+                .contains("getData<Tenant[]>('/admin/system/tenant-options', params)");
+        assertThat(app)
+                .contains("reactive<PageResult<Tenant>>")
+                .contains("tenantQuery")
+                .contains("tenants.records")
+                .contains("tenants.total")
+                .contains("tenantOptions");
+    }
+
+    @Test
     void adminSystemConfigsArePagedAndDashboardUsesPointLookup() throws Exception {
         String mapper = read(root.resolve(
                 "admin-service/src/main/java/com/framework/admin/system/AdminSystemMapper.java"));

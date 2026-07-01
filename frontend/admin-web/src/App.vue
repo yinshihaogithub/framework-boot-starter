@@ -180,12 +180,18 @@
               <div class="section-head">
                 <span>租户管理</span>
                 <div class="actions">
-                  <el-tag size="small">{{ tenants.length }}</el-tag>
+                  <el-input v-model="tenantQuery.keyword" clearable placeholder="编码/名称" class="filter wide" />
+                  <el-select v-model="tenantQuery.status" clearable placeholder="状态" class="filter">
+                    <el-option label="启用" value="ENABLED" />
+                    <el-option label="禁用" value="DISABLED" />
+                  </el-select>
+                  <el-button :icon="Search" circle type="primary" @click="loadTenants" />
+                  <el-tag size="small">{{ tenants.total }}</el-tag>
                   <el-button v-if="can('system:tenant:create')" :icon="Plus" circle @click="openCreateTenant" />
                 </div>
               </div>
             </template>
-            <el-table :data="tenants" height="520" stripe>
+            <el-table :data="tenants.records" height="500" stripe>
               <el-table-column prop="id" label="ID" width="86" />
               <el-table-column prop="tenantCode" label="租户编码" min-width="180" />
               <el-table-column prop="tenantName" label="租户名称" min-width="180" />
@@ -200,6 +206,7 @@
                 </template>
               </el-table-column>
             </el-table>
+            <el-pagination v-model:current-page="tenantQuery.pageNum" v-model:page-size="tenantQuery.pageSize" class="pager" layout="total, sizes, prev, pager, next" :total="tenants.total" @change="loadTenants" />
           </el-card>
         </section>
 
@@ -210,7 +217,7 @@
                 <span>部门管理</span>
                 <div class="actions">
                   <el-select v-model="deptQuery.tenantId" class="filter" @change="loadDepts">
-                    <el-option v-for="tenant in tenants" :key="tenant.id" :label="tenant.tenantName" :value="tenant.id" />
+                    <el-option v-for="tenant in tenantOptions" :key="tenant.id" :label="tenant.tenantName" :value="tenant.id" />
                   </el-select>
                   <el-tag size="small">{{ flattenDepts(depts).length }}</el-tag>
                   <el-button v-if="can('system:dept:create')" :icon="Plus" circle @click="openCreateDept()" />
@@ -1136,7 +1143,7 @@
     <el-form label-width="88px">
       <el-form-item label="租户">
         <el-select v-model="deptForm.tenantId" filterable>
-          <el-option v-for="tenant in tenants" :key="tenant.id" :label="tenant.tenantName" :value="tenant.id" />
+          <el-option v-for="tenant in tenantOptions" :key="tenant.id" :label="tenant.tenantName" :value="tenant.id" />
         </el-select>
       </el-form-item>
       <el-form-item label="上级部门">
@@ -1537,7 +1544,8 @@ const onlineSessions = reactive<PageResult<OnlineSession>>({ records: [], total:
 const traceDetail = ref<TraceDetail>()
 const health = ref<HealthStatus>()
 const users = reactive<PageResult<AdminUser>>({ records: [], total: 0, pageNum: 1, pageSize: 20, pages: 0 })
-const tenants = ref<Tenant[]>([])
+const tenants = reactive<PageResult<Tenant>>({ records: [], total: 0, pageNum: 1, pageSize: 20, pages: 0 })
+const tenantOptions = ref<Tenant[]>([])
 const depts = ref<Dept[]>([])
 const roles = ref<Role[]>([])
 const menus = ref<MenuItem[]>([])
@@ -1638,6 +1646,7 @@ const logQuery = reactive<{ module: string; logType: string; operatorId?: number
 })
 const loginLogQuery = reactive<{ username: string; success: boolean | ''; pageNum: number; pageSize: number }>({ username: '', success: '', pageNum: 1, pageSize: 20 })
 const userQuery = reactive({ keyword: '', status: '', pageNum: 1, pageSize: 20 })
+const tenantQuery = reactive({ keyword: '', status: '', pageNum: 1, pageSize: 20 })
 const configQuery = reactive({ keyword: '', pageNum: 1, pageSize: 20 })
 const deptQuery = reactive({ tenantId: 1 as number | undefined })
 
@@ -1839,15 +1848,28 @@ async function loadDashboard() {
 }
 
 async function loadTenants() {
-  tenants.value = await api.tenants()
-  if (!deptQuery.tenantId && tenants.value.length) {
-    deptQuery.tenantId = tenants.value[0].id
+  const page = await api.tenants(tenantQuery)
+  Object.assign(tenants, page)
+  if (tenants.records.length === 0 && tenants.total > 0 && tenantQuery.pageNum > 1) {
+    tenantQuery.pageNum -= 1
+    await loadTenants()
+    return
+  }
+  if (tenantOptions.value.length === 0) {
+    await loadTenantOptions()
+  }
+}
+
+async function loadTenantOptions() {
+  tenantOptions.value = await api.tenantOptions()
+  if (!deptQuery.tenantId && tenantOptions.value.length) {
+    deptQuery.tenantId = tenantOptions.value[0].id
   }
 }
 
 async function loadDepts() {
-  if (tenants.value.length === 0) {
-    await loadTenants()
+  if (tenantOptions.value.length === 0) {
+    await loadTenantOptions()
   }
   depts.value = await api.depts(deptQuery.tenantId)
 }
@@ -2006,6 +2028,7 @@ async function saveTenant() {
   }
   tenantDialogVisible.value = false
   await loadTenants()
+  await loadTenantOptions()
 }
 
 async function deleteTenant(row: Tenant) {
@@ -2013,6 +2036,7 @@ async function deleteTenant(row: Tenant) {
   await api.deleteTenant(row.id)
   ElMessage.success('已删除')
   await loadTenants()
+  await loadTenantOptions()
 }
 
 function openCreateDept(parent?: Dept) {

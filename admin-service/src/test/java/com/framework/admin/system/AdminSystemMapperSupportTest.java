@@ -84,6 +84,38 @@ class AdminSystemMapperSupportTest {
     }
 
     @Test
+    void listTenantsUsesPagingKeywordAndStatusThenCountsMatches() {
+        mapper.tenants = List.of(new Tenant()
+                .setId(2L)
+                .setTenantCode("tenant-a")
+                .setTenantName("Tenant A")
+                .setStatus("ENABLED"));
+        mapper.tenantCount = 7L;
+
+        List<Tenant> tenants = mapperSupport.listTenants(" tenant ", " enabled ", 2, 10);
+        long count = mapperSupport.countTenants(" tenant ", " enabled ");
+
+        assertThat(tenants).hasSize(1);
+        assertThat(count).isEqualTo(7L);
+        assertThat(mapper.operations).containsExactly(
+                "listTenants:%tenant%:ENABLED:10:10",
+                "countTenants:%tenant%:ENABLED");
+    }
+
+    @Test
+    void listTenantOptionsUsesKeywordAndBoundedLimit() {
+        mapper.tenantOptions = List.of(new Tenant()
+                .setId(1L)
+                .setTenantCode("default")
+                .setTenantName("Default"));
+
+        List<Tenant> options = mapperSupport.listTenantOptions("\u00A0default\u3000", 500);
+
+        assertThat(options).hasSize(1);
+        assertThat(mapper.operations).containsExactly("listTenantOptions:%default%:200");
+    }
+
+    @Test
     void updateConfigPreservesExistingSensitiveValueWhenMaskedPlaceholderIsSubmitted() {
         ConfigRequest request = new ConfigRequest();
         request.setConfigKey("oauth.client-secret");
@@ -547,6 +579,9 @@ class AdminSystemMapperSupportTest {
         private List<ConfigItem> configs = List.of();
         private ConfigItem configByKey;
         private long configCount;
+        private List<Tenant> tenants = List.of();
+        private List<Tenant> tenantOptions = List.of();
+        private long tenantCount;
         private List<Dept> allDepts = List.of();
         private List<Menu> allMenus = List.of();
         private AdminSystemModels.AdminUser insertedUser;
@@ -600,6 +635,18 @@ class AdminSystemMapperSupportTest {
                         case "findConfigByKey" -> {
                             operations.add("findConfigByKey:" + args[0]);
                             yield configByKey;
+                        }
+                        case "listTenants" -> {
+                            operations.add("listTenants:" + args[0] + ":" + args[1] + ":" + args[2] + ":" + args[3]);
+                            yield tenants;
+                        }
+                        case "countTenants" -> {
+                            operations.add("countTenants:" + args[0] + ":" + args[1]);
+                            yield tenantCount;
+                        }
+                        case "listTenantOptions" -> {
+                            operations.add("listTenantOptions:" + args[0] + ":" + args[1]);
+                            yield tenantOptions;
                         }
                         case "listAllDepts" -> {
                             operations.add("listAllDepts");

@@ -164,8 +164,16 @@ public class AdminSystemMapperSupport {
         return mapper.countLoginLogs(like(username), success);
     }
 
-    public List<Tenant> listTenants() {
-        return mapper.listTenants();
+    public List<Tenant> listTenants(String keyword, String status, int pageNum, int pageSize) {
+        return mapper.listTenants(like(keyword), upperText(status), offset(pageNum, pageSize), pageSize);
+    }
+
+    public long countTenants(String keyword, String status) {
+        return mapper.countTenants(like(keyword), upperText(status));
+    }
+
+    public List<Tenant> listTenantOptions(String keyword, int limit) {
+        return mapper.listTenantOptions(like(keyword), optionLimit(limit));
     }
 
     public Long createTenant(TenantRequest request) {
@@ -627,6 +635,13 @@ public class AdminSystemMapperSupport {
 
     private static int offset(int pageNum, int pageSize) {
         return (Math.max(pageNum, 1) - 1) * pageSize;
+    }
+
+    private static int optionLimit(int limit) {
+        if (limit <= 0) {
+            return 20;
+        }
+        return Math.min(limit, 200);
     }
 
     private static String like(String value) {

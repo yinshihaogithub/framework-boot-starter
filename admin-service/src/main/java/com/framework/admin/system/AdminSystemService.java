@@ -73,11 +73,29 @@ public class AdminSystemService {
         this.loginSecurityServiceProvider = loginSecurityServiceProvider;
     }
 
-    public List<Tenant> tenants() {
+    public PageResult<Tenant> tenants(String keyword, String status, int pageNum, int pageSize) {
+        int safePageNum = AdminPageSupport.safePageNum(pageNum);
+        int safePageSize = AdminPageSupport.safePageSize(pageSize);
+        String safeKeyword = text(keyword);
+        String safeStatus = normalizeStatusFilter(status);
+        if (isInvalidStatusFilter(status, safeStatus)) {
+            return PageResult.empty(safePageNum, safePageSize);
+        }
         try {
-            return mapperSupport.listTenants();
+            List<Tenant> records = mapperSupport.listTenants(safeKeyword, safeStatus, safePageNum, safePageSize);
+            return PageResult.of(records, mapperSupport.countTenants(safeKeyword, safeStatus), safePageNum, safePageSize);
         } catch (RuntimeException e) {
             log.warn("[系统管理] 租户列表查询失败 error={}", e.getMessage());
+            return PageResult.empty(safePageNum, safePageSize);
+        }
+    }
+
+    public List<Tenant> tenantOptions(String keyword, int limit) {
+        int safeLimit = AdminPageSupport.safePageSize(limit);
+        try {
+            return mapperSupport.listTenantOptions(text(keyword), safeLimit);
+        } catch (RuntimeException e) {
+            log.warn("[系统管理] 租户选项查询失败 error={}", e.getMessage());
             return List.of();
         }
     }

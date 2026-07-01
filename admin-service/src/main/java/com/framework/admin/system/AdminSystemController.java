@@ -52,8 +52,19 @@ public class AdminSystemController {
     @Operation(summary = "租户列表")
     @GetMapping("/tenants")
     @RequirePermission("system:tenant:view")
-    public Result<List<Tenant>> tenants() {
-        return Result.success(systemService.tenants());
+    public Result<PageResult<Tenant>> tenants(@RequestParam(required = false) String keyword,
+                                              @RequestParam(required = false) String status,
+                                              @RequestParam(defaultValue = "1") int pageNum,
+                                              @RequestParam(defaultValue = "20") int pageSize) {
+        return Result.success(systemService.tenants(keyword, status, pageNum, pageSize));
+    }
+
+    @Operation(summary = "租户选项")
+    @GetMapping("/tenant-options")
+    @RequirePermission("system:tenant:view")
+    public Result<List<Tenant>> tenantOptions(@RequestParam(required = false) String keyword,
+                                             @RequestParam(defaultValue = "200") int limit) {
+        return Result.success(systemService.tenantOptions(keyword, limit));
     }
 
     @Operation(summary = "新增租户")

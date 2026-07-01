@@ -119,9 +119,14 @@ class AdminSystemServiceTest {
     void queryEndpointsFallBackWhenMapperSupportFails() {
         mapperSupport.queryFailure = new RuntimeException("database down");
 
+        PageResult<Tenant> tenants = service.tenants(null, null, 0, 0);
         PageResult<AdminUser> users = service.users(null, null, 0, 0);
 
-        assertThat(service.tenants()).isEmpty();
+        assertThat(tenants.getPageNum()).isEqualTo(1);
+        assertThat(tenants.getPageSize()).isEqualTo(20);
+        assertThat(tenants.getRecords()).isEmpty();
+        assertThat(tenants.getTotal()).isZero();
+        assertThat(service.tenantOptions(null, 0)).isEmpty();
         assertThat(service.depts(1L)).isEmpty();
         assertThat(users.getPageNum()).isEqualTo(1);
         assertThat(users.getPageSize()).isEqualTo(20);
@@ -137,6 +142,58 @@ class AdminSystemServiceTest {
         assertThat(configs.getPageSize()).isEqualTo(20);
         assertThat(configs.getRecords()).isEmpty();
         assertThat(configs.getTotal()).isZero();
+    }
+
+    @Test
+    void tenantsReturnsPagedResultAndNormalizesFilters() {
+        mapperSupport.tenants = List.of(new Tenant()
+                .setId(2L)
+                .setTenantCode("tenant-a")
+                .setTenantName("租户A")
+                .setStatus("ENABLED"));
+        mapperSupport.tenantCount = 6L;
+
+        PageResult<Tenant> tenants = service.tenants("\u00A0tenant\u3000", "\u3000enabled\u00A0", 3, 500);
+
+        assertThat(tenants.getRecords()).hasSize(1);
+        assertThat(tenants.getTotal()).isEqualTo(6L);
+        assertThat(tenants.getPageNum()).isEqualTo(3);
+        assertThat(tenants.getPageSize()).isEqualTo(200);
+        assertThat(mapperSupport.listTenantKeyword).isEqualTo("tenant");
+        assertThat(mapperSupport.listTenantStatus).isEqualTo("ENABLED");
+        assertThat(mapperSupport.listTenantPageNum).isEqualTo(3);
+        assertThat(mapperSupport.listTenantPageSize).isEqualTo(200);
+        assertThat(mapperSupport.countTenantKeyword).isEqualTo("tenant");
+        assertThat(mapperSupport.countTenantStatus).isEqualTo("ENABLED");
+    }
+
+    @Test
+    void tenantsReturnEmptyPageForInvalidStatusFilter() {
+        mapperSupport.tenants = List.of(new Tenant().setId(2L));
+        mapperSupport.tenantCount = 1L;
+
+        PageResult<Tenant> tenants = service.tenants(" tenant ", "LOCKED", 1, 20);
+
+        assertThat(tenants.getRecords()).isEmpty();
+        assertThat(tenants.getTotal()).isZero();
+        assertThat(mapperSupport.listTenantKeyword).isNull();
+        assertThat(mapperSupport.listTenantStatus).isNull();
+        assertThat(mapperSupport.countTenantKeyword).isNull();
+        assertThat(mapperSupport.countTenantStatus).isNull();
+    }
+
+    @Test
+    void tenantOptionsAreTrimmedAndLimitIsBounded() {
+        mapperSupport.tenantOptions = List.of(new Tenant()
+                .setId(1L)
+                .setTenantCode("default")
+                .setTenantName("默认租户"));
+
+        List<Tenant> options = service.tenantOptions("\u00A0default\u3000", 500);
+
+        assertThat(options).hasSize(1);
+        assertThat(mapperSupport.tenantOptionKeyword).isEqualTo("default");
+        assertThat(mapperSupport.tenantOptionLimit).isEqualTo(200);
     }
 
     @Test
@@ -965,6 +1022,17 @@ class AdminSystemServiceTest {
         private String listUserStatus;
         private String countUserKeyword;
         private String countUserStatus;
+        private List<Tenant> tenants = List.of();
+        private long tenantCount;
+        private List<Tenant> tenantOptions = List.of();
+        private String listTenantKeyword;
+        private String listTenantStatus;
+        private int listTenantPageNum;
+        private int listTenantPageSize;
+        private String countTenantKeyword;
+        private String countTenantStatus;
+        private String tenantOptionKeyword;
+        private int tenantOptionLimit;
         private List<ConfigItem> configs = List.of();
         private long configCount;
         private String listConfigKeyword;
@@ -1038,9 +1106,29 @@ class AdminSystemServiceTest {
         }
 
         @Override
-        public List<Tenant> listTenants() {
+        public List<Tenant> listTenants(String keyword, String status, int pageNum, int pageSize) {
             failQueryIfNeeded();
-            return List.of();
+            this.listTenantKeyword = keyword;
+            this.listTenantStatus = status;
+            this.listTenantPageNum = pageNum;
+            this.listTenantPageSize = pageSize;
+            return new ArrayList<>(tenants);
+        }
+
+        @Override
+        public long countTenants(String keyword, String status) {
+            failQueryIfNeeded();
+            this.countTenantKeyword = keyword;
+            this.countTenantStatus = status;
+            return tenantCount;
+        }
+
+        @Override
+        public List<Tenant> listTenantOptions(String keyword, int limit) {
+            failQueryIfNeeded();
+            this.tenantOptionKeyword = keyword;
+            this.tenantOptionLimit = limit;
+            return new ArrayList<>(tenantOptions);
         }
 
         @Override

@@ -154,12 +154,53 @@ public interface AdminSystemMapper {
     long countLoginLogs(@Param("usernameLike") String usernameLike, @Param("success") Boolean success);
 
     @Select("""
+            <script>
             SELECT id, tenant_code AS tenantCode, tenant_name AS tenantName, status,
                    DATE_FORMAT(create_time, '%Y-%m-%d %H:%i:%s') AS createTime
             FROM sys_tenant
+            <where>
+                <if test="keywordLike != null">
+                    AND (tenant_code LIKE #{keywordLike} OR tenant_name LIKE #{keywordLike})
+                </if>
+                <if test="status != null">AND status = #{status}</if>
+            </where>
             ORDER BY id ASC
+            LIMIT #{offset}, #{pageSize}
+            </script>
             """)
-    List<Tenant> listTenants();
+    List<Tenant> listTenants(@Param("keywordLike") String keywordLike,
+                             @Param("status") String status,
+                             @Param("offset") int offset,
+                             @Param("pageSize") int pageSize);
+
+    @Select("""
+            <script>
+            SELECT COUNT(*)
+            FROM sys_tenant
+            <where>
+                <if test="keywordLike != null">
+                    AND (tenant_code LIKE #{keywordLike} OR tenant_name LIKE #{keywordLike})
+                </if>
+                <if test="status != null">AND status = #{status}</if>
+            </where>
+            </script>
+            """)
+    long countTenants(@Param("keywordLike") String keywordLike, @Param("status") String status);
+
+    @Select("""
+            <script>
+            SELECT id, tenant_code AS tenantCode, tenant_name AS tenantName, status,
+                   DATE_FORMAT(create_time, '%Y-%m-%d %H:%i:%s') AS createTime
+            FROM sys_tenant
+            WHERE status = 'ENABLED'
+            <if test="keywordLike != null">
+                AND (tenant_code LIKE #{keywordLike} OR tenant_name LIKE #{keywordLike})
+            </if>
+            ORDER BY id ASC
+            LIMIT #{limit}
+            </script>
+            """)
+    List<Tenant> listTenantOptions(@Param("keywordLike") String keywordLike, @Param("limit") int limit);
 
     @Insert("""
             INSERT INTO sys_tenant (tenant_code, tenant_name, status)
