@@ -121,6 +121,7 @@ class AdminSystemServiceTest {
 
         PageResult<Tenant> tenants = service.tenants(null, null, 0, 0);
         PageResult<AdminUser> users = service.users(null, null, 0, 0);
+        PageResult<Role> roles = service.roles(null, null, 0, 0);
 
         assertThat(tenants.getPageNum()).isEqualTo(1);
         assertThat(tenants.getPageSize()).isEqualTo(20);
@@ -132,7 +133,11 @@ class AdminSystemServiceTest {
         assertThat(users.getPageSize()).isEqualTo(20);
         assertThat(users.getRecords()).isEmpty();
         assertThat(users.getTotal()).isZero();
-        assertThat(service.roles()).isEmpty();
+        assertThat(roles.getPageNum()).isEqualTo(1);
+        assertThat(roles.getPageSize()).isEqualTo(20);
+        assertThat(roles.getRecords()).isEmpty();
+        assertThat(roles.getTotal()).isZero();
+        assertThat(service.roleOptions(null, 0)).isEmpty();
         assertThat(service.roleMenuIds(1L)).isEmpty();
         assertThat(service.menus()).isEmpty();
         assertThat(service.dictTypes()).isEmpty();
@@ -194,6 +199,58 @@ class AdminSystemServiceTest {
         assertThat(options).hasSize(1);
         assertThat(mapperSupport.tenantOptionKeyword).isEqualTo("default");
         assertThat(mapperSupport.tenantOptionLimit).isEqualTo(200);
+    }
+
+    @Test
+    void rolesReturnsPagedResultAndNormalizesFilters() {
+        mapperSupport.roles = List.of(new Role()
+                .setId(3L)
+                .setRoleCode("OPS")
+                .setRoleName("运维")
+                .setStatus("ENABLED"));
+        mapperSupport.roleCount = 9L;
+
+        PageResult<Role> roles = service.roles("\u00A0ops\u3000", "\u3000enabled\u00A0", 2, 500);
+
+        assertThat(roles.getRecords()).hasSize(1);
+        assertThat(roles.getTotal()).isEqualTo(9L);
+        assertThat(roles.getPageNum()).isEqualTo(2);
+        assertThat(roles.getPageSize()).isEqualTo(200);
+        assertThat(mapperSupport.listRoleKeyword).isEqualTo("ops");
+        assertThat(mapperSupport.listRoleStatus).isEqualTo("ENABLED");
+        assertThat(mapperSupport.listRolePageNum).isEqualTo(2);
+        assertThat(mapperSupport.listRolePageSize).isEqualTo(200);
+        assertThat(mapperSupport.countRoleKeyword).isEqualTo("ops");
+        assertThat(mapperSupport.countRoleStatus).isEqualTo("ENABLED");
+    }
+
+    @Test
+    void rolesReturnEmptyPageForInvalidStatusFilter() {
+        mapperSupport.roles = List.of(new Role().setId(3L));
+        mapperSupport.roleCount = 1L;
+
+        PageResult<Role> roles = service.roles(" ops ", "LOCKED", 1, 20);
+
+        assertThat(roles.getRecords()).isEmpty();
+        assertThat(roles.getTotal()).isZero();
+        assertThat(mapperSupport.listRoleKeyword).isNull();
+        assertThat(mapperSupport.listRoleStatus).isNull();
+        assertThat(mapperSupport.countRoleKeyword).isNull();
+        assertThat(mapperSupport.countRoleStatus).isNull();
+    }
+
+    @Test
+    void roleOptionsAreTrimmedAndLimitIsBounded() {
+        mapperSupport.roleOptions = List.of(new Role()
+                .setId(1L)
+                .setRoleCode("SUPER_ADMIN")
+                .setRoleName("超级管理员"));
+
+        List<Role> options = service.roleOptions("\u00A0admin\u3000", 500);
+
+        assertThat(options).hasSize(1);
+        assertThat(mapperSupport.roleOptionKeyword).isEqualTo("admin");
+        assertThat(mapperSupport.roleOptionLimit).isEqualTo(200);
     }
 
     @Test
@@ -1033,6 +1090,17 @@ class AdminSystemServiceTest {
         private String countTenantStatus;
         private String tenantOptionKeyword;
         private int tenantOptionLimit;
+        private List<Role> roles = List.of();
+        private long roleCount;
+        private List<Role> roleOptions = List.of();
+        private String listRoleKeyword;
+        private String listRoleStatus;
+        private int listRolePageNum;
+        private int listRolePageSize;
+        private String countRoleKeyword;
+        private String countRoleStatus;
+        private String roleOptionKeyword;
+        private int roleOptionLimit;
         private List<ConfigItem> configs = List.of();
         private long configCount;
         private String listConfigKeyword;
@@ -1261,9 +1329,29 @@ class AdminSystemServiceTest {
         }
 
         @Override
-        public List<Role> listRoles() {
+        public List<Role> listRoles(String keyword, String status, int pageNum, int pageSize) {
             failQueryIfNeeded();
-            return List.of();
+            this.listRoleKeyword = keyword;
+            this.listRoleStatus = status;
+            this.listRolePageNum = pageNum;
+            this.listRolePageSize = pageSize;
+            return new ArrayList<>(roles);
+        }
+
+        @Override
+        public long countRoles(String keyword, String status) {
+            failQueryIfNeeded();
+            this.countRoleKeyword = keyword;
+            this.countRoleStatus = status;
+            return roleCount;
+        }
+
+        @Override
+        public List<Role> listRoleOptions(String keyword, int limit) {
+            failQueryIfNeeded();
+            this.roleOptionKeyword = keyword;
+            this.roleOptionLimit = limit;
+            return new ArrayList<>(roleOptions);
         }
 
         @Override

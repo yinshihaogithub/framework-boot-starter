@@ -116,6 +116,38 @@ class AdminSystemMapperSupportTest {
     }
 
     @Test
+    void listRolesUsesPagingKeywordAndStatusThenCountsMatches() {
+        mapper.roles = List.of(new Role()
+                .setId(2L)
+                .setRoleCode("OPS")
+                .setRoleName("运维")
+                .setStatus("ENABLED"));
+        mapper.roleCount = 5L;
+
+        List<Role> roles = mapperSupport.listRoles(" ops ", " enabled ", 3, 10);
+        long count = mapperSupport.countRoles(" ops ", " enabled ");
+
+        assertThat(roles).hasSize(1);
+        assertThat(count).isEqualTo(5L);
+        assertThat(mapper.operations).containsExactly(
+                "listRoles:%ops%:ENABLED:20:10",
+                "countRoles:%ops%:ENABLED");
+    }
+
+    @Test
+    void listRoleOptionsUsesKeywordAndBoundedLimit() {
+        mapper.roleOptions = List.of(new Role()
+                .setId(1L)
+                .setRoleCode("SUPER_ADMIN")
+                .setRoleName("超级管理员"));
+
+        List<Role> options = mapperSupport.listRoleOptions("\u00A0admin\u3000", 500);
+
+        assertThat(options).hasSize(1);
+        assertThat(mapper.operations).containsExactly("listRoleOptions:%admin%:200");
+    }
+
+    @Test
     void updateConfigPreservesExistingSensitiveValueWhenMaskedPlaceholderIsSubmitted() {
         ConfigRequest request = new ConfigRequest();
         request.setConfigKey("oauth.client-secret");
@@ -582,6 +614,9 @@ class AdminSystemMapperSupportTest {
         private List<Tenant> tenants = List.of();
         private List<Tenant> tenantOptions = List.of();
         private long tenantCount;
+        private List<Role> roles = List.of();
+        private List<Role> roleOptions = List.of();
+        private long roleCount;
         private List<Dept> allDepts = List.of();
         private List<Menu> allMenus = List.of();
         private AdminSystemModels.AdminUser insertedUser;
@@ -647,6 +682,18 @@ class AdminSystemMapperSupportTest {
                         case "listTenantOptions" -> {
                             operations.add("listTenantOptions:" + args[0] + ":" + args[1]);
                             yield tenantOptions;
+                        }
+                        case "listRoles" -> {
+                            operations.add("listRoles:" + args[0] + ":" + args[1] + ":" + args[2] + ":" + args[3]);
+                            yield roles;
+                        }
+                        case "countRoles" -> {
+                            operations.add("countRoles:" + args[0] + ":" + args[1]);
+                            yield roleCount;
+                        }
+                        case "listRoleOptions" -> {
+                            operations.add("listRoleOptions:" + args[0] + ":" + args[1]);
+                            yield roleOptions;
                         }
                         case "listAllDepts" -> {
                             operations.add("listAllDepts");

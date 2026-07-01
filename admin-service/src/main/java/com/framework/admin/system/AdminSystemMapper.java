@@ -285,12 +285,54 @@ public interface AdminSystemMapper {
     int deleteDeptIds(@Param("ids") List<Long> ids);
 
     @Select("""
+            <script>
             SELECT id, role_code AS roleCode, role_name AS roleName, sort_order AS sortOrder, status,
                    DATE_FORMAT(create_time, '%Y-%m-%d %H:%i:%s') AS createTime
             FROM sys_role
+            <where>
+                <if test="keywordLike != null">
+                    AND (role_code LIKE #{keywordLike} OR role_name LIKE #{keywordLike})
+                </if>
+                <if test="status != null">AND status = #{status}</if>
+            </where>
             ORDER BY sort_order ASC, id ASC
+            LIMIT #{offset}, #{pageSize}
+            </script>
             """)
-    List<Role> listRoles();
+    List<Role> listRoles(@Param("keywordLike") String keywordLike,
+                         @Param("status") String status,
+                         @Param("offset") int offset,
+                         @Param("pageSize") int pageSize);
+
+    @Select("""
+            <script>
+            SELECT COUNT(*)
+            FROM sys_role
+            <where>
+                <if test="keywordLike != null">
+                    AND (role_code LIKE #{keywordLike} OR role_name LIKE #{keywordLike})
+                </if>
+                <if test="status != null">AND status = #{status}</if>
+            </where>
+            </script>
+            """)
+    long countRoles(@Param("keywordLike") String keywordLike, @Param("status") String status);
+
+    @Select("""
+            <script>
+            SELECT id, role_code AS roleCode, role_name AS roleName, sort_order AS sortOrder, status,
+                   DATE_FORMAT(create_time, '%Y-%m-%d %H:%i:%s') AS createTime
+            FROM sys_role
+            <where>
+                <if test="keywordLike != null">
+                    AND (role_code LIKE #{keywordLike} OR role_name LIKE #{keywordLike})
+                </if>
+            </where>
+            ORDER BY sort_order ASC, id ASC
+            LIMIT #{limit}
+            </script>
+            """)
+    List<Role> listRoleOptions(@Param("keywordLike") String keywordLike, @Param("limit") int limit);
 
     @Insert("""
             INSERT INTO sys_role (tenant_id, role_code, role_name, sort_order, status)

@@ -304,12 +304,18 @@
               <div class="section-head">
                 <span>角色管理</span>
                 <div class="actions">
-                  <el-tag size="small">{{ roles.length }}</el-tag>
+                  <el-input v-model="roleQuery.keyword" clearable placeholder="编码/名称" class="filter wide" />
+                  <el-select v-model="roleQuery.status" clearable placeholder="状态" class="filter">
+                    <el-option label="启用" value="ENABLED" />
+                    <el-option label="禁用" value="DISABLED" />
+                  </el-select>
+                  <el-button :icon="Search" circle type="primary" @click="loadRoles" />
+                  <el-tag size="small">{{ roles.total }}</el-tag>
                   <el-button v-if="can('system:role:create')" :icon="Plus" circle @click="openCreateRole" />
                 </div>
               </div>
             </template>
-            <el-table :data="roles" height="520" stripe>
+            <el-table :data="roles.records" height="500" stripe>
               <el-table-column prop="id" label="ID" width="80" />
               <el-table-column prop="roleCode" label="角色编码" min-width="180" />
               <el-table-column prop="roleName" label="角色名称" min-width="180" />
@@ -323,6 +329,7 @@
                 </template>
               </el-table-column>
             </el-table>
+            <el-pagination v-model:current-page="roleQuery.pageNum" v-model:page-size="roleQuery.pageSize" class="pager" layout="total, sizes, prev, pager, next" :total="roles.total" @change="loadRoles" />
           </el-card>
         </section>
 
@@ -1112,7 +1119,7 @@
       </el-form-item>
       <el-form-item label="角色">
         <el-select v-model="userForm.roleIds" multiple>
-          <el-option v-for="role in roles" :key="role.id" :label="role.roleName" :value="role.id" />
+          <el-option v-for="role in roleOptions" :key="role.id" :label="role.roleName" :value="role.id" />
         </el-select>
       </el-form-item>
     </el-form>
@@ -1547,7 +1554,8 @@ const users = reactive<PageResult<AdminUser>>({ records: [], total: 0, pageNum: 
 const tenants = reactive<PageResult<Tenant>>({ records: [], total: 0, pageNum: 1, pageSize: 20, pages: 0 })
 const tenantOptions = ref<Tenant[]>([])
 const depts = ref<Dept[]>([])
-const roles = ref<Role[]>([])
+const roles = reactive<PageResult<Role>>({ records: [], total: 0, pageNum: 1, pageSize: 20, pages: 0 })
+const roleOptions = ref<Role[]>([])
 const menus = ref<MenuItem[]>([])
 const dictTypes = ref<DictType[]>([])
 const dictItems = ref<DictItem[]>([])
@@ -1647,6 +1655,7 @@ const logQuery = reactive<{ module: string; logType: string; operatorId?: number
 const loginLogQuery = reactive<{ username: string; success: boolean | ''; pageNum: number; pageSize: number }>({ username: '', success: '', pageNum: 1, pageSize: 20 })
 const userQuery = reactive({ keyword: '', status: '', pageNum: 1, pageSize: 20 })
 const tenantQuery = reactive({ keyword: '', status: '', pageNum: 1, pageSize: 20 })
+const roleQuery = reactive({ keyword: '', status: '', pageNum: 1, pageSize: 20 })
 const configQuery = reactive({ keyword: '', pageNum: 1, pageSize: 20 })
 const deptQuery = reactive({ tenantId: 1 as number | undefined })
 
@@ -1875,8 +1884,8 @@ async function loadDepts() {
 }
 
 async function loadUsers() {
-  if (roles.value.length === 0) {
-    await loadRoles()
+  if (roleOptions.value.length === 0) {
+    await loadRoleOptions()
   }
   if (depts.value.length === 0) {
     await loadDepts()
@@ -1886,10 +1895,23 @@ async function loadUsers() {
 }
 
 async function loadRoles() {
-  roles.value = await api.roles()
+  const page = await api.roles(roleQuery)
+  Object.assign(roles, page)
+  if (roles.records.length === 0 && roles.total > 0 && roleQuery.pageNum > 1) {
+    roleQuery.pageNum -= 1
+    await loadRoles()
+    return
+  }
+  if (roleOptions.value.length === 0) {
+    await loadRoleOptions()
+  }
   if (menus.value.length === 0) {
     await loadMenus()
   }
+}
+
+async function loadRoleOptions() {
+  roleOptions.value = await api.roleOptions()
 }
 
 async function loadMenus() {
@@ -2221,6 +2243,7 @@ async function saveRole() {
   }
   roleDialogVisible.value = false
   await loadRoles()
+  await loadRoleOptions()
 }
 
 async function deleteRole(row: Role) {
@@ -2228,6 +2251,7 @@ async function deleteRole(row: Role) {
   await api.deleteRole(row.id)
   ElMessage.success('已删除')
   await loadRoles()
+  await loadRoleOptions()
 }
 
 async function openRoleAuth(row: Role) {

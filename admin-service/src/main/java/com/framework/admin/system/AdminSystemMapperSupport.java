@@ -244,8 +244,16 @@ public class AdminSystemMapperSupport {
         });
     }
 
-    public List<Role> listRoles() {
-        return mapper.listRoles();
+    public List<Role> listRoles(String keyword, String status, int pageNum, int pageSize) {
+        return mapper.listRoles(like(keyword), upperText(status), offset(pageNum, pageSize), pageSize);
+    }
+
+    public long countRoles(String keyword, String status) {
+        return mapper.countRoles(like(keyword), upperText(status));
+    }
+
+    public List<Role> listRoleOptions(String keyword, int limit) {
+        return mapper.listRoleOptions(like(keyword), optionLimit(limit));
     }
 
     public Long createRole(RoleRequest request) {

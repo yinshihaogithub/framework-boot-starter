@@ -176,8 +176,19 @@ public class AdminSystemController {
     @Operation(summary = "角色列表")
     @GetMapping("/roles")
     @RequirePermission("system:role:view")
-    public Result<List<Role>> roles() {
-        return Result.success(systemService.roles());
+    public Result<PageResult<Role>> roles(@RequestParam(required = false) String keyword,
+                                          @RequestParam(required = false) String status,
+                                          @RequestParam(defaultValue = "1") int pageNum,
+                                          @RequestParam(defaultValue = "20") int pageSize) {
+        return Result.success(systemService.roles(keyword, status, pageNum, pageSize));
+    }
+
+    @Operation(summary = "角色选项")
+    @GetMapping("/role-options")
+    @RequirePermission("system:role:view")
+    public Result<List<Role>> roleOptions(@RequestParam(required = false) String keyword,
+                                          @RequestParam(defaultValue = "200") int limit) {
+        return Result.success(systemService.roleOptions(keyword, limit));
     }
 
     @Operation(summary = "新增角色")

@@ -410,11 +410,29 @@ public class AdminSystemService {
         }
     }
 
-    public List<Role> roles() {
+    public PageResult<Role> roles(String keyword, String status, int pageNum, int pageSize) {
+        int safePageNum = AdminPageSupport.safePageNum(pageNum);
+        int safePageSize = AdminPageSupport.safePageSize(pageSize);
+        String safeKeyword = text(keyword);
+        String safeStatus = normalizeStatusFilter(status);
+        if (isInvalidStatusFilter(status, safeStatus)) {
+            return PageResult.empty(safePageNum, safePageSize);
+        }
         try {
-            return mapperSupport.listRoles();
+            List<Role> records = mapperSupport.listRoles(safeKeyword, safeStatus, safePageNum, safePageSize);
+            return PageResult.of(records, mapperSupport.countRoles(safeKeyword, safeStatus), safePageNum, safePageSize);
         } catch (RuntimeException e) {
             log.warn("[系统管理] 角色列表查询失败 error={}", e.getMessage());
+            return PageResult.empty(safePageNum, safePageSize);
+        }
+    }
+
+    public List<Role> roleOptions(String keyword, int limit) {
+        int safeLimit = AdminPageSupport.safePageSize(limit);
+        try {
+            return mapperSupport.listRoleOptions(text(keyword), safeLimit);
+        } catch (RuntimeException e) {
+            log.warn("[系统管理] 角色选项查询失败 error={}", e.getMessage());
             return List.of();
         }
     }
