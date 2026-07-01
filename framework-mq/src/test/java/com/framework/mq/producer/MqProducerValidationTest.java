@@ -208,6 +208,15 @@ class MqProducerValidationTest {
     }
 
     @Test
+    void rocketProducerRejectsNegativeDelayBeforeSending() {
+        RocketMqProducer producer = new RocketMqProducer(new FakeRocketMQTemplate());
+
+        assertThatThrownBy(() -> producer.sendWithDelay("order-topic", "created", MessageWrapper.of("payload"), -1L))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("delayMs");
+    }
+
+    @Test
     void rocketProducerNormalizesTopicAndTagBeforeSending() {
         FakeRocketMQTemplate template = new FakeRocketMQTemplate();
         RocketMqProducer producer = new RocketMqProducer(template);

@@ -745,6 +745,8 @@ class RepositoryEngineeringGuardTest {
         String autoConfiguration = read(root.resolve("framework-mq/src/main/java/com/framework/mq/config/MqAutoConfiguration.java"));
         String properties = read(root.resolve("framework-mq/src/main/java/com/framework/mq/config/MqProperties.java"));
         String mapper = read(root.resolve("framework-mq/src/main/java/com/framework/mq/mapper/MqFailedMessageMapper.java"));
+        String rocketProducer = read(root.resolve(
+                "framework-mq/src/main/java/com/framework/mq/producer/RocketMqProducer.java"));
         String repositoryInterface = read(root.resolve(
                 "framework-mq/src/main/java/com/framework/mq/deadletter/MqFailedMessageRepository.java"));
         String repository = read(root.resolve(
@@ -784,6 +786,11 @@ class RepositoryEngineeringGuardTest {
         assertThat(properties)
                 .contains("private int restoreLimit = 1000")
                 .contains("framework.mq.dead-letter.restore-limit must be greater than 0");
+        assertThat(rocketProducer)
+                .contains("sendWithDelay(")
+                .contains("syncSendDelay.invoke")
+                .contains("DELAY_LEVEL_MILLIS")
+                .contains("syncSend(String, Object, long, int)");
         assertThat(repositoryInterface)
                 .contains("findRecent(int limit)")
                 .doesNotContain("findAll()");
