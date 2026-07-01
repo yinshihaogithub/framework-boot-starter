@@ -1138,11 +1138,13 @@ class RepositoryEngineeringGuardTest {
                 .contains("@RequirePermission(\"file:delete\")")
                 .contains("@GetMapping(\"/{id}/download\")");
         assertThat(service)
+                .contains("FileAdminMapperSupport")
                 .contains("ObjectProvider<FileStorageService>")
                 .contains("storageService.store")
                 .contains("storageService.load")
                 .contains("storageService.delete")
-                .contains("auditService.success");
+                .contains("auditService.success")
+                .doesNotContain("FileAdminRepository");
         assertThat(mapper)
                 .contains("@Mapper")
                 .contains("framework_file_record")
@@ -1192,10 +1194,11 @@ class RepositoryEngineeringGuardTest {
         assertThat(service)
                 .contains("ObjectProvider<NotifyAdminMapper>")
                 .contains("ObjectProvider<ExcelAdminMapper>")
-                .contains("ObjectProvider<FileAdminRepository>")
+                .contains("ObjectProvider<FileAdminMapper>")
                 .contains("ObjectProvider<AdminSystemRepository>")
                 .doesNotContain("NotifyAdminRepository")
                 .doesNotContain("ExcelAdminRepository")
+                .doesNotContain("FileAdminRepository")
                 .contains("admin.default.password.changed")
                 .contains("notifyMetrics()")
                 .contains("excelMetrics()")

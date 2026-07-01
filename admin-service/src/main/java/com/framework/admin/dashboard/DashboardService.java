@@ -1,7 +1,7 @@
 package com.framework.admin.dashboard;
 
 import com.framework.admin.excel.ExcelAdminMapper;
-import com.framework.admin.file.FileAdminRepository;
+import com.framework.admin.file.FileAdminMapper;
 import com.framework.admin.notify.NotifyAdminMapper;
 import com.framework.admin.system.AdminSystemModels.ConfigItem;
 import com.framework.admin.system.AdminSystemRepository;
@@ -29,7 +29,7 @@ public class DashboardService {
     private final ObjectProvider<OperationLogMapper> operationLogMapperProvider;
     private final ObjectProvider<NotifyAdminMapper> notifyAdminMapperProvider;
     private final ObjectProvider<ExcelAdminMapper> excelAdminMapperProvider;
-    private final ObjectProvider<FileAdminRepository> fileAdminRepositoryProvider;
+    private final ObjectProvider<FileAdminMapper> fileAdminMapperProvider;
     private final ObjectProvider<AdminSystemRepository> adminSystemRepositoryProvider;
 
     public DashboardService(ObjectProvider<DeadLetterHandler> deadLetterHandlerProvider,
@@ -37,14 +37,14 @@ public class DashboardService {
                             ObjectProvider<OperationLogMapper> operationLogMapperProvider,
                             ObjectProvider<NotifyAdminMapper> notifyAdminMapperProvider,
                             ObjectProvider<ExcelAdminMapper> excelAdminMapperProvider,
-                            ObjectProvider<FileAdminRepository> fileAdminRepositoryProvider,
+                            ObjectProvider<FileAdminMapper> fileAdminMapperProvider,
                             ObjectProvider<AdminSystemRepository> adminSystemRepositoryProvider) {
         this.deadLetterHandlerProvider = deadLetterHandlerProvider;
         this.localMessageServiceProvider = localMessageServiceProvider;
         this.operationLogMapperProvider = operationLogMapperProvider;
         this.notifyAdminMapperProvider = notifyAdminMapperProvider;
         this.excelAdminMapperProvider = excelAdminMapperProvider;
-        this.fileAdminRepositoryProvider = fileAdminRepositoryProvider;
+        this.fileAdminMapperProvider = fileAdminMapperProvider;
         this.adminSystemRepositoryProvider = adminSystemRepositoryProvider;
     }
 
@@ -181,12 +181,14 @@ public class DashboardService {
         metrics.put("active", 0L);
         metrics.put("deleted", 0L);
         metrics.put("totalSize", 0L);
-        FileAdminRepository repository = available(fileAdminRepositoryProvider);
-        if (repository == null) {
+        FileAdminMapper mapper = available(fileAdminMapperProvider);
+        if (mapper == null) {
             return metrics;
         }
         try {
-            metrics.putAll(repository.stats());
+            metrics.put("active", mapper.countActive());
+            metrics.put("deleted", mapper.countDeleted());
+            metrics.put("totalSize", mapper.sumActiveSize());
         } catch (Exception ignored) {
             return zero(metrics);
         }

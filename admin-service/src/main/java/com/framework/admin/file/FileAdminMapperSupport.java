@@ -2,48 +2,48 @@ package com.framework.admin.file;
 
 import com.framework.admin.support.AdminTextSupport;
 
-import org.springframework.stereotype.Repository;
-
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-@Repository
-public class FileAdminRepository {
+final class FileAdminMapperSupport {
 
-    private final FileAdminMapper mapper;
-
-    public FileAdminRepository(FileAdminMapper mapper) {
-        this.mapper = mapper;
+    private FileAdminMapperSupport() {
     }
 
-    public List<FileAdminModels.FileRecord> list(String keyword, String businessType, String businessKey,
-                                                 String contentType, int pageNum, int pageSize) {
+    static List<FileAdminModels.FileRecord> list(FileAdminMapper mapper,
+                                                 String keyword,
+                                                 String businessType,
+                                                 String businessKey,
+                                                 String contentType,
+                                                 int pageNum,
+                                                 int pageSize) {
         return mapper.list(like(keyword), text(businessType), like(businessKey), like(contentType),
                 offset(pageNum, pageSize), pageSize);
     }
 
-    public long count(String keyword, String businessType, String businessKey, String contentType) {
+    static long count(FileAdminMapper mapper, String keyword, String businessType, String businessKey,
+                      String contentType) {
         return mapper.count(like(keyword), text(businessType), like(businessKey), like(contentType));
     }
 
-    public Map<String, Long> stats() {
+    static Map<String, Long> stats(FileAdminMapper mapper) {
         return Map.of(
                 "active", mapper.countActive(),
                 "deleted", mapper.countDeleted(),
                 "totalSize", mapper.sumActiveSize());
     }
 
-    public FileAdminModels.FileRecord create(FileAdminModels.FileRecord record) {
+    static FileAdminModels.FileRecord create(FileAdminMapper mapper, FileAdminModels.FileRecord record) {
         mapper.insert(record);
         return record;
     }
 
-    public Optional<FileAdminModels.FileRecord> findById(Long id) {
+    static Optional<FileAdminModels.FileRecord> findById(FileAdminMapper mapper, Long id) {
         return Optional.ofNullable(mapper.findById(id));
     }
 
-    public boolean markDeleted(Long id) {
+    static boolean markDeleted(FileAdminMapper mapper, Long id) {
         return mapper.markDeleted(id) > 0;
     }
 

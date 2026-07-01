@@ -30,21 +30,21 @@ import java.util.Map;
 @Service
 public class FileAdminService {
 
-    private final FileAdminRepository repository;
+    private final FileAdminMapper mapper;
     private final ObjectProvider<FileStorageService> fileStorageServiceProvider;
     private final AdminAuditService auditService;
 
-    public FileAdminService(FileAdminRepository repository,
+    public FileAdminService(FileAdminMapper mapper,
                             ObjectProvider<FileStorageService> fileStorageServiceProvider,
                             AdminAuditService auditService) {
-        this.repository = repository;
+        this.mapper = mapper;
         this.fileStorageServiceProvider = fileStorageServiceProvider;
         this.auditService = auditService;
     }
 
     public Map<String, Long> stats() {
         try {
-            return repository.stats();
+            return FileAdminMapperSupport.stats(mapper);
         } catch (RuntimeException e) {
             log.warn("[文件中心] 统计查询失败 error={}", e.getMessage());
             return emptyStats();
@@ -61,8 +61,10 @@ public class FileAdminService {
         String safeContentType = text(contentType);
         try {
             return PageResult.of(
-                    repository.list(safeKeyword, safeBusinessType, safeBusinessKey, safeContentType, safePageNum, safePageSize),
-                    repository.count(safeKeyword, safeBusinessType, safeBusinessKey, safeContentType),
+                    FileAdminMapperSupport.list(mapper, safeKeyword, safeBusinessType, safeBusinessKey,
+                            safeContentType, safePageNum, safePageSize),
+                    FileAdminMapperSupport.count(mapper, safeKeyword, safeBusinessType, safeBusinessKey,
+                            safeContentType),
                     safePageNum,
                     safePageSize);
         } catch (RuntimeException e) {
@@ -84,7 +86,7 @@ public class FileAdminService {
         try (InputStream inputStream = file.getInputStream()) {
             StoredFile storedFile = storageService.store(file.getOriginalFilename(), inputStream);
             try {
-                FileAdminModels.FileRecord record = repository.create(new FileAdminModels.FileRecord()
+                FileAdminModels.FileRecord record = FileAdminMapperSupport.create(mapper, new FileAdminModels.FileRecord()
                         .setFileKey(storedFile.getKey())
                         .setOriginalFilename(storedFile.getOriginalFilename())
                         .setContentType(storedFile.getContentType())
@@ -124,7 +126,7 @@ public class FileAdminService {
         }
         FileAdminModels.FileRecord record;
         try {
-            record = repository.findById(id).orElse(null);
+            record = FileAdminMapperSupport.findById(mapper, id).orElse(null);
         } catch (RuntimeException e) {
             log.warn("[文件中心] 文件元数据查询失败 fileId={}, error={}", id, e.getMessage());
             return Result.fail(ResultCode.SERVICE_ERROR.getCode(), "文件读取失败");
@@ -165,7 +167,7 @@ public class FileAdminService {
         }
         FileAdminModels.FileRecord record;
         try {
-            record = repository.findById(id).orElse(null);
+            record = FileAdminMapperSupport.findById(mapper, id).orElse(null);
         } catch (RuntimeException e) {
             log.warn("[文件中心] 删除前查询文件失败 fileId={}, error={}", id, e.getMessage());
             return Result.fail(ResultCode.SERVICE_ERROR.getCode(), "文件删除失败");
@@ -178,7 +180,7 @@ public class FileAdminService {
             return Result.fail(ResultCode.SERVICE_ERROR.getCode(), "文件存储服务未启用");
         }
         try {
-            if (!repository.markDeleted(id)) {
+            if (!FileAdminMapperSupport.markDeleted(mapper, id)) {
                 return Result.fail(ResultCode.NOT_FOUND.getCode(), "文件不存在");
             }
         } catch (RuntimeException e) {

@@ -1,7 +1,7 @@
 package com.framework.admin.dashboard;
 
 import com.framework.admin.excel.ExcelAdminMapper;
-import com.framework.admin.file.FileAdminRepository;
+import com.framework.admin.file.FileAdminMapper;
 import com.framework.admin.notify.NotifyAdminMapper;
 import com.framework.admin.system.AdminSystemModels.ConfigItem;
 import com.framework.admin.system.AdminSystemRepository;
@@ -55,7 +55,7 @@ class DashboardControllerTest {
                 provider(null),
                 provider(new FakeNotifyMapper()),
                 provider(new FakeExcelMapper()),
-                provider(new FakeFileRepository()),
+                provider(new FakeFileMapper()),
                 provider(new FakeSystemRepository(false)));
         DashboardController controller = new DashboardController(service);
 
@@ -223,14 +223,50 @@ class DashboardControllerTest {
         }
     }
 
-    private static class FakeFileRepository extends FileAdminRepository {
-        private FakeFileRepository() {
-            super(null);
+    private static class FakeFileMapper implements FileAdminMapper {
+        @Override
+        public List<com.framework.admin.file.FileAdminModels.FileRecord> list(String keyword,
+                                                                              String businessType,
+                                                                              String businessKey,
+                                                                              String contentType,
+                                                                              int offset,
+                                                                              int pageSize) {
+            return List.of();
         }
 
         @Override
-        public Map<String, Long> stats() {
-            return Map.of("active", 4L, "deleted", 1L, "totalSize", 1024L);
+        public long count(String keyword, String businessType, String businessKey, String contentType) {
+            return 4L;
+        }
+
+        @Override
+        public long countActive() {
+            return 4L;
+        }
+
+        @Override
+        public long countDeleted() {
+            return 1L;
+        }
+
+        @Override
+        public long sumActiveSize() {
+            return 1024L;
+        }
+
+        @Override
+        public com.framework.admin.file.FileAdminModels.FileRecord findById(Long id) {
+            return null;
+        }
+
+        @Override
+        public int insert(com.framework.admin.file.FileAdminModels.FileRecord record) {
+            return 1;
+        }
+
+        @Override
+        public int markDeleted(Long id) {
+            return 1;
         }
     }
 

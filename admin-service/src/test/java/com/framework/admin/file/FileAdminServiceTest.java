@@ -22,14 +22,13 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class FileAdminServiceTest {
 
-    private final FakeRepository repository = new FakeRepository();
+    private final FakeMapper repository = new FakeMapper();
     private final FakeStorageService storageService = new FakeStorageService();
     private final FakeAuditService auditService = new FakeAuditService();
     private final FileAdminService service = new FileAdminService(repository, provider(storageService), auditService);
@@ -53,12 +52,12 @@ class FileAdminServiceTest {
         assertThat(page.getPageNum()).isEqualTo(1);
         assertThat(page.getPageSize()).isEqualTo(200);
         assertThat(page.getRecords()).hasSize(1);
-        assertThat(repository.listPageNum).isEqualTo(1);
+        assertThat(repository.listOffset).isZero();
         assertThat(repository.listPageSize).isEqualTo(200);
-        assertThat(repository.listKeyword).isEqualTo("a");
+        assertThat(repository.listKeyword).isEqualTo("%a%");
         assertThat(repository.listBusinessType).isEqualTo("system");
-        assertThat(repository.listBusinessKey).isEqualTo("order-1");
-        assertThat(repository.listContentType).isEqualTo("text");
+        assertThat(repository.listBusinessKey).isEqualTo("%order-1%");
+        assertThat(repository.listContentType).isEqualTo("%text%");
         assertThat(service.stats()).containsEntry("totalSize", 3L);
     }
 
@@ -349,10 +348,10 @@ class FileAdminServiceTest {
         assertThat(result.getMessage()).isEqualTo("文件ID必须大于0");
     }
 
-    private static class FakeRepository extends FileAdminRepository {
+    private static class FakeMapper implements FileAdminMapper {
         private List<FileAdminModels.FileRecord> records = List.of();
         private long count;
-        private int listPageNum;
+        private int listOffset;
         private int listPageSize;
         private String listKeyword;
         private String listBusinessType;
@@ -369,13 +368,9 @@ class FileAdminServiceTest {
         private RuntimeException findFailure;
         private RuntimeException markFailure;
 
-        private FakeRepository() {
-            super(null);
-        }
-
         @Override
         public List<FileAdminModels.FileRecord> list(String keyword, String businessType, String businessKey,
-                                                     String contentType, int pageNum, int pageSize) {
+                                                     String contentType, int offset, int pageSize) {
             if (listFailure != null) {
                 throw listFailure;
             }
@@ -383,7 +378,7 @@ class FileAdminServiceTest {
             this.listBusinessType = businessType;
             this.listBusinessKey = businessKey;
             this.listContentType = contentType;
-            this.listPageNum = pageNum;
+            this.listOffset = offset;
             this.listPageSize = pageSize;
             return records;
         }
@@ -394,37 +389,53 @@ class FileAdminServiceTest {
         }
 
         @Override
-        public Map<String, Long> stats() {
+        public long countActive() {
             if (statsFailure != null) {
                 throw statsFailure;
             }
-            return stats;
+            return stats.getOrDefault("active", 0L);
         }
 
         @Override
-        public FileAdminModels.FileRecord create(FileAdminModels.FileRecord record) {
+        public long countDeleted() {
+            if (statsFailure != null) {
+                throw statsFailure;
+            }
+            return stats.getOrDefault("deleted", 0L);
+        }
+
+        @Override
+        public long sumActiveSize() {
+            if (statsFailure != null) {
+                throw statsFailure;
+            }
+            return stats.getOrDefault("totalSize", 0L);
+        }
+
+        @Override
+        public int insert(FileAdminModels.FileRecord record) {
             if (createFailure != null) {
                 throw createFailure;
             }
             this.created = record.setId(9L);
-            return created;
+            return 1;
         }
 
         @Override
-        public Optional<FileAdminModels.FileRecord> findById(Long id) {
+        public FileAdminModels.FileRecord findById(Long id) {
             if (findFailure != null) {
                 throw findFailure;
             }
-            return Optional.ofNullable(record);
+            return record;
         }
 
         @Override
-        public boolean markDeleted(Long id) {
+        public int markDeleted(Long id) {
             if (markFailure != null) {
                 throw markFailure;
             }
             this.deletedId = id;
-            return markDeletedAffected;
+            return markDeletedAffected ? 1 : 0;
         }
     }
 
