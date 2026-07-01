@@ -1,11 +1,14 @@
 package com.framework.admin.trace;
 
 import com.framework.admin.localmessage.LocalMessageVO;
+import com.framework.admin.localmessage.LocalMessageAdminMapperSupport;
 import com.framework.admin.support.AdminTextSupport;
 import com.framework.admin.trace.TraceAdminModels.TraceDetail;
 import com.framework.admin.trace.TraceAdminModels.TraceEvent;
+import com.framework.localmessage.config.LocalMessageProperties;
+import com.framework.localmessage.mapper.LocalMessageMapper;
 import com.framework.localmessage.model.LocalMessage;
-import com.framework.localmessage.service.LocalMessageService;
+import com.framework.localmessage.model.LocalMessageStatus;
 import com.framework.log.entity.OperationLogEntity;
 import com.framework.log.mapper.OperationLogMapper;
 import com.framework.mq.deadletter.DeadLetterHandler;
@@ -33,19 +36,23 @@ public class TraceAdminService {
     private static final String LOG_COUNT_WARNING = "操作日志统计不可用";
     private static final String MQ_WARNING = "MQ失败消息数据不可用";
     private static final String LOCAL_MESSAGE_WARNING = "本地消息数据不可用";
+    private static final String LOCAL_MESSAGE_COUNT_WARNING = "本地消息统计不可用";
     private static final int MAX_TIMELINE_MESSAGE_LENGTH = 1024;
     private static final int MAX_WARNING_MESSAGE_LENGTH = 512;
 
     private final ObjectProvider<OperationLogMapper> operationLogMapperProvider;
     private final ObjectProvider<DeadLetterHandler> deadLetterHandlerProvider;
-    private final ObjectProvider<LocalMessageService> localMessageServiceProvider;
+    private final ObjectProvider<LocalMessageMapper> localMessageMapperProvider;
+    private final ObjectProvider<LocalMessageProperties> localMessagePropertiesProvider;
 
     public TraceAdminService(ObjectProvider<OperationLogMapper> operationLogMapperProvider,
                              ObjectProvider<DeadLetterHandler> deadLetterHandlerProvider,
-                             ObjectProvider<LocalMessageService> localMessageServiceProvider) {
+                             ObjectProvider<LocalMessageMapper> localMessageMapperProvider,
+                             ObjectProvider<LocalMessageProperties> localMessagePropertiesProvider) {
         this.operationLogMapperProvider = operationLogMapperProvider;
         this.deadLetterHandlerProvider = deadLetterHandlerProvider;
-        this.localMessageServiceProvider = localMessageServiceProvider;
+        this.localMessageMapperProvider = localMessageMapperProvider;
+        this.localMessagePropertiesProvider = localMessagePropertiesProvider;
     }
 
     public TraceDetail detail(String traceId) {
@@ -108,23 +115,40 @@ public class TraceAdminService {
     }
 
     private TraceSourceData<LocalMessage> findLocalMessages(String traceId, List<String> warnings) {
-        LocalMessageService service = available(localMessageServiceProvider, LOCAL_MESSAGE_WARNING, warnings);
-        if (service == null) {
+        LocalMessageMapper mapper = available(localMessageMapperProvider, LOCAL_MESSAGE_WARNING, warnings);
+        if (mapper == null) {
+            return TraceSourceData.empty(LOCAL_MESSAGES_KEY);
+        }
+        String tableName = localMessageTableName(warnings);
+        if (tableName == null) {
             return TraceSourceData.empty(LOCAL_MESSAGES_KEY);
         }
         try {
-            List<LocalMessage> matched = service.findAll().stream()
-                    .filter(message -> traceId.equals(message.getTraceId()))
-                    .sorted(Comparator.comparing(LocalMessage::getCreateTime, newestFirst()))
-                    .toList();
-            List<LocalMessage> displayed = matched.stream().limit(TRACE_LIMIT).toList();
-            long failed = matched.stream()
-                    .filter(message -> "FAILED".equals(String.valueOf(message.getStatus())))
-                    .count();
-            return new TraceSourceData<>(LOCAL_MESSAGES_KEY, displayed, matched.size(), failed);
+            List<LocalMessage> displayed = LocalMessageAdminMapperSupport.listByTraceId(
+                    mapper, tableName, traceId, 1, TRACE_LIMIT);
+            long total = countLocalMessages(mapper, tableName, traceId, null, displayed.size(), warnings);
+            long failed = countLocalMessages(mapper, tableName, traceId, LocalMessageStatus.FAILED,
+                    displayed.stream()
+                            .filter(message -> LocalMessageStatus.FAILED.equals(message.getStatus()))
+                            .count(),
+                    warnings);
+            return new TraceSourceData<>(LOCAL_MESSAGES_KEY, displayed, total, failed);
         } catch (Exception e) {
             warnings.add(warning(LOCAL_MESSAGE_WARNING, e));
             return TraceSourceData.empty(LOCAL_MESSAGES_KEY);
+        }
+    }
+
+    private String localMessageTableName(List<String> warnings) {
+        LocalMessageProperties properties = available(localMessagePropertiesProvider, LOCAL_MESSAGE_WARNING, warnings);
+        if (properties == null) {
+            return null;
+        }
+        try {
+            return LocalMessageAdminMapperSupport.tableName(properties);
+        } catch (Exception e) {
+            warnings.add(warning(LOCAL_MESSAGE_WARNING, e));
+            return null;
         }
     }
 
@@ -141,6 +165,17 @@ public class TraceAdminService {
             return Math.max(mapper.count(null, null, null, success, traceId), fallback);
         } catch (Exception e) {
             warnings.add(warning(LOG_COUNT_WARNING, e));
+            return fallback;
+        }
+    }
+
+    private long countLocalMessages(LocalMessageMapper mapper, String tableName, String traceId,
+                                    LocalMessageStatus status, long fallback, List<String> warnings) {
+        try {
+            return Math.max(LocalMessageAdminMapperSupport.countByTraceId(mapper, tableName, traceId, status),
+                    fallback);
+        } catch (Exception e) {
+            warnings.add(warning(LOCAL_MESSAGE_COUNT_WARNING, e));
             return fallback;
         }
     }

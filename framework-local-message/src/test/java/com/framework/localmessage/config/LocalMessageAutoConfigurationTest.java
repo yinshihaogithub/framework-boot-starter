@@ -101,6 +101,28 @@ class LocalMessageAutoConfigurationTest {
         }
 
         @Override
+        public List<LocalMessage> list(String tableName, String topic, LocalMessageStatus status,
+                                       String traceIdLike, String businessKeyLike, int offset, int pageSize) {
+            return List.of();
+        }
+
+        @Override
+        public long count(String tableName, String topic, LocalMessageStatus status,
+                          String traceIdLike, String businessKeyLike) {
+            return 0;
+        }
+
+        @Override
+        public long countAll(String tableName) {
+            return 0;
+        }
+
+        @Override
+        public long countByStatus(String tableName, LocalMessageStatus status) {
+            return 0;
+        }
+
+        @Override
         public int delete(String tableName, Long id) {
             return 0;
         }

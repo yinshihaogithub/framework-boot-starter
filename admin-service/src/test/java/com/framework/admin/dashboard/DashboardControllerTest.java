@@ -6,9 +6,14 @@ import com.framework.admin.notify.NotifyAdminMapper;
 import com.framework.admin.system.AdminSystemModels.ConfigItem;
 import com.framework.admin.system.AdminSystemMapperSupport;
 import com.framework.core.result.Result;
+import com.framework.localmessage.config.LocalMessageProperties;
+import com.framework.localmessage.mapper.LocalMessageMapper;
+import com.framework.localmessage.model.LocalMessage;
+import com.framework.localmessage.model.LocalMessageStatus;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
@@ -20,6 +25,7 @@ class DashboardControllerTest {
     @Test
     void moduleStatusesMatchAdminRuntimeModules() {
         DashboardService service = new DashboardService(
+                provider(null),
                 provider(null),
                 provider(null),
                 provider(null),
@@ -51,7 +57,8 @@ class DashboardControllerTest {
     void summaryIncludesOperationalCenterMetrics() {
         DashboardService service = new DashboardService(
                 provider(null),
-                provider(null),
+                provider(new FakeLocalMessageMapper()),
+                provider(localMessageProperties()),
                 provider(null),
                 provider(new FakeNotifyMapper()),
                 provider(new FakeExcelMapper()),
@@ -66,6 +73,10 @@ class DashboardControllerTest {
                 .containsEntry("templates", 3L)
                 .containsEntry("successRecords", 7L)
                 .containsEntry("failedRecords", 2L);
+        assertThat(result.getData().localMessage())
+                .containsEntry("pending", 2L)
+                .containsEntry("failed", 1L)
+                .containsEntry("total", 6L);
         assertThat(result.getData().excel())
                 .containsEntry("total", 5L)
                 .containsEntry("failed", 1L);
@@ -78,6 +89,7 @@ class DashboardControllerTest {
     @Test
     void summaryIncludesDefaultPasswordChangedSecurityStatus() {
         DashboardService service = new DashboardService(
+                provider(null),
                 provider(null),
                 provider(null),
                 provider(null),
@@ -102,6 +114,7 @@ class DashboardControllerTest {
                 failingProvider(),
                 failingProvider(),
                 failingProvider(),
+                failingProvider(),
                 failingProvider());
         DashboardController controller = new DashboardController(service);
 
@@ -115,6 +128,70 @@ class DashboardControllerTest {
         assertThat(result.getData().excel()).containsEntry("total", 0L);
         assertThat(result.getData().files()).containsEntry("active", 0L);
         assertThat(result.getData().security().defaultPasswordChanged()).isTrue();
+    }
+
+    private static class FakeLocalMessageMapper implements LocalMessageMapper {
+        @Override
+        public void createTableIfNotExists(String tableName) {
+        }
+
+        @Override
+        public int insert(String tableName, LocalMessage message) {
+            return 1;
+        }
+
+        @Override
+        public int update(String tableName, LocalMessage message) {
+            return 1;
+        }
+
+        @Override
+        public LocalMessage findById(String tableName, Long id) {
+            return null;
+        }
+
+        @Override
+        public List<LocalMessage> findDueMessages(String tableName, LocalMessageStatus status,
+                                                  LocalDateTime now, int limit) {
+            return List.of();
+        }
+
+        @Override
+        public List<LocalMessage> findAll(String tableName) {
+            return List.of();
+        }
+
+        @Override
+        public List<LocalMessage> list(String tableName, String topic, LocalMessageStatus status,
+                                       String traceIdLike, String businessKeyLike, int offset, int pageSize) {
+            return List.of();
+        }
+
+        @Override
+        public long count(String tableName, String topic, LocalMessageStatus status,
+                          String traceIdLike, String businessKeyLike) {
+            return status == null ? 6L : countByStatus(tableName, status);
+        }
+
+        @Override
+        public long countAll(String tableName) {
+            return 6L;
+        }
+
+        @Override
+        public long countByStatus(String tableName, LocalMessageStatus status) {
+            return switch (status) {
+                case PENDING -> 2L;
+                case PROCESSING -> 1L;
+                case SUCCESS -> 2L;
+                case FAILED -> 1L;
+            };
+        }
+
+        @Override
+        public int delete(String tableName, Long id) {
+            return 0;
+        }
     }
 
     private static class FakeNotifyMapper implements NotifyAdminMapper {
@@ -313,6 +390,12 @@ class DashboardControllerTest {
                 return value == null ? Stream.empty() : Stream.of(value);
             }
         };
+    }
+
+    private static LocalMessageProperties localMessageProperties() {
+        LocalMessageProperties properties = new LocalMessageProperties();
+        properties.setTableName("framework_local_message");
+        return properties;
     }
 
     private static <T> ObjectProvider<T> failingProvider() {

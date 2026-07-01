@@ -46,6 +46,31 @@ class LocalMessageMapperTest {
                 .contains("next_retry_time <= #{now}")
                 .contains("LIMIT #{limit}");
 
+        Method list = LocalMessageMapper.class.getMethod("list", String.class, String.class,
+                com.framework.localmessage.model.LocalMessageStatus.class, String.class, String.class, int.class, int.class);
+        assertThat(sql(list.getAnnotation(Select.class).value()))
+                .contains("topic = #{topic}")
+                .contains("status = #{status}")
+                .contains("trace_id LIKE #{traceIdLike}")
+                .contains("business_key LIKE #{businessKeyLike}")
+                .contains("ORDER BY create_time DESC, id DESC")
+                .contains("LIMIT #{offset}, #{pageSize}");
+
+        Method count = LocalMessageMapper.class.getMethod("count", String.class, String.class,
+                com.framework.localmessage.model.LocalMessageStatus.class, String.class, String.class);
+        assertThat(sql(count.getAnnotation(Select.class).value()))
+                .contains("SELECT COUNT(*)")
+                .contains("trace_id LIKE #{traceIdLike}");
+
+        Method countAll = LocalMessageMapper.class.getMethod("countAll", String.class);
+        assertThat(sql(countAll.getAnnotation(Select.class).value()))
+                .isEqualTo("SELECT COUNT(*) FROM ${tableName}");
+
+        Method countByStatus = LocalMessageMapper.class.getMethod("countByStatus", String.class,
+                com.framework.localmessage.model.LocalMessageStatus.class);
+        assertThat(sql(countByStatus.getAnnotation(Select.class).value()))
+                .isEqualTo("SELECT COUNT(*) FROM ${tableName} WHERE status = #{status}");
+
         Method delete = LocalMessageMapper.class.getMethod("delete", String.class, Long.class);
         assertThat(sql(delete.getAnnotation(Delete.class).value()))
                 .isEqualTo("DELETE FROM ${tableName} WHERE id = #{id}");

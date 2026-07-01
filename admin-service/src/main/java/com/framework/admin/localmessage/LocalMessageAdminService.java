@@ -7,9 +7,10 @@ import com.framework.auth.context.UserContextHolder;
 import com.framework.core.result.PageResult;
 import com.framework.core.result.ResultCode;
 import com.framework.core.trace.TraceContext;
+import com.framework.localmessage.config.LocalMessageProperties;
+import com.framework.localmessage.mapper.LocalMessageMapper;
 import com.framework.localmessage.model.LocalMessage;
 import com.framework.localmessage.model.LocalMessageStatus;
-import com.framework.localmessage.repository.LocalMessageRepository;
 import com.framework.localmessage.service.LocalMessageService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
@@ -17,8 +18,6 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
-import java.util.Comparator;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -28,37 +27,32 @@ import java.util.Map;
 public class LocalMessageAdminService {
 
     private final ObjectProvider<LocalMessageService> localMessageServiceProvider;
-    private final ObjectProvider<LocalMessageRepository> repositoryProvider;
+    private final ObjectProvider<LocalMessageMapper> mapperProvider;
+    private final ObjectProvider<LocalMessageProperties> propertiesProvider;
     private final AdminAuditService auditService;
 
     public LocalMessageAdminService(ObjectProvider<LocalMessageService> localMessageServiceProvider,
-                                    ObjectProvider<LocalMessageRepository> repositoryProvider,
+                                    ObjectProvider<LocalMessageMapper> mapperProvider,
+                                    ObjectProvider<LocalMessageProperties> propertiesProvider,
                                     AdminAuditService auditService) {
         this.localMessageServiceProvider = localMessageServiceProvider;
-        this.repositoryProvider = repositoryProvider;
+        this.mapperProvider = mapperProvider;
+        this.propertiesProvider = propertiesProvider;
         this.auditService = auditService;
     }
 
     public Map<String, Long> stats() {
-        Map<String, Long> stats = new LinkedHashMap<>();
-        for (LocalMessageStatus status : LocalMessageStatus.values()) {
-            stats.put(status.name(), 0L);
-        }
-        stats.put("TOTAL", 0L);
-        LocalMessageService service = available(localMessageServiceProvider);
-        if (service == null) {
+        Map<String, Long> stats = LocalMessageAdminMapperSupport.zeroStats();
+        LocalMessageMapper mapper = available(mapperProvider);
+        String tableName = tableName();
+        if (mapper == null || tableName == null) {
             return stats;
         }
         try {
-            List<LocalMessage> messages = service.findAll();
-            for (LocalMessageStatus status : LocalMessageStatus.values()) {
-                stats.put(status.name(), messages.stream().filter(message -> status == message.getStatus()).count());
-            }
-            stats.put("TOTAL", (long) messages.size());
+            return LocalMessageAdminMapperSupport.stats(mapper, tableName);
         } catch (Exception ignored) {
             return zero(stats);
         }
-        return stats;
     }
 
     public PageResult<LocalMessageVO> list(String topic, String status, String traceId,
@@ -75,25 +69,20 @@ public class LocalMessageAdminService {
         if (isInvalidTraceIdFilter(traceId, safeTraceId)) {
             return PageResult.empty(safePageNum, safePageSize);
         }
-        LocalMessageService service = available(localMessageServiceProvider);
-        if (service == null) {
+        LocalMessageMapper mapper = available(mapperProvider);
+        String tableName = tableName();
+        if (mapper == null || tableName == null) {
             return PageResult.empty(safePageNum, safePageSize);
         }
         try {
-            List<LocalMessage> filtered = service.findAll().stream()
-                    .filter(message -> safeTopic == null || safeTopic.equals(message.getTopic()))
-                    .filter(message -> safeStatus == null || safeStatus == message.getStatus())
-                    .filter(message -> safeTraceId == null || contains(message.getTraceId(), safeTraceId))
-                    .filter(message -> safeBusinessKey == null || contains(message.getBusinessKey(), safeBusinessKey))
-                    .sorted(Comparator.comparing(LocalMessage::getCreateTime, newestFirst()))
+            List<LocalMessageVO> records = LocalMessageAdminMapperSupport.list(
+                            mapper, tableName, safeTopic, safeStatus, safeTraceId, safeBusinessKey,
+                            safePageNum, safePageSize)
+                    .stream()
+                    .map(LocalMessageVO::from)
                     .toList();
-            int total = filtered.size();
-            long offset = (long) (safePageNum - 1) * safePageSize;
-            int start = offset < total ? (int) offset : total;
-            int end = Math.min(start + safePageSize, total);
-            List<LocalMessageVO> records = start < total
-                    ? filtered.subList(start, end).stream().map(LocalMessageVO::from).toList()
-                    : List.of();
+            long total = LocalMessageAdminMapperSupport.count(
+                    mapper, tableName, safeTopic, safeStatus, safeTraceId, safeBusinessKey);
             return PageResult.of(records, total, safePageNum, safePageSize);
         } catch (Exception ignored) {
             return PageResult.empty(safePageNum, safePageSize);
@@ -105,12 +94,13 @@ public class LocalMessageAdminService {
         if (invalidId != null) {
             return invalidId;
         }
-        LocalMessageService service = available(localMessageServiceProvider);
-        if (service == null) {
-            return ActionResult.fail(ResultCode.SERVICE_ERROR, "本地消息服务未启用");
+        LocalMessageMapper mapper = available(mapperProvider);
+        String tableName = tableName();
+        if (mapper == null || tableName == null) {
+            return ActionResult.fail(ResultCode.SERVICE_ERROR, "本地消息表未启用");
         }
         try {
-            return service.findById(id)
+            return LocalMessageAdminMapperSupport.findById(mapper, tableName, id)
                     .map(LocalMessageVO::from)
                     .map(ActionResult::success)
                     .orElseGet(() -> ActionResult.fail(ResultCode.NOT_FOUND, "消息不存在"));
@@ -140,12 +130,13 @@ public class LocalMessageAdminService {
         if (invalidId != null) {
             return invalidId;
         }
-        LocalMessageRepository repository = available(repositoryProvider);
-        if (repository == null) {
-            return ActionResult.fail(ResultCode.SERVICE_ERROR, "本地消息仓储未启用");
+        LocalMessageMapper mapper = available(mapperProvider);
+        String tableName = tableName();
+        if (mapper == null || tableName == null) {
+            return ActionResult.fail(ResultCode.SERVICE_ERROR, "本地消息表未启用");
         }
         try {
-            LocalMessage message = repository.findById(id).orElse(null);
+            LocalMessage message = LocalMessageAdminMapperSupport.findById(mapper, tableName, id).orElse(null);
             if (message == null) {
                 return ActionResult.fail(ResultCode.NOT_FOUND, "消息不存在");
             }
@@ -156,7 +147,7 @@ public class LocalMessageAdminService {
             updated.setErrorMessage(null);
             updated.setNextRetryTime(LocalDateTime.now());
             updated.setOperator(operator);
-            if (!repository.update(updated)) {
+            if (!LocalMessageAdminMapperSupport.update(mapper, tableName, updated)) {
                 return ActionResult.fail(ResultCode.NOT_FOUND, "消息不存在");
             }
             auditSuccess(servletRequest, "人工立即重试本地消息", "UPDATE",
@@ -173,12 +164,13 @@ public class LocalMessageAdminService {
         if (invalidId != null) {
             return invalidId;
         }
-        LocalMessageRepository repository = available(repositoryProvider);
-        if (repository == null) {
-            return ActionResult.fail(ResultCode.SERVICE_ERROR, "本地消息仓储未启用");
+        LocalMessageMapper mapper = available(mapperProvider);
+        String tableName = tableName();
+        if (mapper == null || tableName == null) {
+            return ActionResult.fail(ResultCode.SERVICE_ERROR, "本地消息表未启用");
         }
         try {
-            LocalMessage message = repository.findById(id).orElse(null);
+            LocalMessage message = LocalMessageAdminMapperSupport.findById(mapper, tableName, id).orElse(null);
             if (message == null) {
                 return ActionResult.fail(ResultCode.NOT_FOUND, "消息不存在");
             }
@@ -189,7 +181,7 @@ public class LocalMessageAdminService {
             updated.setErrorMessage(null);
             updated.setNextRetryTime(null);
             updated.setOperator(operator);
-            if (!repository.update(updated)) {
+            if (!LocalMessageAdminMapperSupport.update(mapper, tableName, updated)) {
                 return ActionResult.fail(ResultCode.NOT_FOUND, "消息不存在");
             }
             auditSuccess(servletRequest, "人工标记本地消息成功", "UPDATE",
@@ -206,12 +198,13 @@ public class LocalMessageAdminService {
         if (invalidId != null) {
             return invalidId;
         }
-        LocalMessageRepository repository = available(repositoryProvider);
-        if (repository == null) {
-            return ActionResult.fail(ResultCode.SERVICE_ERROR, "本地消息仓储未启用");
+        LocalMessageMapper mapper = available(mapperProvider);
+        String tableName = tableName();
+        if (mapper == null || tableName == null) {
+            return ActionResult.fail(ResultCode.SERVICE_ERROR, "本地消息表未启用");
         }
         try {
-            LocalMessage message = repository.findById(id).orElse(null);
+            LocalMessage message = LocalMessageAdminMapperSupport.findById(mapper, tableName, id).orElse(null);
             if (message == null) {
                 return ActionResult.fail(ResultCode.NOT_FOUND, "消息不存在");
             }
@@ -226,7 +219,7 @@ public class LocalMessageAdminService {
             updated.setErrorMessage(safeReason);
             updated.setNextRetryTime(null);
             updated.setOperator(operator);
-            if (!repository.update(updated)) {
+            if (!LocalMessageAdminMapperSupport.update(mapper, tableName, updated)) {
                 return ActionResult.fail(ResultCode.NOT_FOUND, "消息不存在");
             }
             auditSuccess(servletRequest, "人工标记本地消息失败", "UPDATE",
@@ -243,17 +236,18 @@ public class LocalMessageAdminService {
         if (invalidId != null) {
             return invalidId;
         }
-        LocalMessageRepository repository = available(repositoryProvider);
-        if (repository == null) {
-            return ActionResult.fail(ResultCode.SERVICE_ERROR, "本地消息仓储未启用");
+        LocalMessageMapper mapper = available(mapperProvider);
+        String tableName = tableName();
+        if (mapper == null || tableName == null) {
+            return ActionResult.fail(ResultCode.SERVICE_ERROR, "本地消息表未启用");
         }
         try {
-            LocalMessage message = repository.findById(id).orElse(null);
+            LocalMessage message = LocalMessageAdminMapperSupport.findById(mapper, tableName, id).orElse(null);
             if (message == null) {
                 return ActionResult.fail(ResultCode.NOT_FOUND, "消息不存在");
             }
             String operator = operator();
-            if (!repository.delete(id)) {
+            if (!LocalMessageAdminMapperSupport.delete(mapper, tableName, id)) {
                 return ActionResult.fail(ResultCode.NOT_FOUND, "消息不存在");
             }
             auditSuccess(servletRequest, "删除本地消息", "DELETE",
@@ -263,10 +257,6 @@ public class LocalMessageAdminService {
         } catch (Exception ignored) {
             return ActionResult.fail(ResultCode.SERVICE_ERROR, "本地消息操作失败");
         }
-    }
-
-    private boolean contains(String value, String keyword) {
-        return value != null && value.contains(keyword);
     }
 
     private boolean isBlank(String value) {
@@ -305,10 +295,6 @@ public class LocalMessageAdminService {
 
     private boolean isInvalidTraceIdFilter(String originalTraceId, String normalizedTraceId) {
         return !isBlank(originalTraceId) && normalizedTraceId == null;
-    }
-
-    private <T extends Comparable<? super T>> Comparator<T> newestFirst() {
-        return Comparator.nullsLast(Comparator.reverseOrder());
     }
 
     private Map<String, Long> zero(Map<String, Long> stats) {
@@ -361,6 +347,18 @@ public class LocalMessageAdminService {
         }
         try {
             return provider.getIfAvailable();
+        } catch (RuntimeException ignored) {
+            return null;
+        }
+    }
+
+    private String tableName() {
+        LocalMessageProperties properties = available(propertiesProvider);
+        if (properties == null) {
+            return null;
+        }
+        try {
+            return LocalMessageAdminMapperSupport.tableName(properties);
         } catch (RuntimeException ignored) {
             return null;
         }

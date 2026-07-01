@@ -3,9 +3,10 @@ package com.framework.admin.trace;
 import com.framework.admin.trace.TraceAdminModels.TraceDetail;
 import com.framework.core.result.Result;
 import com.framework.core.result.ResultCode;
+import com.framework.localmessage.config.LocalMessageProperties;
+import com.framework.localmessage.mapper.LocalMessageMapper;
 import com.framework.localmessage.model.LocalMessage;
 import com.framework.localmessage.model.LocalMessageStatus;
-import com.framework.localmessage.service.LocalMessageService;
 import com.framework.log.entity.OperationLogEntity;
 import com.framework.log.mapper.OperationLogMapper;
 import com.framework.mq.config.MqProperties;
@@ -16,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 
 import java.time.LocalDateTime;
+import java.util.Comparator;
 import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -219,7 +221,8 @@ class TraceAdminServiceTest {
 
     @Test
     void returnsEmptyDetailWhenOptionalRuntimesAreMissing() {
-        TraceAdminService service = new TraceAdminService(provider(null), provider(null), provider(null));
+        TraceAdminService service = new TraceAdminService(provider(null), provider(null), provider(null),
+                provider(null));
 
         TraceDetail detail = service.detail("trace-empty");
 
@@ -247,7 +250,8 @@ class TraceAdminServiceTest {
 
     @Test
     void returnsEmptyDetailWhenOptionalProvidersFail() {
-        TraceAdminService service = new TraceAdminService(failingProvider(), failingProvider(), failingProvider());
+        TraceAdminService service = new TraceAdminService(failingProvider(), failingProvider(), failingProvider(),
+                provider(null));
 
         TraceDetail detail = service.detail("trace-provider-failed");
 
@@ -272,7 +276,8 @@ class TraceAdminServiceTest {
         TraceAdminService service = new TraceAdminService(
                 provider(failingMapper()),
                 provider(null),
-                provider(failingLocalMessageService()));
+                provider(failingLocalMessageMapper()),
+                provider(localMessageProperties()));
 
         TraceDetail detail = service.detail("trace-query-failed");
 
@@ -292,6 +297,7 @@ class TraceAdminServiceTest {
         TraceAdminService service = new TraceAdminService(
                 failingProvider("provider\u00A0line\n" + "x".repeat(900)),
                 provider(null),
+                provider(null),
                 provider(null));
 
         TraceDetail detail = service.detail("trace-warning");
@@ -310,7 +316,8 @@ class TraceAdminServiceTest {
         return new TraceAdminService(
                 provider(mapper(logs)),
                 provider(new DeadLetterHandler(new InMemoryMqFailedMessageRepository(mqMessages), new MqProperties())),
-                provider(localMessageService(localMessages)));
+                provider(localMessageMapper(localMessages)),
+                provider(localMessageProperties()));
     }
 
     private static OperationLogEntity operationLog(String traceId, boolean success, String action, String uri, Date time) {
@@ -411,78 +418,160 @@ class TraceAdminServiceTest {
         };
     }
 
-    private static LocalMessageService localMessageService(List<LocalMessage> messages) {
-        return new LocalMessageService() {
+    private static LocalMessageMapper localMessageMapper(List<LocalMessage> messages) {
+        return new LocalMessageMapper() {
             @Override
-            public LocalMessage publish(LocalMessage message) {
-                return null;
+            public void createTableIfNotExists(String tableName) {
             }
 
             @Override
-            public int retryDueMessages() {
-                return 0;
+            public int insert(String tableName, LocalMessage message) {
+                return 1;
             }
 
             @Override
-            public boolean retryNow(Long id) {
-                return false;
+            public int update(String tableName, LocalMessage message) {
+                return 1;
             }
 
             @Override
-            public void markSuccess(Long id) {
+            public LocalMessage findById(String tableName, Long id) {
+                return messages.stream().filter(message -> id.equals(message.getId())).findFirst().orElse(null);
             }
 
             @Override
-            public void markFailure(Long id, Exception exception) {
+            public List<LocalMessage> findDueMessages(String tableName, LocalMessageStatus status,
+                                                      LocalDateTime now, int limit) {
+                return List.of();
             }
 
             @Override
-            public Optional<LocalMessage> findById(Long id) {
-                return messages.stream().filter(message -> id.equals(message.getId())).findFirst();
-            }
-
-            @Override
-            public List<LocalMessage> findAll() {
+            public List<LocalMessage> findAll(String tableName) {
                 return messages;
+            }
+
+            @Override
+            public List<LocalMessage> list(String tableName, String topic, LocalMessageStatus status,
+                                           String traceIdLike, String businessKeyLike, int offset, int pageSize) {
+                return messages.stream()
+                        .filter(message -> topic == null || topic.equals(message.getTopic()))
+                        .filter(message -> status == null || status.equals(message.getStatus()))
+                        .filter(message -> matchesLike(message.getTraceId(), traceIdLike))
+                        .filter(message -> matchesLike(message.getBusinessKey(), businessKeyLike))
+                        .sorted(Comparator.comparing(LocalMessage::getCreateTime, newestLocalFirst()))
+                        .skip(offset)
+                        .limit(pageSize)
+                        .toList();
+            }
+
+            @Override
+            public long count(String tableName, String topic, LocalMessageStatus status,
+                              String traceIdLike, String businessKeyLike) {
+                return messages.stream()
+                        .filter(message -> topic == null || topic.equals(message.getTopic()))
+                        .filter(message -> status == null || status.equals(message.getStatus()))
+                        .filter(message -> matchesLike(message.getTraceId(), traceIdLike))
+                        .filter(message -> matchesLike(message.getBusinessKey(), businessKeyLike))
+                        .count();
+            }
+
+            @Override
+            public long countAll(String tableName) {
+                return messages.size();
+            }
+
+            @Override
+            public long countByStatus(String tableName, LocalMessageStatus status) {
+                return messages.stream().filter(message -> status.equals(message.getStatus())).count();
+            }
+
+            @Override
+            public int delete(String tableName, Long id) {
+                return 0;
             }
         };
     }
 
-    private static LocalMessageService failingLocalMessageService() {
-        return new LocalMessageService() {
+    private static LocalMessageMapper failingLocalMessageMapper() {
+        return new LocalMessageMapper() {
             @Override
-            public LocalMessage publish(LocalMessage message) {
+            public void createTableIfNotExists(String tableName) {
+            }
+
+            @Override
+            public int insert(String tableName, LocalMessage message) {
+                return 1;
+            }
+
+            @Override
+            public int update(String tableName, LocalMessage message) {
+                return 1;
+            }
+
+            @Override
+            public LocalMessage findById(String tableName, Long id) {
                 return null;
             }
 
             @Override
-            public int retryDueMessages() {
+            public List<LocalMessage> findDueMessages(String tableName, LocalMessageStatus status,
+                                                      LocalDateTime now, int limit) {
+                return List.of();
+            }
+
+            @Override
+            public List<LocalMessage> findAll(String tableName) {
+                return List.of();
+            }
+
+            @Override
+            public List<LocalMessage> list(String tableName, String topic, LocalMessageStatus status,
+                                           String traceIdLike, String businessKeyLike, int offset, int pageSize) {
+                throw new IllegalStateException("local message table unavailable");
+            }
+
+            @Override
+            public long count(String tableName, String topic, LocalMessageStatus status,
+                              String traceIdLike, String businessKeyLike) {
                 return 0;
             }
 
             @Override
-            public boolean retryNow(Long id) {
-                return false;
+            public long countAll(String tableName) {
+                return 0;
             }
 
             @Override
-            public void markSuccess(Long id) {
+            public long countByStatus(String tableName, LocalMessageStatus status) {
+                return 0;
             }
 
             @Override
-            public void markFailure(Long id, Exception exception) {
-            }
-
-            @Override
-            public Optional<LocalMessage> findById(Long id) {
-                return Optional.empty();
-            }
-
-            @Override
-            public List<LocalMessage> findAll() {
-                throw new IllegalStateException("local message table unavailable");
+            public int delete(String tableName, Long id) {
+                return 0;
             }
         };
+    }
+
+    private static Comparator<LocalDateTime> newestLocalFirst() {
+        return Comparator.nullsLast(Comparator.reverseOrder());
+    }
+
+    private static boolean matchesLike(String value, String like) {
+        if (like == null) {
+            return true;
+        }
+        if (like.startsWith("%") || like.endsWith("%")) {
+            String needle = like.replace("%", "");
+            return value != null && value.contains(needle);
+        }
+        return like.equals(value);
+    }
+
+    private static LocalMessageProperties localMessageProperties() {
+        LocalMessageProperties properties = new LocalMessageProperties();
+        properties.setTableName("framework_local_message");
+        return properties;
     }
 
     private static <T> ObjectProvider<T> provider(T value) {

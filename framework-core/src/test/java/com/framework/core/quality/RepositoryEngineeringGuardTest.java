@@ -343,6 +343,14 @@ class RepositoryEngineeringGuardTest {
                 "admin-service/src/main/java/com/framework/admin/localmessage/LocalMessageAdminController.java"));
         String service = read(root.resolve(
                 "admin-service/src/main/java/com/framework/admin/localmessage/LocalMessageAdminService.java"));
+        String dashboardService = read(root.resolve(
+                "admin-service/src/main/java/com/framework/admin/dashboard/DashboardService.java"));
+        String traceService = read(root.resolve(
+                "admin-service/src/main/java/com/framework/admin/trace/TraceAdminService.java"));
+        String mapperSupport = read(root.resolve(
+                "admin-service/src/main/java/com/framework/admin/localmessage/LocalMessageAdminMapperSupport.java"));
+        String mapper = read(root.resolve(
+                "framework-local-message/src/main/java/com/framework/localmessage/mapper/LocalMessageMapper.java"));
         String test = read(root.resolve(
                 "admin-service/src/test/java/com/framework/admin/localmessage/LocalMessageAdminControllerTest.java"));
         String client = read(root.resolve("frontend/admin-web/src/api/client.ts"));
@@ -352,13 +360,40 @@ class RepositoryEngineeringGuardTest {
                 .contains("@PostMapping(\"/{id}/retry\")")
                 .contains("localMessageAdminService.retryNow");
         assertThat(service)
+                .contains("LocalMessageAdminMapperSupport")
+                .contains("ObjectProvider<LocalMessageMapper>")
+                .doesNotContain("LocalMessageRepository")
+                .doesNotContain("service.findAll()")
                 .contains("public ActionResult<String> retryNow")
                 .contains("setStatus(LocalMessageStatus.PENDING)")
                 .contains("setRetryCount(0)")
                 .contains("setNextRetryTime(LocalDateTime.now())")
                 .contains("人工立即重试本地消息");
+        assertThat(dashboardService)
+                .contains("ObjectProvider<LocalMessageMapper>")
+                .contains("ObjectProvider<LocalMessageProperties>")
+                .contains("LocalMessageAdminMapperSupport.stats")
+                .doesNotContain("ObjectProvider<LocalMessageService>");
+        assertThat(traceService)
+                .contains("ObjectProvider<LocalMessageMapper>")
+                .contains("ObjectProvider<LocalMessageProperties>")
+                .contains("LocalMessageAdminMapperSupport.listByTraceId")
+                .contains("LocalMessageAdminMapperSupport.countByTraceId")
+                .doesNotContain("LocalMessageService")
+                .doesNotContain("findAll()");
+        assertThat(mapperSupport)
+                .contains("mapper.list(")
+                .contains("mapper.count(")
+                .contains("mapper.countByStatus(")
+                .contains("listByTraceId")
+                .contains("countByTraceId");
+        assertThat(mapper)
+                .contains("ORDER BY create_time DESC, id DESC")
+                .contains("LIMIT #{offset}, #{pageSize}")
+                .contains("SELECT COUNT(*)");
         assertThat(test)
                 .contains("manualRetryResetsMessageForImmediateRetry")
+                .contains("FakeLocalMessageMapper")
                 .contains("已加入重试队列");
         assertThat(client)
                 .contains("retryLocalMessage:");

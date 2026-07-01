@@ -2,11 +2,13 @@ package com.framework.admin.dashboard;
 
 import com.framework.admin.excel.ExcelAdminMapper;
 import com.framework.admin.file.FileAdminMapper;
+import com.framework.admin.localmessage.LocalMessageAdminMapperSupport;
 import com.framework.admin.notify.NotifyAdminMapper;
 import com.framework.admin.system.AdminSystemModels.ConfigItem;
 import com.framework.admin.system.AdminSystemMapperSupport;
+import com.framework.localmessage.config.LocalMessageProperties;
+import com.framework.localmessage.mapper.LocalMessageMapper;
 import com.framework.localmessage.model.LocalMessageStatus;
-import com.framework.localmessage.service.LocalMessageService;
 import com.framework.log.mapper.OperationLogMapper;
 import com.framework.mq.deadletter.DeadLetterHandler;
 import com.framework.mq.deadletter.MqFailedMessage;
@@ -25,7 +27,8 @@ import java.util.Map;
 public class DashboardService {
 
     private final ObjectProvider<DeadLetterHandler> deadLetterHandlerProvider;
-    private final ObjectProvider<LocalMessageService> localMessageServiceProvider;
+    private final ObjectProvider<LocalMessageMapper> localMessageMapperProvider;
+    private final ObjectProvider<LocalMessageProperties> localMessagePropertiesProvider;
     private final ObjectProvider<OperationLogMapper> operationLogMapperProvider;
     private final ObjectProvider<NotifyAdminMapper> notifyAdminMapperProvider;
     private final ObjectProvider<ExcelAdminMapper> excelAdminMapperProvider;
@@ -33,14 +36,16 @@ public class DashboardService {
     private final ObjectProvider<AdminSystemMapperSupport> adminSystemMapperSupportProvider;
 
     public DashboardService(ObjectProvider<DeadLetterHandler> deadLetterHandlerProvider,
-                            ObjectProvider<LocalMessageService> localMessageServiceProvider,
+                            ObjectProvider<LocalMessageMapper> localMessageMapperProvider,
+                            ObjectProvider<LocalMessageProperties> localMessagePropertiesProvider,
                             ObjectProvider<OperationLogMapper> operationLogMapperProvider,
                             ObjectProvider<NotifyAdminMapper> notifyAdminMapperProvider,
                             ObjectProvider<ExcelAdminMapper> excelAdminMapperProvider,
                             ObjectProvider<FileAdminMapper> fileAdminMapperProvider,
                             ObjectProvider<AdminSystemMapperSupport> adminSystemMapperSupportProvider) {
         this.deadLetterHandlerProvider = deadLetterHandlerProvider;
-        this.localMessageServiceProvider = localMessageServiceProvider;
+        this.localMessageMapperProvider = localMessageMapperProvider;
+        this.localMessagePropertiesProvider = localMessagePropertiesProvider;
         this.operationLogMapperProvider = operationLogMapperProvider;
         this.notifyAdminMapperProvider = notifyAdminMapperProvider;
         this.excelAdminMapperProvider = excelAdminMapperProvider;
@@ -96,19 +101,17 @@ public class DashboardService {
             metrics.put(status.name().toLowerCase(), 0L);
         }
         metrics.put("total", 0L);
-        LocalMessageService service = available(localMessageServiceProvider);
-        if (service == null) {
+        LocalMessageMapper mapper = available(localMessageMapperProvider);
+        String tableName = localMessageTableName();
+        if (mapper == null || tableName == null) {
             return metrics;
         }
         try {
-            var messages = service.findAll();
+            Map<String, Long> stats = LocalMessageAdminMapperSupport.stats(mapper, tableName);
             for (LocalMessageStatus status : LocalMessageStatus.values()) {
-                long count = messages.stream()
-                        .filter(message -> status == message.getStatus())
-                        .count();
-                metrics.put(status.name().toLowerCase(), count);
+                metrics.put(status.name().toLowerCase(), stats.getOrDefault(status.name(), 0L));
             }
-            metrics.put("total", (long) messages.size());
+            metrics.put("total", stats.getOrDefault("TOTAL", 0L));
         } catch (Exception ignored) {
             return zero(metrics);
         }
@@ -206,6 +209,18 @@ public class DashboardService {
         }
         try {
             return provider.getIfAvailable();
+        } catch (RuntimeException ignored) {
+            return null;
+        }
+    }
+
+    private String localMessageTableName() {
+        LocalMessageProperties properties = available(localMessagePropertiesProvider);
+        if (properties == null) {
+            return null;
+        }
+        try {
+            return LocalMessageAdminMapperSupport.tableName(properties);
         } catch (RuntimeException ignored) {
             return null;
         }

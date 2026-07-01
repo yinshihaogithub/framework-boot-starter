@@ -173,6 +173,32 @@ class MybatisLocalMessageRepositoryTest {
         }
 
         @Override
+        public List<LocalMessage> list(String tableName, String topic, LocalMessageStatus status,
+                                       String traceIdLike, String businessKeyLike, int offset, int pageSize) {
+            this.tableName = tableName;
+            return new ArrayList<>(List.of(message));
+        }
+
+        @Override
+        public long count(String tableName, String topic, LocalMessageStatus status,
+                          String traceIdLike, String businessKeyLike) {
+            this.tableName = tableName;
+            return 1;
+        }
+
+        @Override
+        public long countAll(String tableName) {
+            this.tableName = tableName;
+            return 1;
+        }
+
+        @Override
+        public long countByStatus(String tableName, LocalMessageStatus status) {
+            this.tableName = tableName;
+            return LocalMessageStatus.PENDING == status ? 1 : 0;
+        }
+
+        @Override
         public int delete(String tableName, Long id) {
             this.tableName = tableName;
             this.deletedId = id;

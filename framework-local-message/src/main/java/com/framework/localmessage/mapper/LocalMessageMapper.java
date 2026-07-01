@@ -136,6 +136,54 @@ public interface LocalMessageMapper {
     @ResultMap("localMessageMap")
     List<LocalMessage> findAll(@Param("tableName") String tableName);
 
+    @Select("""
+            <script>
+            SELECT *
+            FROM ${tableName}
+            <where>
+                <if test="topic != null">AND topic = #{topic}</if>
+                <if test="status != null">AND status = #{status}</if>
+                <if test="traceIdLike != null">AND trace_id LIKE #{traceIdLike}</if>
+                <if test="businessKeyLike != null">AND business_key LIKE #{businessKeyLike}</if>
+            </where>
+            ORDER BY create_time DESC, id DESC
+            LIMIT #{offset}, #{pageSize}
+            </script>
+            """)
+    @ResultMap("localMessageMap")
+    List<LocalMessage> list(@Param("tableName") String tableName,
+                            @Param("topic") String topic,
+                            @Param("status") LocalMessageStatus status,
+                            @Param("traceIdLike") String traceIdLike,
+                            @Param("businessKeyLike") String businessKeyLike,
+                            @Param("offset") int offset,
+                            @Param("pageSize") int pageSize);
+
+    @Select("""
+            <script>
+            SELECT COUNT(*)
+            FROM ${tableName}
+            <where>
+                <if test="topic != null">AND topic = #{topic}</if>
+                <if test="status != null">AND status = #{status}</if>
+                <if test="traceIdLike != null">AND trace_id LIKE #{traceIdLike}</if>
+                <if test="businessKeyLike != null">AND business_key LIKE #{businessKeyLike}</if>
+            </where>
+            </script>
+            """)
+    long count(@Param("tableName") String tableName,
+               @Param("topic") String topic,
+               @Param("status") LocalMessageStatus status,
+               @Param("traceIdLike") String traceIdLike,
+               @Param("businessKeyLike") String businessKeyLike);
+
+    @Select("SELECT COUNT(*) FROM ${tableName}")
+    long countAll(@Param("tableName") String tableName);
+
+    @Select("SELECT COUNT(*) FROM ${tableName} WHERE status = #{status}")
+    long countByStatus(@Param("tableName") String tableName,
+                       @Param("status") LocalMessageStatus status);
+
     @Delete("DELETE FROM ${tableName} WHERE id = #{id}")
     int delete(@Param("tableName") String tableName, @Param("id") Long id);
 }
