@@ -51,6 +51,7 @@ const endpoints = [
   '/admin/logs/stats',
   '/admin/logs?pageNum=1&pageSize=5',
   '/admin/monitor/health',
+  '/admin/monitor/jvm',
   '/admin/notify/stats',
   '/admin/files/stats',
   '/admin/files?pageNum=1&pageSize=5',
