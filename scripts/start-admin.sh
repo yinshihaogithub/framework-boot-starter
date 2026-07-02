@@ -10,4 +10,4 @@ if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; 
   docker compose up -d mysql redis
 fi
 
-java -jar admin-service/target/admin-service-1.0.0.jar
+java -jar admin-service/target/admin-service.jar

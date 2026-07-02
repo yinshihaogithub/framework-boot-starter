@@ -5,6 +5,6 @@ RUN mvn -q -pl admin-service -am package -DskipTests
 
 FROM eclipse-temurin:17-jre
 WORKDIR /app
-COPY --from=build /workspace/admin-service/target/admin-service-1.0.0.jar /app/admin-service.jar
+COPY --from=build /workspace/admin-service/target/admin-service.jar /app/admin-service.jar
 EXPOSE 8081
 ENTRYPOINT ["java", "-jar", "/app/admin-service.jar"]
