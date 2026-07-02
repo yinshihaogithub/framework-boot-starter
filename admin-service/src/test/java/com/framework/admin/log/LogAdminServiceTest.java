@@ -79,6 +79,23 @@ class LogAdminServiceTest {
     }
 
     @Test
+    void statsCountOperationApiAndFailedExceptionLogs() {
+        LogAdminService service = new LogAdminService(provider(mapper(List.of(
+                operationLog(1L, "system", "OPERATION", true, "trace-a"),
+                operationLog(2L, "system", "API", true, "trace-b"),
+                operationLog(3L, "web", "EXCEPTION", false, "trace-c"),
+                operationLog(4L, "web", "EXCEPTION", true, "trace-d")))), systemMapperSupport(List.of()));
+
+        Map<String, Long> stats = service.stats();
+
+        assertThat(stats)
+                .containsEntry("total", 4L)
+                .containsEntry("operation", 1L)
+                .containsEntry("api", 1L)
+                .containsEntry("exception", 1L);
+    }
+
+    @Test
     void returnsZeroStatsWhenMapperIsMissing() {
         LogAdminService service = new LogAdminService(provider(null), systemMapperSupport(List.of()));
 
