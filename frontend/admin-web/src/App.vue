@@ -1020,6 +1020,12 @@
         </section>
 
         <section v-if="activeView === 'logs'" class="view">
+          <div class="metrics compact">
+            <div class="metric"><span>总量</span><strong>{{ metric(logStats, 'total') }}</strong></div>
+            <div class="metric"><span>操作日志</span><strong>{{ metric(logStats, 'operation') }}</strong></div>
+            <div class="metric"><span>接口日志</span><strong>{{ metric(logStats, 'api') }}</strong></div>
+            <div class="metric"><span>异常日志</span><strong>{{ metric(logStats, 'exception') }}</strong></div>
+          </div>
           <el-card shadow="never">
             <template #header>
               <div class="section-head">
@@ -2270,6 +2276,7 @@ const excelTasks = reactive<PageResult<ExcelTask>>({ records: [], total: 0, page
 const excelErrors = reactive<PageResult<ExcelErrorRecord>>({ records: [], total: 0, pageNum: 1, pageSize: 20, pages: 0 })
 const fileStats = ref<Record<string, number>>({})
 const fileRecords = reactive<PageResult<FileRecord>>({ records: [], total: 0, pageNum: 1, pageSize: 20, pages: 0 })
+const logStats = ref<Record<string, number>>({})
 const logs = reactive<PageResult<OperationLog>>({ records: [], total: 0, pageNum: 1, pageSize: 20, pages: 0 })
 const loginLogs = reactive<PageResult<LoginLog>>({ records: [], total: 0, pageNum: 1, pageSize: 20, pages: 0 })
 const onlineSessions = reactive<PageResult<OnlineSession>>({ records: [], total: 0, pageNum: 1, pageSize: 20, pages: 0 })
@@ -2820,15 +2827,19 @@ async function loadFiles() {
 }
 
 async function loadLogs() {
-  const page = await api.logs({
-    module: logQuery.module,
-    logType: logQuery.logType,
-    operatorId: logQuery.operatorId,
-    success: logQuery.success === '' ? undefined : logQuery.success,
-    traceId: logQuery.traceId,
-    pageNum: logQuery.pageNum,
-    pageSize: logQuery.pageSize
-  })
+  const [stats, page] = await Promise.all([
+    api.logStats(),
+    api.logs({
+      module: logQuery.module,
+      logType: logQuery.logType,
+      operatorId: logQuery.operatorId,
+      success: logQuery.success === '' ? undefined : logQuery.success,
+      traceId: logQuery.traceId,
+      pageNum: logQuery.pageNum,
+      pageSize: logQuery.pageSize
+    })
+  ])
+  logStats.value = stats
   Object.assign(logs, page)
 }
 

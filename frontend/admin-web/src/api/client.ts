@@ -636,6 +636,7 @@ export const api = {
     postData<string>(`/admin/local-messages/${id}/failure`, { reason }),
   deleteLocalMessage: (id: number) => deleteData<string>(`/admin/local-messages/${id}`),
   cleanLocalProcessed: () => deleteData<string>('/admin/local-messages/clean'),
+  logStats: () => getData<Record<string, number>>('/admin/logs/stats'),
   logs: (params: Record<string, unknown>) => getData<PageResult<OperationLog>>('/admin/logs', params),
   logDetail: (id: number) => getData<OperationLog>(`/admin/logs/${id}`),
   loginLogs: (params: Record<string, unknown>) => getData<PageResult<LoginLog>>('/admin/logs/login', params),
