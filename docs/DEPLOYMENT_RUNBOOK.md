@@ -49,6 +49,19 @@ cp .env.example .env
 ./scripts/stop-compose.sh
 ```
 
+如需本地启动 MQ 中间件样例，使用 Compose 的 `mq` profile：
+
+```bash
+./scripts/start-mq.sh
+```
+
+默认端口：
+
+- RabbitMQ：`5672`，管理台 `15672`
+- Kafka：`9092`
+- RocketMQ nameserver：`9876`
+- RocketMQ broker：`10909`、`10911`
+
 ## 启动后端
 
 ```bash

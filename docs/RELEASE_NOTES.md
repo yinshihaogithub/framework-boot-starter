@@ -116,6 +116,12 @@ cp .env.example .env
 - 管理后台：`http://localhost:5173`
 - 后台 API：`http://localhost:8081`
 
+MQ 可选中间件样例使用 Compose `mq` profile 启动，包含 RabbitMQ、Kafka 和 RocketMQ：
+
+```bash
+./scripts/start-mq.sh
+```
+
 本地只启动后端时，可以先初始化 MySQL：
 
 ```bash
@@ -149,4 +155,4 @@ cp .env.example .env
 - 前端 Element Plus chunk 较大，后续可按路由和图表做拆包。
 - 当后台某个业务域明显膨胀后，再从 `admin-service` 拆成独立 service。
 - 生产环境可继续补充外部化配置、镜像仓库推送和 CD 发布流水线。
-- MQ 的 RocketMQ、Kafka、RabbitMQ 可继续补真实中间件集成样例。
+- MQ 可继续补按 provider 切换的业务消费示例。

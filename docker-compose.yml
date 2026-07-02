@@ -67,15 +67,36 @@ services:
     container_name: framework-rabbitmq
     profiles: ["mq"]
     ports:
-      - "5672:5672"
-      - "15672:15672"
+      - "${RABBITMQ_PORT:-5672}:5672"
+      - "${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
 
   kafka:
     image: apache/kafka:3.8.0
     container_name: framework-kafka
     profiles: ["mq"]
     ports:
-      - "9092:9092"
+      - "${KAFKA_PORT:-9092}:9092"
+
+  rocketmq-namesrv:
+    image: apache/rocketmq:5.3.0
+    container_name: framework-rocketmq-namesrv
+    profiles: ["mq"]
+    command: sh mqnamesrv
+    ports:
+      - "${ROCKETMQ_NAMESRV_PORT:-9876}:9876"
+
+  rocketmq-broker:
+    image: apache/rocketmq:5.3.0
+    container_name: framework-rocketmq-broker
+    profiles: ["mq"]
+    command: sh mqbroker -n rocketmq-namesrv:9876
+    environment:
+      JAVA_OPT_EXT: "-server -Xms256m -Xmx256m"
+    ports:
+      - "${ROCKETMQ_BROKER_FAST_PORT:-10909}:10909"
+      - "${ROCKETMQ_BROKER_PORT:-10911}:10911"
+    depends_on:
+      - rocketmq-namesrv
 
 volumes:
   mysql-data:
