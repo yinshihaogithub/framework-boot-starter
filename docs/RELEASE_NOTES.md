@@ -102,6 +102,27 @@ mysql -uroot -proot framework_admin < sql/mysql/framework_boot_starter_init.sql
 - 前端端口：`5173`
 - 默认账号：`admin / Admin@123`
 
+## 运行方式
+
+推荐使用仓库内置 Compose 和脚本启动第一版完整后台：
+
+```bash
+cp .env.example .env
+./scripts/start-compose.sh
+```
+
+访问入口：
+
+- 管理后台：`http://localhost:5173`
+- 后台 API：`http://localhost:8081`
+
+本地只启动后端时，可以先初始化 MySQL：
+
+```bash
+./scripts/init-mysql.sh
+./scripts/start-admin.sh
+```
+
 ## 验收结果
 
 本版本已完成以下验收：
@@ -110,6 +131,7 @@ mysql -uroot -proot framework_admin < sql/mysql/framework_boot_starter_init.sql
 - 后端打包通过：`mvn package -DskipTests`
 - 前端生产构建通过：`npm --prefix frontend/admin-web run build`
 - 格式检查通过：`git diff --check`
+- CI 回归入口已补充：`.github/workflows/ci.yml`
 - 后端健康检查通过：`/actuator/health`
 - 前端首页访问通过：`http://localhost:5173/`
 - 登录烟测通过：`admin / Admin@123`
@@ -126,5 +148,5 @@ mysql -uroot -proot framework_admin < sql/mysql/framework_boot_starter_init.sql
 
 - 前端 Element Plus chunk 较大，后续可按路由和图表做拆包。
 - 当后台某个业务域明显膨胀后，再从 `admin-service` 拆成独立 service。
-- 生产环境可补充 Docker Compose、Nginx、外部化配置和 CI 发布流水线。
+- 生产环境可继续补充外部化配置、镜像仓库推送和 CD 发布流水线。
 - MQ 的 RocketMQ、Kafka、RabbitMQ 可继续补真实中间件集成样例。

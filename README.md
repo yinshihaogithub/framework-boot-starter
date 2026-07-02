@@ -235,12 +235,12 @@ cp .env.example .env
 也可以只启动基础组件后本地跑服务：
 
 ```bash
-docker run -d --name mysql -p 3306:3306 -e MYSQL_ROOT_PASSWORD=root -e MYSQL_DATABASE=framework_demo mysql:8.0
+docker run -d --name mysql -p 3306:3306 -e MYSQL_ROOT_PASSWORD=root -e MYSQL_DATABASE=framework_admin mysql:8.0
 docker run -d --name redis -p 6379:6379 redis:7
-mysql -uroot -proot framework_demo < sql/mysql/framework_boot_starter_init.sql
+mysql -uroot -proot framework_admin < sql/mysql/framework_boot_starter_init.sql
 ```
 
-管理后台默认库名是 `framework_admin`：
+也可以直接使用脚本创建并初始化默认库 `framework_admin`：
 
 ```bash
 ./scripts/init-mysql.sh

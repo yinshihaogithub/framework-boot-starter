@@ -27,6 +27,28 @@ mysql -uroot -proot framework_admin < sql/mysql/framework_boot_starter_init.sql
 
 如本地 MySQL 账号不同，优先修改本地运行参数或本地配置，不提交个人密码。
 
+## Compose 一键启动
+
+仓库已经提供 `docker-compose.yml` 和 `.env.example`。第一版推荐用它启动 MySQL、Redis、后端和前端：
+
+```bash
+cp .env.example .env
+./scripts/start-compose.sh
+```
+
+默认端口：
+
+- 前端：`http://localhost:5173`
+- 后端：`http://localhost:8081`
+- MySQL：`localhost:3306`
+- Redis：`localhost:6379`
+
+停止：
+
+```bash
+./scripts/stop-compose.sh
+```
+
 ## 启动后端
 
 ```bash
@@ -89,6 +111,11 @@ mvn package -DskipTests
 ```bash
 npm --prefix frontend/admin-web run build
 ```
+
+GitHub Actions 已提供基础 CI：
+
+- 后端：`mvn -q test`
+- 前端：`npm ci && npm run build`
 
 ## 核心接口烟测
 
