@@ -7,6 +7,25 @@ on:
   pull_request:
 
 jobs:
+  delivery:
+    name: Delivery Checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check shell scripts
+        run: |
+          bash -n scripts/*.sh
+          test -x scripts/init-mysql.sh
+          test -x scripts/start-admin.sh
+          test -x scripts/start-compose.sh
+          test -x scripts/start-mq.sh
+          test -x scripts/stop-compose.sh
+
+      - name: Validate Docker Compose
+        run: docker compose config
+
   backend:
     name: Backend Tests
     runs-on: ubuntu-latest
