@@ -275,12 +275,16 @@ public class TraceAdminService {
         List<TraceEvent> events = new ArrayList<>();
         logs.forEach(log -> events.add(new TraceEvent()
                 .setSource("LOG")
+                .setSourceId(log.getId())
+                .setTraceId(log.getTraceId())
                 .setTitle(firstNonBlank(log.getAction(), log.getUri(), log.getMethod()))
                 .setStatus(Boolean.FALSE.equals(log.getSuccess()) ? "FAILED" : "SUCCESS")
                 .setMessage(timelineMessage(log.getErrorMessage()))
                 .setTime(log.getCreateTime())));
         mqMessages.forEach(message -> events.add(new TraceEvent()
                 .setSource("MQ")
+                .setSourceId(message.getId())
+                .setTraceId(message.getTraceId())
                 .setTitle(firstNonBlank(message.getMessageType(), message.getQueueName(), message.getMessageId()))
                 .setStatus(message.getStatus())
                 .setMessage(timelineMessage(message.getErrorMessage()))
@@ -288,6 +292,8 @@ public class TraceAdminService {
                 .setTime(message.getCreateTime())));
         localMessages.forEach(message -> events.add(new TraceEvent()
                 .setSource("LOCAL_MESSAGE")
+                .setSourceId(message.getId())
+                .setTraceId(message.getTraceId())
                 .setTitle(firstNonBlank(message.getTopic(), message.getMessageId()))
                 .setStatus(String.valueOf(message.getStatus()))
                 .setMessage(timelineMessage(message.getErrorMessage()))

@@ -919,9 +919,25 @@
                     <strong>{{ event.title || '-' }}</strong>
                     <el-tag size="small" :type="statusType(event.status)">{{ event.status || 'UNKNOWN' }}</el-tag>
                   </div>
-                  <div v-if="event.businessKey || event.message" class="trace-event-body">
+                  <div v-if="event.businessKey || event.message || canOpenTraceEventDetail(event) || canOpenTraceEventSource(event)" class="trace-event-body">
                     <span v-if="event.businessKey">业务键：{{ event.businessKey }}</span>
                     <span v-if="event.message">{{ event.message }}</span>
+                    <div v-if="canOpenTraceEventDetail(event) || canOpenTraceEventSource(event)" class="trace-event-actions">
+                      <el-button
+                        v-if="canOpenTraceEventDetail(event)"
+                        :icon="View"
+                        circle
+                        size="small"
+                        @click="openTraceEventDetail(event)"
+                      />
+                      <el-button
+                        v-if="canOpenTraceEventSource(event)"
+                        :icon="Connection"
+                        circle
+                        size="small"
+                        @click="openTraceEventSource(event)"
+                      />
+                    </div>
                   </div>
                 </div>
               </el-timeline-item>
@@ -1503,6 +1519,7 @@ import {
   type PageResult,
   type Role,
   type Tenant,
+  type TraceEvent,
   type TraceDetail
 } from './api/client'
 
@@ -2570,14 +2587,14 @@ async function openMqDetail(id: number) {
   openDetail(message)
 }
 
-async function openMqByTrace(value?: string) {
+async function openMqByTrace(value?: string, businessKey?: string) {
   const traceId = trimToUndefined(value)
   if (!traceId) return
   activeView.value = 'mq'
   Object.assign(mqQuery, {
     status: '',
     traceId,
-    businessKey: '',
+    businessKey: trimToUndefined(businessKey) || '',
     messageType: '',
     queueName: '',
     pageNum: 1
@@ -2666,14 +2683,14 @@ async function openLocalDetail(id: number) {
   openDetail(message)
 }
 
-async function openLocalByTrace(value?: string) {
+async function openLocalByTrace(value?: string, businessKey?: string) {
   const traceId = trimToUndefined(value)
   if (!traceId) return
   activeView.value = 'local'
   Object.assign(localQuery, {
     status: '',
     topic: '',
-    businessKey: '',
+    businessKey: trimToUndefined(businessKey) || '',
     traceId,
     pageNum: 1
   })
@@ -2876,6 +2893,83 @@ async function openLogsByTrace(value?: string) {
     pageNum: 1
   })
   await loadLogs()
+}
+
+function traceEventSourceId(event: TraceEvent) {
+  const value = Number(event.sourceId)
+  return Number.isInteger(value) && value > 0 ? value : undefined
+}
+
+function canOpenTraceEventDetail(event: TraceEvent) {
+  return traceEventSourceId(event) !== undefined
+}
+
+function canOpenTraceEventSource(event: TraceEvent) {
+  const traceId = trimToUndefined(event.traceId)
+  if (!traceId) {
+    return false
+  }
+  if (event.source === 'MQ') return canOpenView('mq')
+  if (event.source === 'LOCAL_MESSAGE') return canOpenView('local')
+  if (event.source === 'LOG') return canOpenView('logs')
+  return false
+}
+
+function traceLogRecord(id: number) {
+  return traceDetail.value?.logs?.find((item) => item.id === id)
+}
+
+function traceMqRecord(id: number) {
+  return traceDetail.value?.mqMessages?.find((item) => item.id === id)
+}
+
+function traceLocalRecord(id: number) {
+  return traceDetail.value?.localMessages?.find((item) => item.id === id)
+}
+
+async function openTraceEventDetail(event: TraceEvent) {
+  const id = traceEventSourceId(event)
+  if (!id) return
+  if (event.source === 'LOG') {
+    const record = traceLogRecord(id)
+    if (record) {
+      openDetail(record)
+      return
+    }
+    await openLogsByTrace(event.traceId)
+    return
+  }
+  if (event.source === 'MQ') {
+    const record = traceMqRecord(id)
+    if (record) {
+      openDetail(record)
+      return
+    }
+    await openMqDetail(id)
+    return
+  }
+  if (event.source === 'LOCAL_MESSAGE') {
+    const record = traceLocalRecord(id)
+    if (record) {
+      openDetail(record)
+      return
+    }
+    await openLocalDetail(id)
+  }
+}
+
+async function openTraceEventSource(event: TraceEvent) {
+  if (event.source === 'MQ') {
+    await openMqByTrace(event.traceId, event.businessKey)
+    return
+  }
+  if (event.source === 'LOCAL_MESSAGE') {
+    await openLocalByTrace(event.traceId, event.businessKey)
+    return
+  }
+  if (event.source === 'LOG') {
+    await openLogsByTrace(event.traceId)
+  }
 }
 
 async function selectDict(row: DictType) {
@@ -3909,6 +4003,12 @@ function stringifyHealthValue(value: unknown) {
 .trace-event-body {
   color: #71717a;
   font-size: 13px;
+}
+
+.trace-event-actions {
+  display: inline-flex;
+  gap: 8px;
+  margin-left: auto;
 }
 
 .filter {

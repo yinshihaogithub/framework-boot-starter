@@ -95,11 +95,11 @@ class TraceAdminServiceTest {
         assertThat(detail.getMqMessages()).extracting(MqFailedMessage::getId).containsExactly(1L);
         assertThat(detail.getLocalMessages()).extracting("id").containsExactly(1L);
         assertThat(detail.getTimeline())
-                .extracting("source", "title", "status")
+                .extracting("source", "sourceId", "traceId", "title", "status")
                 .contains(
-                        tuple("LOG", "删除用户", "FAILED"),
-                        tuple("MQ", "OrderCreated", MqFailedMessage.STATUS_EXHAUSTED),
-                        tuple("LOCAL_MESSAGE", "order.created", "FAILED"));
+                        tuple("LOG", 1000L, "trace-a", "删除用户", "FAILED"),
+                        tuple("MQ", 1L, "trace-a", "OrderCreated", MqFailedMessage.STATUS_EXHAUSTED),
+                        tuple("LOCAL_MESSAGE", 1L, "trace-a", "order.created", "FAILED"));
     }
 
     @Test
@@ -322,6 +322,7 @@ class TraceAdminServiceTest {
 
     private static OperationLogEntity operationLog(String traceId, boolean success, String action, String uri, Date time) {
         OperationLogEntity log = new OperationLogEntity();
+        log.setId(time == null ? null : time.getTime());
         log.setTraceId(traceId);
         log.setSuccess(success);
         log.setAction(action);

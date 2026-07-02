@@ -280,6 +280,8 @@ export interface ConfigItem {
 
 export interface TraceEvent {
   source: string
+  sourceId?: number
+  traceId?: string
   title: string
   status?: string
   message?: string

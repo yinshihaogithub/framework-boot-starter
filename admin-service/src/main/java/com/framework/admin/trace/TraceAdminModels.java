@@ -31,6 +31,8 @@ public class TraceAdminModels {
     @Accessors(chain = true)
     public static class TraceEvent {
         private String source;
+        private Long sourceId;
+        private String traceId;
         private String title;
         private String status;
         private String message;
