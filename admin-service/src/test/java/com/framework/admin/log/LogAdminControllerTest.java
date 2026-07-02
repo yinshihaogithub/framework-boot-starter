@@ -14,6 +14,19 @@ import static org.assertj.core.api.Assertions.assertThat;
 class LogAdminControllerTest {
 
     @Test
+    void statsReturnsServiceStats() {
+        RecordingLogAdminService service = new RecordingLogAdminService();
+        service.stats = Map.of("total", 4L, "operation", 2L, "api", 1L, "exception", 1L);
+        LogAdminController controller = new LogAdminController(service);
+
+        Result<Map<String, Long>> result = controller.stats();
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(service.statsCalls).isEqualTo(1);
+        assertThat(result.getData()).containsAllEntriesOf(service.stats);
+    }
+
+    @Test
     void detailReturnsOperationLogFromService() {
         RecordingLogAdminService service = new RecordingLogAdminService();
         service.detailResult = LogAdminService.ActionResult.success(operationLog(9L));
@@ -81,6 +94,8 @@ class LogAdminControllerTest {
     }
 
     private static final class RecordingLogAdminService extends LogAdminService {
+        private Map<String, Long> stats = Map.of();
+        private int statsCalls;
         private Long detailId;
         private ActionResult<OperationLogEntity> detailResult = ActionResult.success(operationLog(1L));
         private String traceId;
@@ -107,7 +122,8 @@ class LogAdminControllerTest {
 
         @Override
         public Map<String, Long> stats() {
-            return Map.of();
+            statsCalls++;
+            return stats;
         }
 
         @Override
