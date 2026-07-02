@@ -43,6 +43,8 @@ cp .env.example .env
 - MySQL：`localhost:3306`
 - Redis：`localhost:6379`
 
+Compose 会等待 MySQL、Redis 和后端服务健康后再启动前端容器。后端镜像检查 `/actuator/health`，前端镜像检查 Nginx 首页。
+
 停止：
 
 ```bash

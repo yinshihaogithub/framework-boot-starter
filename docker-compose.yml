@@ -60,7 +60,8 @@ services:
     ports:
       - "${ADMIN_WEB_PORT:-5173}:80"
     depends_on:
-      - admin-service
+      admin-service:
+        condition: service_healthy
 
   rabbitmq:
     image: rabbitmq:3.13-management
