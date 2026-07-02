@@ -1124,8 +1124,9 @@
                   </el-tag>
                 </template>
               </el-table-column>
-              <el-table-column label="操作" width="90" fixed="right">
+              <el-table-column label="操作" width="126" fixed="right">
                 <template #default="{ row }">
+                  <el-button :icon="View" circle size="small" @click="openDetail(row, 'online-session')" />
                   <el-tooltip content="强制下线">
                     <el-button
                       v-if="can('session:kick')"
@@ -1778,6 +1779,65 @@
         </section>
       </template>
 
+      <template v-else-if="detailKind === 'excel-error-page' && detailExcelErrorPage">
+        <section class="detail-section">
+          <div class="detail-section-title">任务信息</div>
+          <el-descriptions :column="1" border size="small" class="detail-descriptions">
+            <el-descriptions-item label="任务 ID">{{ detailExcelErrorPage.task.id }}</el-descriptions-item>
+            <el-descriptions-item label="任务名称">{{ displayDetailValue(detailExcelErrorPage.task.taskName) }}</el-descriptions-item>
+            <el-descriptions-item label="任务类型">{{ displayDetailValue(detailExcelErrorPage.task.taskType) }}</el-descriptions-item>
+            <el-descriptions-item label="状态">
+              <el-tag size="small" :type="statusType(detailExcelErrorPage.task.status)">
+                {{ detailExcelErrorPage.task.status || '-' }}
+              </el-tag>
+            </el-descriptions-item>
+            <el-descriptions-item label="业务类型">{{ displayDetailValue(detailExcelErrorPage.task.bizType) }}</el-descriptions-item>
+            <el-descriptions-item label="失败行数">{{ displayDetailValue(detailExcelErrorPage.task.failureRows) }}</el-descriptions-item>
+            <el-descriptions-item label="任务错误">{{ displayDetailValue(detailExcelErrorPage.task.errorMessage) }}</el-descriptions-item>
+          </el-descriptions>
+        </section>
+
+        <section class="detail-section">
+          <div class="detail-section-title">错误分页</div>
+          <el-descriptions :column="1" border size="small" class="detail-descriptions">
+            <el-descriptions-item label="总错误数">{{ displayDetailValue(detailExcelErrorPage.errorPage.total) }}</el-descriptions-item>
+            <el-descriptions-item label="当前页">{{ displayDetailValue(detailExcelErrorPage.errorPage.pageNum) }}</el-descriptions-item>
+            <el-descriptions-item label="每页条数">{{ displayDetailValue(detailExcelErrorPage.errorPage.pageSize) }}</el-descriptions-item>
+            <el-descriptions-item label="总页数">{{ displayDetailValue(detailExcelErrorPage.errorPage.pages) }}</el-descriptions-item>
+          </el-descriptions>
+        </section>
+
+        <section class="detail-section">
+          <div class="detail-section-title">错误明细</div>
+          <el-empty v-if="detailExcelErrorPage.errors.length === 0" description="暂无错误记录" />
+          <el-table v-else :data="detailExcelErrorPage.errors" size="small" stripe class="detail-table">
+            <el-table-column prop="id" label="ID" width="86" />
+            <el-table-column prop="rowIndex" label="行号" width="86" />
+            <el-table-column prop="errorMessage" label="错误信息" min-width="220" show-overflow-tooltip />
+            <el-table-column prop="createTime" label="时间" min-width="170" />
+          </el-table>
+        </section>
+      </template>
+
+      <template v-else-if="detailKind === 'online-session' && detailOnlineSession">
+        <section class="detail-section">
+          <div class="detail-section-title">会话信息</div>
+          <el-descriptions :column="1" border size="small" class="detail-descriptions">
+            <el-descriptions-item label="用户名">{{ displayDetailValue(detailOnlineSession.username) }}</el-descriptions-item>
+            <el-descriptions-item label="用户 ID">{{ displayDetailValue(detailOnlineSession.userId) }}</el-descriptions-item>
+            <el-descriptions-item label="租户">{{ displayDetailValue(detailOnlineSession.tenantId) }}</el-descriptions-item>
+            <el-descriptions-item label="设备 ID">{{ displayDetailValue(detailOnlineSession.deviceId) }}</el-descriptions-item>
+            <el-descriptions-item label="当前会话">
+              <el-tag size="small" :type="isCurrentSession(detailOnlineSession) ? 'success' : 'info'">
+                {{ isCurrentSession(detailOnlineSession) ? '是' : '否' }}
+              </el-tag>
+            </el-descriptions-item>
+            <el-descriptions-item label="登录时间">{{ formatLoginTime(detailOnlineSession.loginTime) }}</el-descriptions-item>
+            <el-descriptions-item label="剩余有效期">{{ formatTtl(detailOnlineSession.ttlSeconds) }}</el-descriptions-item>
+          </el-descriptions>
+        </section>
+      </template>
+
       <pre v-else class="detail">{{ detailJsonText }}</pre>
     </div>
   </el-drawer>
@@ -1901,6 +1961,18 @@ type DetailKind =
   | 'excel-task'
   | 'file-record'
   | 'login-log'
+  | 'excel-error-page'
+  | 'online-session'
+type ExcelErrorPageDetail = {
+  task: ExcelTask
+  errors: ExcelErrorRecord[]
+  errorPage: {
+    total: number
+    pageNum: number
+    pageSize: number
+    pages: number
+  }
+}
 
 const viewTitles: Record<ViewName, string> = {
   dashboard: '数据看板',
@@ -2041,6 +2113,8 @@ const detailDrawerTitle = computed(() => {
   if (detailKind.value === 'excel-task') return 'Excel 任务详情'
   if (detailKind.value === 'file-record') return '文件详情'
   if (detailKind.value === 'login-log') return '登录日志详情'
+  if (detailKind.value === 'excel-error-page') return 'Excel 错误详情'
+  if (detailKind.value === 'online-session') return '在线会话详情'
   return '详情'
 })
 const detailOperationLog = computed(() =>
@@ -2066,6 +2140,12 @@ const detailFileRecord = computed(() =>
 )
 const detailLoginLog = computed(() =>
   detailKind.value === 'login-log' ? (detailRecord.value as LoginLog | undefined) : undefined
+)
+const detailExcelErrorPage = computed(() =>
+  detailKind.value === 'excel-error-page' ? (detailRecord.value as ExcelErrorPageDetail | undefined) : undefined
+)
+const detailOnlineSession = computed(() =>
+  detailKind.value === 'online-session' ? (detailRecord.value as OnlineSession | undefined) : undefined
 )
 const detailJsonText = computed(() => formatJsonDetailText(detailRecord.value))
 const userDialogVisible = ref(false)
@@ -3205,7 +3285,7 @@ async function loadExcelErrors(row: ExcelTask) {
       pageSize: excelErrors.pageSize,
       pages: excelErrors.pages
     }
-  })
+  }, 'excel-error-page')
 }
 
 function chooseFile() {
