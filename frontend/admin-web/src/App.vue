@@ -740,7 +740,7 @@
                   <el-button v-if="can('notify:template:update')" :icon="Edit" circle size="small" @click="openEditNotify(row)" />
                   <el-button v-if="can('notify:send-test')" :icon="Bell" circle size="small" @click="sendTestNotify(row)" />
                   <el-button v-if="can('notify:template:delete')" :icon="Delete" circle size="small" @click="deleteNotify(row)" />
-                  <el-button :icon="View" circle size="small" @click="openDetail(row)" />
+                  <el-button :icon="View" circle size="small" @click="openDetail(row, 'notify-template')" />
                 </template>
               </el-table-column>
             </el-table>
@@ -777,7 +777,7 @@
               <el-table-column prop="resultMessage" label="说明" min-width="180" show-overflow-tooltip />
               <el-table-column prop="traceId" label="Trace ID" min-width="180" show-overflow-tooltip />
               <el-table-column label="操作" width="80" fixed="right">
-                <template #default="{ row }"><el-button :icon="View" circle size="small" @click="openDetail(row)" /></template>
+                <template #default="{ row }"><el-button :icon="View" circle size="small" @click="openDetail(row, 'notify-record')" /></template>
               </el-table-column>
             </el-table>
             <el-pagination v-model:current-page="notifyRecordQuery.pageNum" v-model:page-size="notifyRecordQuery.pageSize" class="pager" layout="total, sizes, prev, pager, next" :total="notifyRecords.total" @change="loadNotify" />
@@ -827,7 +827,7 @@
               <el-table-column label="操作" width="116" fixed="right">
                 <template #default="{ row }">
                   <el-button :icon="Document" circle size="small" @click="loadExcelErrors(row)" />
-                  <el-button :icon="View" circle size="small" @click="openDetail(row)" />
+                  <el-button :icon="View" circle size="small" @click="openDetail(row, 'excel-task')" />
                 </template>
               </el-table-column>
             </el-table>
@@ -871,7 +871,7 @@
                 <template #default="{ row }">
                   <el-button :icon="Download" circle size="small" @click="downloadFile(row)" />
                   <el-button v-if="can('file:delete')" :icon="Delete" circle size="small" @click="deleteFile(row)" />
-                  <el-button :icon="View" circle size="small" @click="openDetail(row)" />
+                  <el-button :icon="View" circle size="small" @click="openDetail(row, 'file-record')" />
                 </template>
               </el-table-column>
             </el-table>
@@ -1088,7 +1088,7 @@
               <el-table-column prop="message" label="说明" min-width="220" show-overflow-tooltip />
               <el-table-column prop="createTime" label="时间" min-width="170" />
               <el-table-column label="操作" width="80" fixed="right">
-                <template #default="{ row }"><el-button :icon="View" circle size="small" @click="openDetail(row)" /></template>
+                <template #default="{ row }"><el-button :icon="View" circle size="small" @click="openDetail(row, 'login-log')" /></template>
               </el-table-column>
             </el-table>
             <el-pagination v-model:current-page="loginLogQuery.pageNum" v-model:page-size="loginLogQuery.pageSize" class="pager" layout="total, sizes, prev, pager, next" :total="loginLogs.total" @change="loadLoginLogs" />
@@ -1615,6 +1615,169 @@
         </section>
       </template>
 
+      <template v-else-if="detailKind === 'notify-template' && detailNotifyTemplate">
+        <section class="detail-section">
+          <div class="detail-section-title">模板信息</div>
+          <el-descriptions :column="1" border size="small" class="detail-descriptions">
+            <el-descriptions-item label="模板编码">{{ displayDetailValue(detailNotifyTemplate.templateCode) }}</el-descriptions-item>
+            <el-descriptions-item label="模板名称">{{ displayDetailValue(detailNotifyTemplate.templateName) }}</el-descriptions-item>
+            <el-descriptions-item label="通道">{{ displayDetailValue(detailNotifyTemplate.channel) }}</el-descriptions-item>
+            <el-descriptions-item label="状态">
+              <el-tag size="small" :type="detailNotifyTemplate.status === 'ENABLED' ? 'success' : 'info'">
+                {{ detailNotifyTemplate.status || '-' }}
+              </el-tag>
+            </el-descriptions-item>
+            <el-descriptions-item label="标题">{{ displayDetailValue(detailNotifyTemplate.title) }}</el-descriptions-item>
+            <el-descriptions-item label="接收人">{{ displayArrayValue(detailNotifyTemplate.receivers) }}</el-descriptions-item>
+            <el-descriptions-item label="Webhook">{{ displayDetailValue(detailNotifyTemplate.webhookUrl) }}</el-descriptions-item>
+            <el-descriptions-item label="创建时间">{{ displayDetailValue(detailNotifyTemplate.createTime) }}</el-descriptions-item>
+            <el-descriptions-item label="更新时间">{{ displayDetailValue(detailNotifyTemplate.updateTime) }}</el-descriptions-item>
+          </el-descriptions>
+        </section>
+
+        <section class="detail-section">
+          <div class="detail-section-title">模板内容</div>
+          <pre class="detail-code">{{ formatJsonDetailText(detailNotifyTemplate.content) }}</pre>
+        </section>
+      </template>
+
+      <template v-else-if="detailKind === 'notify-record' && detailNotifyRecord">
+        <section class="detail-section">
+          <div class="detail-section-title">发送结果</div>
+          <el-descriptions :column="1" border size="small" class="detail-descriptions">
+            <el-descriptions-item label="记录 ID">{{ detailNotifyRecord.id }}</el-descriptions-item>
+            <el-descriptions-item label="模板编码">{{ displayDetailValue(detailNotifyRecord.templateCode) }}</el-descriptions-item>
+            <el-descriptions-item label="通道">{{ displayDetailValue(detailNotifyRecord.channel) }}</el-descriptions-item>
+            <el-descriptions-item label="结果">
+              <el-tag size="small" :type="operationLogResultType(detailNotifyRecord.success)">
+                {{ booleanResultLabel(detailNotifyRecord.success) }}
+              </el-tag>
+            </el-descriptions-item>
+            <el-descriptions-item label="标题">{{ displayDetailValue(detailNotifyRecord.title) }}</el-descriptions-item>
+            <el-descriptions-item label="处理人">{{ displayDetailValue(detailNotifyRecord.operatorName) }}</el-descriptions-item>
+            <el-descriptions-item label="Trace ID">
+              <el-button
+                link
+                type="primary"
+                class="trace-link"
+                :disabled="!detailNotifyRecord.traceId"
+                @click="openTrace(detailNotifyRecord.traceId)"
+              >
+                {{ detailNotifyRecord.traceId || '-' }}
+              </el-button>
+            </el-descriptions-item>
+            <el-descriptions-item label="发送时间">{{ displayDetailValue(detailNotifyRecord.createTime) }}</el-descriptions-item>
+          </el-descriptions>
+        </section>
+
+        <section class="detail-section">
+          <div class="detail-section-title">通知目标</div>
+          <el-descriptions :column="1" border size="small" class="detail-descriptions">
+            <el-descriptions-item label="接收人">{{ displayArrayValue(detailNotifyRecord.receivers) }}</el-descriptions-item>
+            <el-descriptions-item label="Webhook">{{ displayDetailValue(detailNotifyRecord.webhookUrl) }}</el-descriptions-item>
+          </el-descriptions>
+        </section>
+
+        <section v-if="detailNotifyRecord.resultMessage" class="detail-section">
+          <div class="detail-section-title">处理说明</div>
+          <pre class="detail-code">{{ formatJsonDetailText(detailNotifyRecord.resultMessage) }}</pre>
+        </section>
+
+        <section v-if="detailNotifyRecord.content" class="detail-section">
+          <div class="detail-section-title">通知内容</div>
+          <pre class="detail-code">{{ formatJsonDetailText(detailNotifyRecord.content) }}</pre>
+        </section>
+      </template>
+
+      <template v-else-if="detailKind === 'excel-task' && detailExcelTask">
+        <section class="detail-section">
+          <div class="detail-section-title">任务信息</div>
+          <el-descriptions :column="1" border size="small" class="detail-descriptions">
+            <el-descriptions-item label="任务 ID">{{ detailExcelTask.id }}</el-descriptions-item>
+            <el-descriptions-item label="任务名称">{{ displayDetailValue(detailExcelTask.taskName) }}</el-descriptions-item>
+            <el-descriptions-item label="任务类型">{{ displayDetailValue(detailExcelTask.taskType) }}</el-descriptions-item>
+            <el-descriptions-item label="业务类型">{{ displayDetailValue(detailExcelTask.bizType) }}</el-descriptions-item>
+            <el-descriptions-item label="状态">
+              <el-tag size="small" :type="statusType(detailExcelTask.status)">{{ detailExcelTask.status || '-' }}</el-tag>
+            </el-descriptions-item>
+            <el-descriptions-item label="文件名">{{ displayDetailValue(detailExcelTask.filename) }}</el-descriptions-item>
+            <el-descriptions-item label="操作人">{{ displayDetailValue(detailExcelTask.operatorName) }}</el-descriptions-item>
+            <el-descriptions-item label="创建时间">{{ displayDetailValue(detailExcelTask.createTime) }}</el-descriptions-item>
+            <el-descriptions-item label="更新时间">{{ displayDetailValue(detailExcelTask.updateTime) }}</el-descriptions-item>
+          </el-descriptions>
+        </section>
+
+        <section class="detail-section">
+          <div class="detail-section-title">处理结果</div>
+          <el-descriptions :column="1" border size="small" class="detail-descriptions">
+            <el-descriptions-item label="总行数">{{ displayDetailValue(detailExcelTask.totalRows) }}</el-descriptions-item>
+            <el-descriptions-item label="成功行数">{{ displayDetailValue(detailExcelTask.successRows) }}</el-descriptions-item>
+            <el-descriptions-item label="失败行数">{{ displayDetailValue(detailExcelTask.failureRows) }}</el-descriptions-item>
+          </el-descriptions>
+        </section>
+
+        <section v-if="detailExcelTask.errorMessage" class="detail-section">
+          <div class="detail-section-title">错误信息</div>
+          <pre class="detail-code">{{ formatJsonDetailText(detailExcelTask.errorMessage) }}</pre>
+        </section>
+      </template>
+
+      <template v-else-if="detailKind === 'file-record' && detailFileRecord">
+        <section class="detail-section">
+          <div class="detail-section-title">文件信息</div>
+          <el-descriptions :column="1" border size="small" class="detail-descriptions">
+            <el-descriptions-item label="文件 ID">{{ detailFileRecord.id }}</el-descriptions-item>
+            <el-descriptions-item label="文件 Key">{{ displayDetailValue(detailFileRecord.fileKey) }}</el-descriptions-item>
+            <el-descriptions-item label="原始文件名">{{ displayDetailValue(detailFileRecord.originalFilename) }}</el-descriptions-item>
+            <el-descriptions-item label="Content-Type">{{ displayDetailValue(detailFileRecord.contentType) }}</el-descriptions-item>
+            <el-descriptions-item label="文件大小">{{ formatBytes(detailFileRecord.fileSize) }}</el-descriptions-item>
+            <el-descriptions-item label="存储类型">{{ displayDetailValue(detailFileRecord.storageType) }}</el-descriptions-item>
+            <el-descriptions-item label="状态">
+              <el-tag size="small" :type="detailFileRecord.deleted ? 'danger' : 'success'">
+                {{ detailFileRecord.deleted ? '已删除' : '有效' }}
+              </el-tag>
+            </el-descriptions-item>
+            <el-descriptions-item label="访问地址">{{ displayDetailValue(detailFileRecord.url) }}</el-descriptions-item>
+          </el-descriptions>
+        </section>
+
+        <section class="detail-section">
+          <div class="detail-section-title">业务归属</div>
+          <el-descriptions :column="1" border size="small" class="detail-descriptions">
+            <el-descriptions-item label="业务类型">{{ displayDetailValue(detailFileRecord.businessType) }}</el-descriptions-item>
+            <el-descriptions-item label="业务键">{{ displayDetailValue(detailFileRecord.businessKey) }}</el-descriptions-item>
+            <el-descriptions-item label="上传人">
+              {{ displayDetailValue(detailFileRecord.operatorName || detailFileRecord.operatorId) }}
+            </el-descriptions-item>
+            <el-descriptions-item label="上传时间">{{ displayDetailValue(detailFileRecord.createTime) }}</el-descriptions-item>
+            <el-descriptions-item label="更新时间">{{ displayDetailValue(detailFileRecord.updateTime) }}</el-descriptions-item>
+          </el-descriptions>
+        </section>
+      </template>
+
+      <template v-else-if="detailKind === 'login-log' && detailLoginLog">
+        <section class="detail-section">
+          <div class="detail-section-title">登录信息</div>
+          <el-descriptions :column="1" border size="small" class="detail-descriptions">
+            <el-descriptions-item label="日志 ID">{{ detailLoginLog.id }}</el-descriptions-item>
+            <el-descriptions-item label="用户名">{{ displayDetailValue(detailLoginLog.username) }}</el-descriptions-item>
+            <el-descriptions-item label="用户 ID">{{ displayDetailValue(detailLoginLog.userId) }}</el-descriptions-item>
+            <el-descriptions-item label="客户端 IP">{{ displayDetailValue(detailLoginLog.clientIp) }}</el-descriptions-item>
+            <el-descriptions-item label="结果">
+              <el-tag size="small" :type="operationLogResultType(detailLoginLog.success)">
+                {{ booleanResultLabel(detailLoginLog.success) }}
+              </el-tag>
+            </el-descriptions-item>
+            <el-descriptions-item label="时间">{{ displayDetailValue(detailLoginLog.createTime) }}</el-descriptions-item>
+          </el-descriptions>
+        </section>
+
+        <section v-if="detailLoginLog.message" class="detail-section">
+          <div class="detail-section-title">处理说明</div>
+          <pre class="detail-code">{{ formatJsonDetailText(detailLoginLog.message) }}</pre>
+        </section>
+      </template>
+
       <pre v-else class="detail">{{ detailJsonText }}</pre>
     </div>
   </el-drawer>
@@ -1728,7 +1891,16 @@ type FrameworkHealthDetails = {
   os?: string
   modules: string[]
 }
-type DetailKind = 'json' | 'operation-log' | 'mq-failed-message' | 'local-message'
+type DetailKind =
+  | 'json'
+  | 'operation-log'
+  | 'mq-failed-message'
+  | 'local-message'
+  | 'notify-template'
+  | 'notify-record'
+  | 'excel-task'
+  | 'file-record'
+  | 'login-log'
 
 const viewTitles: Record<ViewName, string> = {
   dashboard: '数据看板',
@@ -1864,6 +2036,11 @@ const detailDrawerTitle = computed(() => {
   if (detailKind.value === 'operation-log') return '日志详情'
   if (detailKind.value === 'mq-failed-message') return 'MQ 失败消息详情'
   if (detailKind.value === 'local-message') return '本地消息详情'
+  if (detailKind.value === 'notify-template') return '通知模板详情'
+  if (detailKind.value === 'notify-record') return '通知记录详情'
+  if (detailKind.value === 'excel-task') return 'Excel 任务详情'
+  if (detailKind.value === 'file-record') return '文件详情'
+  if (detailKind.value === 'login-log') return '登录日志详情'
   return '详情'
 })
 const detailOperationLog = computed(() =>
@@ -1874,6 +2051,21 @@ const detailMqMessage = computed(() =>
 )
 const detailLocalMessage = computed(() =>
   detailKind.value === 'local-message' ? (detailRecord.value as LocalMessage | undefined) : undefined
+)
+const detailNotifyTemplate = computed(() =>
+  detailKind.value === 'notify-template' ? (detailRecord.value as NotifyTemplate | undefined) : undefined
+)
+const detailNotifyRecord = computed(() =>
+  detailKind.value === 'notify-record' ? (detailRecord.value as NotifyRecord | undefined) : undefined
+)
+const detailExcelTask = computed(() =>
+  detailKind.value === 'excel-task' ? (detailRecord.value as ExcelTask | undefined) : undefined
+)
+const detailFileRecord = computed(() =>
+  detailKind.value === 'file-record' ? (detailRecord.value as FileRecord | undefined) : undefined
+)
+const detailLoginLog = computed(() =>
+  detailKind.value === 'login-log' ? (detailRecord.value as LoginLog | undefined) : undefined
 )
 const detailJsonText = computed(() => formatJsonDetailText(detailRecord.value))
 const userDialogVisible = ref(false)
@@ -3491,6 +3683,12 @@ function operationLogResultLabel(success?: boolean) {
   return 'UNKNOWN'
 }
 
+function booleanResultLabel(success?: boolean) {
+  if (success === false) return '失败'
+  if (success === true) return '成功'
+  return '未知'
+}
+
 function traceSourceType(source?: string) {
   if (source === 'MQ') return 'warning'
   if (source === 'LOCAL_MESSAGE') return 'success'
@@ -3522,6 +3720,13 @@ function displayDetailValue(value: unknown) {
     return '-'
   }
   return String(value)
+}
+
+function displayArrayValue(values?: unknown[]) {
+  if (!values || values.length === 0) {
+    return '-'
+  }
+  return values.map((item) => displayDetailValue(item)).join(', ')
 }
 
 function formatElapsedMs(value?: number) {
