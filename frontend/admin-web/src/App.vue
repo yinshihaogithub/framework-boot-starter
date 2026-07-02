@@ -199,8 +199,9 @@
                 <template #default="{ row }"><el-tag :type="row.status === 'ENABLED' ? 'success' : 'info'" size="small">{{ row.status }}</el-tag></template>
               </el-table-column>
               <el-table-column prop="createTime" label="创建时间" min-width="170" />
-              <el-table-column label="操作" width="116" fixed="right">
+              <el-table-column label="操作" width="152" fixed="right">
                 <template #default="{ row }">
+                  <el-button :icon="View" circle size="small" @click="openDetail(row, 'tenant')" />
                   <el-button v-if="can('system:tenant:update')" :icon="Edit" circle size="small" @click="openEditTenant(row)" />
                   <el-button v-if="can('system:tenant:delete')" :icon="Delete" circle size="small" @click="deleteTenant(row)" />
                 </template>
@@ -455,8 +456,9 @@
                 <template #default="{ row }"><el-tag :type="row.sensitive ? 'warning' : 'info'" size="small">{{ row.sensitive ? '是' : '否' }}</el-tag></template>
               </el-table-column>
               <el-table-column prop="remark" label="备注" min-width="240" show-overflow-tooltip />
-              <el-table-column label="操作" width="108" fixed="right">
+              <el-table-column label="操作" width="144" fixed="right">
                 <template #default="{ row }">
+                  <el-button :icon="View" circle size="small" @click="openDetail(row, 'config-item')" />
                   <el-button v-if="can('system:config:update')" :icon="Edit" circle size="small" @click="openEditConfig(row)" />
                   <el-button v-if="can('system:config:delete')" :icon="Delete" circle size="small" @click="deleteConfig(row)" />
                 </template>
@@ -1779,6 +1781,43 @@
         </section>
       </template>
 
+      <template v-else-if="detailKind === 'tenant' && detailTenant">
+        <section class="detail-section">
+          <div class="detail-section-title">租户信息</div>
+          <el-descriptions :column="1" border size="small" class="detail-descriptions">
+            <el-descriptions-item label="租户 ID">{{ detailTenant.id }}</el-descriptions-item>
+            <el-descriptions-item label="租户编码">{{ displayDetailValue(detailTenant.tenantCode) }}</el-descriptions-item>
+            <el-descriptions-item label="租户名称">{{ displayDetailValue(detailTenant.tenantName) }}</el-descriptions-item>
+            <el-descriptions-item label="状态">
+              <el-tag size="small" :type="detailTenant.status === 'ENABLED' ? 'success' : 'info'">
+                {{ detailTenant.status || '-' }}
+              </el-tag>
+            </el-descriptions-item>
+            <el-descriptions-item label="创建时间">{{ displayDetailValue(detailTenant.createTime) }}</el-descriptions-item>
+          </el-descriptions>
+        </section>
+      </template>
+
+      <template v-else-if="detailKind === 'config-item' && detailConfigItem">
+        <section class="detail-section">
+          <div class="detail-section-title">参数信息</div>
+          <el-descriptions :column="1" border size="small" class="detail-descriptions">
+            <el-descriptions-item label="参数 ID">{{ detailConfigItem.id }}</el-descriptions-item>
+            <el-descriptions-item label="参数 Key">{{ displayDetailValue(detailConfigItem.configKey) }}</el-descriptions-item>
+            <el-descriptions-item label="参数名称">{{ displayDetailValue(detailConfigItem.configName) }}</el-descriptions-item>
+            <el-descriptions-item label="敏感">
+              <el-tag size="small" :type="detailConfigItem.sensitive ? 'warning' : 'info'">
+                {{ detailConfigItem.sensitive ? '是' : '否' }}
+              </el-tag>
+            </el-descriptions-item>
+            <el-descriptions-item label="参数值">
+              {{ detailConfigItem.sensitive ? MASKED_CONFIG_VALUE : displayDetailValue(detailConfigItem.configValue) }}
+            </el-descriptions-item>
+            <el-descriptions-item label="备注">{{ displayDetailValue(detailConfigItem.remark) }}</el-descriptions-item>
+          </el-descriptions>
+        </section>
+      </template>
+
       <template v-else-if="detailKind === 'excel-error-page' && detailExcelErrorPage">
         <section class="detail-section">
           <div class="detail-section-title">任务信息</div>
@@ -1961,6 +2000,8 @@ type DetailKind =
   | 'excel-task'
   | 'file-record'
   | 'login-log'
+  | 'tenant'
+  | 'config-item'
   | 'excel-error-page'
   | 'online-session'
 type ExcelErrorPageDetail = {
@@ -2113,6 +2154,8 @@ const detailDrawerTitle = computed(() => {
   if (detailKind.value === 'excel-task') return 'Excel 任务详情'
   if (detailKind.value === 'file-record') return '文件详情'
   if (detailKind.value === 'login-log') return '登录日志详情'
+  if (detailKind.value === 'tenant') return '租户详情'
+  if (detailKind.value === 'config-item') return '参数详情'
   if (detailKind.value === 'excel-error-page') return 'Excel 错误详情'
   if (detailKind.value === 'online-session') return '在线会话详情'
   return '详情'
@@ -2140,6 +2183,12 @@ const detailFileRecord = computed(() =>
 )
 const detailLoginLog = computed(() =>
   detailKind.value === 'login-log' ? (detailRecord.value as LoginLog | undefined) : undefined
+)
+const detailTenant = computed(() =>
+  detailKind.value === 'tenant' ? (detailRecord.value as Tenant | undefined) : undefined
+)
+const detailConfigItem = computed(() =>
+  detailKind.value === 'config-item' ? (detailRecord.value as ConfigItem | undefined) : undefined
 )
 const detailExcelErrorPage = computed(() =>
   detailKind.value === 'excel-error-page' ? (detailRecord.value as ExcelErrorPageDetail | undefined) : undefined
