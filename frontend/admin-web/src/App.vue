@@ -559,6 +559,8 @@
                   <el-input v-model="mqQuery.queueName" clearable placeholder="队列" class="filter" />
                   <el-button :icon="Search" circle type="primary" @click="loadMq" />
                   <el-button v-if="can('mq:retry')" :icon="RefreshRight" circle :disabled="!mqStats?.runtime?.retryAvailable || selectedMqMessageIds.length === 0" @click="batchRetryMq" />
+                  <el-button v-if="can('mq:retry')" :icon="Check" circle :disabled="selectedMqMessageIds.length === 0" @click="batchManualSuccessMq" />
+                  <el-button v-if="can('mq:retry')" :icon="Close" circle :disabled="selectedMqMessageIds.length === 0" @click="batchManualFailureMq" />
                   <el-button v-if="can('mq:retry')" :icon="Delete" circle @click="cleanMq" />
                 </div>
               </div>
@@ -927,7 +929,17 @@
           </el-card>
 
           <el-card shadow="never">
-            <template #header><div class="section-head"><span>链路明细</span><el-tag size="small">{{ traceDetail?.traceId || '-' }}</el-tag></div></template>
+            <template #header>
+              <div class="section-head">
+                <span>链路明细</span>
+                <div class="actions">
+                  <el-tag size="small">{{ traceDetail?.traceId || '-' }}</el-tag>
+                  <el-button v-if="canOpenView('logs')" size="small" @click="openLogsByTrace(traceDetail?.traceId)">日志页</el-button>
+                  <el-button v-if="canOpenView('mq')" size="small" @click="openMqByTrace(traceDetail?.traceId)">MQ页</el-button>
+                  <el-button v-if="canOpenView('local')" size="small" @click="openLocalByTrace(traceDetail?.traceId)">本地消息页</el-button>
+                </div>
+              </div>
+            </template>
             <el-tabs>
               <el-tab-pane :label="traceTabLabel('日志', 'logs')">
                 <el-table :data="traceDetail?.logs ?? []" height="360" stripe>
@@ -957,7 +969,7 @@
                   </el-table-column>
                   <el-table-column prop="errorMessage" label="错误" min-width="220" show-overflow-tooltip />
                   <el-table-column label="操作" width="80" fixed="right">
-                    <template #default="{ row }"><el-button :icon="View" circle size="small" @click="openDetail(row)" /></template>
+                    <template #default="{ row }"><el-button :icon="View" circle size="small" @click="openMqDetail(row.id)" /></template>
                   </el-table-column>
                 </el-table>
               </el-tab-pane>
@@ -975,7 +987,7 @@
                   </el-table-column>
                   <el-table-column prop="errorMessage" label="错误" min-width="220" show-overflow-tooltip />
                   <el-table-column label="操作" width="80" fixed="right">
-                    <template #default="{ row }"><el-button :icon="View" circle size="small" @click="openDetail(row)" /></template>
+                    <template #default="{ row }"><el-button :icon="View" circle size="small" @click="openLocalDetail(row.id)" /></template>
                   </el-table-column>
                 </el-table>
               </el-tab-pane>
@@ -2494,6 +2506,22 @@ async function batchRetryMq() {
   await loadMq()
 }
 
+async function batchManualSuccessMq() {
+  if (selectedMqMessageIds.value.length === 0) {
+    ElMessage.warning('请选择要处理的消息')
+    return
+  }
+  const remark = await promptRemark(`批量人工补偿完成 ${selectedMqMessageIds.value.length} 条 MQ 消息`)
+  const result = await api.batchManualSuccessMqMessages(
+    selectedMqMessageIds.value,
+    currentUser.value?.username || 'admin',
+    remark
+  )
+  showBatchActionResult(result, '已处理')
+  selectedMqMessageIds.value = []
+  await loadMq()
+}
+
 async function manualSuccessMq(row: MqFailedMessage) {
   const remark = await promptRemark(`人工补偿完成 ${row.messageId || row.id}`)
   const message = await api.manualSuccessMqMessage(row.id, {
@@ -2501,6 +2529,22 @@ async function manualSuccessMq(row: MqFailedMessage) {
     remark
   })
   ElMessage.success(message)
+  await loadMq()
+}
+
+async function batchManualFailureMq() {
+  if (selectedMqMessageIds.value.length === 0) {
+    ElMessage.warning('请选择要处理的消息')
+    return
+  }
+  const remark = await promptRemark(`批量人工终止 ${selectedMqMessageIds.value.length} 条 MQ 消息`)
+  const result = await api.batchManualFailureMqMessages(
+    selectedMqMessageIds.value,
+    currentUser.value?.username || 'admin',
+    remark
+  )
+  showBatchActionResult(result, '已处理')
+  selectedMqMessageIds.value = []
   await loadMq()
 }
 
@@ -2524,6 +2568,21 @@ async function deleteMq(row: MqFailedMessage) {
 async function openMqDetail(id: number) {
   const message = await api.mqFailedMessage(id)
   openDetail(message)
+}
+
+async function openMqByTrace(value?: string) {
+  const traceId = trimToUndefined(value)
+  if (!traceId) return
+  activeView.value = 'mq'
+  Object.assign(mqQuery, {
+    status: '',
+    traceId,
+    businessKey: '',
+    messageType: '',
+    queueName: '',
+    pageNum: 1
+  })
+  await loadMq()
 }
 
 async function cleanMq() {
@@ -2605,6 +2664,20 @@ async function deleteLocal(row: LocalMessage) {
 async function openLocalDetail(id: number) {
   const message = await api.localMessage(id)
   openDetail(message)
+}
+
+async function openLocalByTrace(value?: string) {
+  const traceId = trimToUndefined(value)
+  if (!traceId) return
+  activeView.value = 'local'
+  Object.assign(localQuery, {
+    status: '',
+    topic: '',
+    businessKey: '',
+    traceId,
+    pageNum: 1
+  })
+  await loadLocal()
 }
 
 async function cleanLocal() {
@@ -2788,6 +2861,21 @@ async function openTrace(value?: string) {
   logQuery.traceId = traceId
   logQuery.pageNum = 1
   await loadTrace()
+}
+
+async function openLogsByTrace(value?: string) {
+  const traceId = trimToUndefined(value)
+  if (!traceId) return
+  activeView.value = 'logs'
+  Object.assign(logQuery, {
+    module: '',
+    logType: '',
+    operatorId: undefined,
+    success: '',
+    traceId,
+    pageNum: 1
+  })
+  await loadLogs()
 }
 
 async function selectDict(row: DictType) {

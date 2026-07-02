@@ -46,10 +46,12 @@ class MqAdminControllerTest {
     void writeEndpointsRequireBothViewAndRetryPermissions() throws NoSuchMethodException {
         assertMqWritePermission("retryOne", Long.class, String.class, String.class, HttpServletRequest.class);
         assertMqWritePermission("batchRetry", MqAdminDTO.ManualRetryRequest.class, HttpServletRequest.class);
+        assertMqWritePermission("batchManualSuccess", MqAdminDTO.ManualRetryRequest.class, HttpServletRequest.class);
         assertMqWritePermission("manualSuccess", Long.class, MqAdminController.ManualCompensationRequest.class,
                 HttpServletRequest.class);
         assertMqWritePermission("manualFailure", Long.class, MqAdminController.ManualCompensationRequest.class,
                 HttpServletRequest.class);
+        assertMqWritePermission("batchManualFailure", MqAdminDTO.ManualRetryRequest.class, HttpServletRequest.class);
         assertMqWritePermission("deleteFailedMessage", Long.class, HttpServletRequest.class);
         assertMqWritePermission("cleanProcessed", HttpServletRequest.class);
     }
@@ -302,6 +304,40 @@ class MqAdminControllerTest {
     }
 
     @Test
+    void batchManualActionsRequireMessageIds() {
+        MqAdminController controller = controller(null, new MqProperties(), null);
+
+        Result<MqAdminDTO.ManualRetryResult> successResult =
+                controller.batchManualSuccess(new MqAdminDTO.ManualRetryRequest(), null);
+        Result<MqAdminDTO.ManualRetryResult> failureResult =
+                controller.batchManualFailure(new MqAdminDTO.ManualRetryRequest(), null);
+
+        assertThat(successResult.isSuccess()).isFalse();
+        assertThat(successResult.getCode()).isEqualTo(ResultCode.PARAM_ERROR.getCode());
+        assertThat(successResult.getMessage()).isEqualTo("请选择要处理的消息");
+        assertThat(failureResult.isSuccess()).isFalse();
+        assertThat(failureResult.getCode()).isEqualTo(ResultCode.PARAM_ERROR.getCode());
+        assertThat(failureResult.getMessage()).isEqualTo("请选择要处理的消息");
+    }
+
+    @Test
+    void batchManualActionsRejectInvalidMessageIdsBeforeProviderLookup() {
+        MqAdminController controller = controller(null, new MqProperties(), null);
+        MqAdminDTO.ManualRetryRequest request = new MqAdminDTO.ManualRetryRequest()
+                .setIds(List.of(1L, 0L));
+
+        Result<MqAdminDTO.ManualRetryResult> successResult = controller.batchManualSuccess(request, null);
+        Result<MqAdminDTO.ManualRetryResult> failureResult = controller.batchManualFailure(request, null);
+
+        assertThat(successResult.isSuccess()).isFalse();
+        assertThat(successResult.getCode()).isEqualTo(ResultCode.PARAM_ERROR.getCode());
+        assertThat(successResult.getMessage()).isEqualTo("消息ID必须大于0");
+        assertThat(failureResult.isSuccess()).isFalse();
+        assertThat(failureResult.getCode()).isEqualTo(ResultCode.PARAM_ERROR.getCode());
+        assertThat(failureResult.getMessage()).isEqualTo("消息ID必须大于0");
+    }
+
+    @Test
     void batchRetryDeduplicatesIdsNormalizesOperatorAndAuditsResult() {
         MqProperties properties = new MqProperties();
         MqMessageSender sender = sender(MqProperties.Provider.RABBIT);
@@ -379,6 +415,70 @@ class MqAdminControllerTest {
     }
 
     @Test
+    void batchManualSuccessDeduplicatesIdsAndAuditsResult() {
+        UserContextHolder.set(new LoginUser().setUserId(7L).setUsername("alice"));
+        InMemoryMqFailedMessageRepository repository = new InMemoryMqFailedMessageRepository(List.of(
+                failedMessage(31L, "trace-success", MqFailedMessage.STATUS_EXHAUSTED),
+                failedMessage(32L, "trace-success", MqFailedMessage.STATUS_PENDING)));
+        DeadLetterHandler handler = new DeadLetterHandler(repository, new MqProperties());
+        repository.updateFailures.add(32L);
+        RecordingAuditService auditService = new RecordingAuditService();
+        MqAdminController controller = controller(handler, new MqProperties(), null, null, auditService);
+        MqAdminDTO.ManualRetryRequest request = new MqAdminDTO.ManualRetryRequest()
+                .setIds(List.of(31L, 31L, 32L, 404L))
+                .setOperator("request-user")
+                .setRemark("\u00A0checked\u3000");
+
+        Result<MqAdminDTO.ManualRetryResult> result = controller.batchManualSuccess(request, null);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getData().getTotal()).isEqualTo(3);
+        assertThat(result.getData().getSuccess()).isEqualTo(1);
+        assertThat(result.getData().getFailed()).isEqualTo(2);
+        assertThat(result.getData().getFailedMessages()).containsExactly("32: 消息不存在", "404: 消息不存在");
+        MqFailedMessage saved = repository.findById(31L).orElseThrow();
+        assertThat(saved.getStatus()).isEqualTo(MqFailedMessage.STATUS_MANUAL);
+        assertThat(saved.getOperator()).isEqualTo("alice");
+        assertThat(saved.getCompensateRemark()).isEqualTo("checked");
+        assertThat(auditService.action).isEqualTo("批量人工补偿完成MQ消息");
+        assertThat(auditService.params)
+                .containsEntry("ids", List.of(31L, 32L, 404L))
+                .containsEntry("operator", "alice")
+                .containsEntry("remark", "checked")
+                .containsEntry("success", 1)
+                .containsEntry("failure", 2);
+    }
+
+    @Test
+    void batchManualFailureUsesDefaultRemarkAndCurrentUser() {
+        UserContextHolder.set(new LoginUser().setUserId(9L).setUsername("operator-a"));
+        InMemoryMqFailedMessageRepository repository = new InMemoryMqFailedMessageRepository(List.of(
+                withNextRetryTime(failedMessage(41L, "trace-failure", MqFailedMessage.STATUS_PENDING)),
+                withNextRetryTime(failedMessage(42L, "trace-failure", MqFailedMessage.STATUS_SUCCESS))));
+        DeadLetterHandler handler = new DeadLetterHandler(repository, new MqProperties());
+        RecordingAuditService auditService = new RecordingAuditService();
+        MqAdminController controller = controller(handler, new MqProperties(), null, null, auditService);
+        MqAdminDTO.ManualRetryRequest request = new MqAdminDTO.ManualRetryRequest()
+                .setIds(List.of(41L, 42L))
+                .setOperator("request-user")
+                .setRemark("\u00A0\u3000");
+
+        Result<MqAdminDTO.ManualRetryResult> result = controller.batchManualFailure(request, null);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getData().getSuccess()).isEqualTo(2);
+        assertThat(result.getData().getFailed()).isZero();
+        assertThat(repository.findById(41L).orElseThrow().getStatus()).isEqualTo(MqFailedMessage.STATUS_EXHAUSTED);
+        assertThat(repository.findById(42L).orElseThrow().getCompensateRemark()).isEqualTo("人工终止");
+        assertThat(repository.findById(41L).orElseThrow().getOperator()).isEqualTo("operator-a");
+        assertThat(auditService.action).isEqualTo("批量人工终止MQ消息");
+        assertThat(auditService.params)
+                .containsEntry("operator", "operator-a")
+                .containsEntry("remark", "人工终止")
+                .containsEntry("status", MqFailedMessage.STATUS_EXHAUSTED);
+    }
+
+    @Test
     void singleMessageOperationsRejectInvalidIdsBeforeProviderLookup() {
         MqAdminController controller = controller(null, new MqProperties(), null);
 
@@ -425,17 +525,21 @@ class MqAdminControllerTest {
 
         Result<String> retry = controller.retryOne(1L, "admin", null, null);
         Result<MqAdminDTO.ManualRetryResult> batch = controller.batchRetry(request, null);
+        Result<MqAdminDTO.ManualRetryResult> batchSuccess = controller.batchManualSuccess(request, null);
         Result<String> success = controller.manualSuccess(1L, null, null);
         Result<String> failure = controller.manualFailure(1L, null, null);
+        Result<MqAdminDTO.ManualRetryResult> batchFailure = controller.batchManualFailure(request, null);
         Result<String> delete = controller.deleteFailedMessage(1L, null);
 
         assertThat(retry.isSuccess()).isFalse();
         assertThat(retry.getCode()).isEqualTo(ResultCode.SERVICE_ERROR.getCode());
         assertThat(retry.getMessage()).isEqualTo("未接入可用 MQ 发送器，无法重发消息");
         assertThat(batch.getCode()).isEqualTo(ResultCode.SERVICE_ERROR.getCode());
+        assertThat(batchSuccess.getCode()).isEqualTo(ResultCode.SERVICE_ERROR.getCode());
         assertThat(success.getCode()).isEqualTo(ResultCode.SERVICE_ERROR.getCode());
         assertThat(success.getMessage()).isEqualTo("MQ死信存储未启用");
         assertThat(failure.getCode()).isEqualTo(ResultCode.SERVICE_ERROR.getCode());
+        assertThat(batchFailure.getCode()).isEqualTo(ResultCode.SERVICE_ERROR.getCode());
         assertThat(delete.getCode()).isEqualTo(ResultCode.SERVICE_ERROR.getCode());
     }
 
@@ -972,6 +1076,7 @@ class MqAdminControllerTest {
 
     private static class InMemoryMqFailedMessageRepository implements MqFailedMessageRepository {
         private final Map<Long, MqFailedMessage> messages = new LinkedHashMap<>();
+        private final java.util.Set<Long> updateFailures = new java.util.LinkedHashSet<>();
         private boolean failOnSave;
         private boolean updateAffected = true;
 
@@ -992,6 +1097,9 @@ class MqAdminControllerTest {
         public boolean update(MqFailedMessage message) {
             if (failOnSave) {
                 throw new IllegalStateException("save failed");
+            }
+            if (updateFailures.contains(message.getId())) {
+                return false;
             }
             if (!updateAffected) {
                 return false;

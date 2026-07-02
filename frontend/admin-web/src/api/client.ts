@@ -606,8 +606,12 @@ export const api = {
     postData<string>(`/admin/mq/failed-messages/${id}/retry`, null, { operator, remark }),
   batchRetryMqMessages: (ids: number[], operator = 'admin', remark = '') =>
     postData<ManualRetryResult>('/admin/mq/failed-messages/batch-retry', { ids, operator, remark }),
+  batchManualSuccessMqMessages: (ids: number[], operator = 'admin', remark = '') =>
+    postData<ManualRetryResult>('/admin/mq/failed-messages/batch-manual-success', { ids, operator, remark }),
   manualSuccessMqMessage: (id: number, data: Record<string, unknown>) =>
     postData<string>(`/admin/mq/failed-messages/${id}/manual-success`, data),
+  batchManualFailureMqMessages: (ids: number[], operator = 'admin', remark = '') =>
+    postData<ManualRetryResult>('/admin/mq/failed-messages/batch-manual-failure', { ids, operator, remark }),
   manualFailureMqMessage: (id: number, data: Record<string, unknown>) =>
     postData<string>(`/admin/mq/failed-messages/${id}/manual-failure`, data),
   deleteMqMessage: (id: number) => deleteData<string>(`/admin/mq/failed-messages/${id}`),

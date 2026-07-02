@@ -190,6 +190,12 @@ public class MqAdminService {
         }
     }
 
+    public ActionResult<MqAdminDTO.ManualRetryResult> batchManualSuccess(MqAdminDTO.ManualRetryRequest request,
+                                                                         HttpServletRequest servletRequest) {
+        return batchManualUpdate(request, servletRequest, "批量人工补偿完成MQ消息",
+                MqFailedMessage.STATUS_MANUAL, "人工补偿完成");
+    }
+
     public ActionResult<String> manualSuccess(Long id, String operator, String remark, HttpServletRequest servletRequest) {
         ActionResult<String> invalidId = invalidIdResult(id);
         if (invalidId != null) {
@@ -222,6 +228,12 @@ public class MqAdminService {
             log.debug("人工补偿MQ消息失败: {}", e.getMessage());
             return ActionResult.fail(ResultCode.SERVICE_ERROR, "MQ人工补偿失败");
         }
+    }
+
+    public ActionResult<MqAdminDTO.ManualRetryResult> batchManualFailure(MqAdminDTO.ManualRetryRequest request,
+                                                                         HttpServletRequest servletRequest) {
+        return batchManualUpdate(request, servletRequest, "批量人工终止MQ消息",
+                MqFailedMessage.STATUS_EXHAUSTED, "人工终止");
     }
 
     public ActionResult<String> manualFailure(Long id, String operator, String remark, HttpServletRequest servletRequest) {
@@ -482,6 +494,64 @@ public class MqAdminService {
             }
         }
         return result;
+    }
+
+    private ActionResult<MqAdminDTO.ManualRetryResult> batchManualUpdate(MqAdminDTO.ManualRetryRequest request,
+                                                                         HttpServletRequest servletRequest,
+                                                                         String action,
+                                                                         String status,
+                                                                         String defaultRemark) {
+        if (request == null || request.getIds() == null || request.getIds().isEmpty()) {
+            return ActionResult.fail(ResultCode.PARAM_ERROR, "请选择要处理的消息");
+        }
+        if (hasInvalidId(request.getIds())) {
+            return ActionResult.fail(ResultCode.PARAM_ERROR, "消息ID必须大于0");
+        }
+        DeadLetterHandler handler = available(deadLetterHandlerProvider);
+        if (handler == null) {
+            return ActionResult.fail(ResultCode.SERVICE_ERROR, "MQ死信存储未启用");
+        }
+        List<Long> ids = distinctIds(request.getIds());
+        String normalizedOperator = operator(request.getOperator());
+        String normalizedRemark = remark(request.getRemark(), defaultRemark);
+        List<String> failedMessages = new ArrayList<>();
+        int success = 0;
+        for (Long id : ids) {
+            try {
+                MqFailedMessage message = handler.getById(id);
+                if (message == null) {
+                    failedMessages.add(id + ": 消息不存在");
+                    continue;
+                }
+                MqFailedMessage updated = message.copy();
+                updated.setStatus(status);
+                updated.setNextRetryTime(null);
+                updated.setOperator(normalizedOperator);
+                updated.setCompensateRemark(normalizedRemark);
+                if (!handler.updateRecord(updated)) {
+                    failedMessages.add(id + ": 消息不存在");
+                    continue;
+                }
+                success++;
+            } catch (Exception e) {
+                failedMessages.add(id + ": " + failureReason(e));
+            }
+        }
+        MqAdminDTO.ManualRetryResult result = new MqAdminDTO.ManualRetryResult()
+                .setTotal(ids.size())
+                .setSuccess(success)
+                .setFailed(ids.size() - success)
+                .setFailedMessages(failedMessages);
+        auditSuccess(servletRequest, action, "UPDATE",
+                auditService.params("ids", ids, "operator", normalizedOperator, "remark", normalizedRemark,
+                        "success", result.getSuccess(), "failure", result.getFailed(),
+                        "failedMessages", failedMessages, "status", status));
+        return ActionResult.success(result);
+    }
+
+    private String failureReason(Exception exception) {
+        String reason = text(exception == null ? null : exception.getMessage());
+        return reason == null ? "操作失败" : reason;
     }
 
     private void auditSuccess(HttpServletRequest servletRequest, String action, String operationType,

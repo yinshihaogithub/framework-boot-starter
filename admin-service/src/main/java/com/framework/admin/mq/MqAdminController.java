@@ -78,6 +78,15 @@ public class MqAdminController {
         return toResult(mqAdminService.batchRetry(request, servletRequest));
     }
 
+    @Operation(summary = "批量人工补偿完成")
+    @PostMapping("/failed-messages/batch-manual-success")
+    @RequirePermission(value = {"mq:view", "mq:retry"}, logicalAnd = true)
+    public Result<MqAdminDTO.ManualRetryResult> batchManualSuccess(
+            @RequestBody(required = false) MqAdminDTO.ManualRetryRequest request,
+            HttpServletRequest servletRequest) {
+        return toResult(mqAdminService.batchManualSuccess(request, servletRequest));
+    }
+
     @Operation(summary = "人工补偿完成")
     @PostMapping("/failed-messages/{id}/manual-success")
     @RequirePermission(value = {"mq:view", "mq:retry"}, logicalAnd = true)
@@ -96,6 +105,15 @@ public class MqAdminController {
                                         HttpServletRequest servletRequest) {
         return toResult(mqAdminService.manualFailure(id, request == null ? null : request.getOperator(),
                 request == null ? null : request.getRemark(), servletRequest));
+    }
+
+    @Operation(summary = "批量人工终止消息")
+    @PostMapping("/failed-messages/batch-manual-failure")
+    @RequirePermission(value = {"mq:view", "mq:retry"}, logicalAnd = true)
+    public Result<MqAdminDTO.ManualRetryResult> batchManualFailure(
+            @RequestBody(required = false) MqAdminDTO.ManualRetryRequest request,
+            HttpServletRequest servletRequest) {
+        return toResult(mqAdminService.batchManualFailure(request, servletRequest));
     }
 
     @Operation(summary = "删除失败记录")
