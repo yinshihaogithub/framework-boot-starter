@@ -138,6 +138,7 @@ MQ 可选中间件样例使用 Compose `mq` profile 启动，包含 RabbitMQ、K
 - 前端生产构建通过：`npm --prefix frontend/admin-web run build`
 - 格式检查通过：`git diff --check`
 - CI 回归入口已补充：`.github/workflows/ci.yml`
+- 本地烟测入口已补充：`scripts/smoke-admin.sh`
 - 后端健康检查通过：`/actuator/health`
 - 前端首页访问通过：`http://localhost:5173/`
 - 登录烟测通过：`admin / Admin@123`

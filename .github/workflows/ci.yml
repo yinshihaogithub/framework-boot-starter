@@ -21,6 +21,7 @@ jobs:
           test -x scripts/start-admin.sh
           test -x scripts/start-compose.sh
           test -x scripts/start-mq.sh
+          test -x scripts/smoke-admin.sh
           test -x scripts/stop-compose.sh
 
       - name: Validate Docker Compose

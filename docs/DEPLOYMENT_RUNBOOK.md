@@ -129,6 +129,23 @@ GitHub Actions 已提供基础 CI：
 
 - 后端：`mvn -q test`
 - 前端：`npm ci && npm run build`
+- 交付入口：脚本语法、脚本可执行权限、Docker Compose 配置解析
+
+## 本地烟测
+
+后端启动后，可以执行后台核心接口烟测：
+
+```bash
+./scripts/smoke-admin.sh
+```
+
+默认配置：
+
+- `ADMIN_BASE_URL=http://127.0.0.1:8081`
+- `ADMIN_USERNAME=admin`
+- `ADMIN_PASSWORD=Admin@123`
+
+脚本会登录后检查认证、看板、会话、MQ、本地消息、日志、监控、通知、文件和 Excel 接口。
 
 ## 核心接口烟测
 
