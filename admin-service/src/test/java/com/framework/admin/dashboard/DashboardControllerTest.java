@@ -5,6 +5,7 @@ import com.framework.admin.file.FileAdminMapper;
 import com.framework.admin.notify.NotifyAdminMapper;
 import com.framework.admin.system.AdminSystemModels.ConfigItem;
 import com.framework.admin.system.AdminSystemMapperSupport;
+import com.framework.core.module.FrameworkModuleRegistry;
 import com.framework.core.result.Result;
 import com.framework.localmessage.config.LocalMessageProperties;
 import com.framework.localmessage.mapper.LocalMessageMapper;
@@ -44,18 +45,10 @@ class DashboardControllerTest {
 
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getData().modules())
-                .hasSize(22)
                 .extracting(DashboardController.ModuleStatus::name)
-                .contains(
-                        "framework-core",
-                        "framework-cache",
-                        "framework-notify",
-                        "framework-excel",
-                        "framework-datasource",
-                        "framework-redis",
-                        "framework-feign",
-                        "framework-job",
-                        "framework-file")
+                .containsExactlyElementsOf(FrameworkModuleRegistry.defaultModules().stream()
+                        .map(FrameworkModuleRegistry.ModuleMarker::name)
+                        .toList())
                 .doesNotHaveDuplicates();
     }
 

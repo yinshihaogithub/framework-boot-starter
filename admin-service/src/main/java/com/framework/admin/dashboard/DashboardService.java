@@ -7,6 +7,7 @@ import com.framework.admin.mq.MqAdminMapperSupport;
 import com.framework.admin.notify.NotifyAdminMapper;
 import com.framework.admin.system.AdminSystemModels.ConfigItem;
 import com.framework.admin.system.AdminSystemMapperSupport;
+import com.framework.core.module.FrameworkModuleRegistry;
 import com.framework.localmessage.config.LocalMessageProperties;
 import com.framework.localmessage.mapper.LocalMessageMapper;
 import com.framework.localmessage.model.LocalMessageStatus;
@@ -16,7 +17,6 @@ import com.framework.mq.mapper.MqFailedMessageMapper;
 import com.framework.mq.deadletter.MqFailedMessage;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
-import org.springframework.util.ClassUtils;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -255,33 +255,11 @@ public class DashboardService {
     }
 
     private List<DashboardController.ModuleStatus> moduleStatuses() {
-        return List.of(
-                module("framework-core", "com.framework.core.trace.TraceContext"),
-                module("framework-web", "com.framework.web.config.TraceIdFilter"),
-                module("framework-auth", "com.framework.auth.jwt.JwtUtils"),
-                module("framework-security", "com.framework.security.aspect.PermissionAspect"),
-                module("framework-cache", "com.framework.cache.config.CacheAutoConfiguration"),
-                module("framework-lock", "com.framework.lock.config.LockAutoConfiguration"),
-                module("framework-idempotent", "com.framework.idempotent.config.IdempotentAutoConfiguration"),
-                module("framework-crypto", "com.framework.crypto.util.PasswordUtils"),
-                module("framework-log", "com.framework.log.aspect.OperationLogAspect"),
-                module("framework-rate-limiter", "com.framework.ratelimiter.config.RateLimiterAutoConfiguration"),
-                module("framework-mq", "com.framework.mq.config.MqAutoConfiguration"),
-                module("framework-retry", "com.framework.retry.config.RetryAutoConfiguration"),
-                module("framework-tools", "com.framework.tools.tree.TreeUtils"),
-                module("framework-notify", "com.framework.notify.config.NotifyAutoConfiguration"),
-                module("framework-local-message", "com.framework.localmessage.service.LocalMessageService"),
-                module("framework-excel", "com.framework.excel.config.ExcelAutoConfiguration"),
-                module("framework-datasource", "com.framework.datasource.config.DatasourceAutoConfiguration"),
-                module("framework-redis", "com.framework.redis.config.RedisAutoConfiguration"),
-                module("framework-feign", "com.framework.feign.config.FeignAutoConfiguration"),
-                module("framework-monitor", "com.framework.monitor.health.FrameworkHealthIndicator"),
-                module("framework-job", "com.framework.job.config.JobAutoConfiguration"),
-                module("framework-file", "com.framework.file.service.FileStorageService"));
-    }
-
-    private DashboardController.ModuleStatus module(String name, String markerClass) {
-        boolean loaded = ClassUtils.isPresent(markerClass, DashboardService.class.getClassLoader());
-        return new DashboardController.ModuleStatus(name, loaded ? "UP" : "MISSING");
+        ClassLoader classLoader = DashboardService.class.getClassLoader();
+        return FrameworkModuleRegistry.defaultModules().stream()
+                .map(module -> new DashboardController.ModuleStatus(
+                        module.name(),
+                        module.isPresent(classLoader) ? "UP" : "MISSING"))
+                .toList();
     }
 }

@@ -1,5 +1,6 @@
 package com.framework.monitor.config;
 
+import com.framework.core.module.FrameworkModuleRegistry;
 import com.framework.job.service.JobHandler;
 import com.framework.monitor.health.FrameworkHealthIndicator;
 import org.junit.jupiter.api.Test;
@@ -40,6 +41,9 @@ class MonitorAutoConfigurationTest {
         List<String> modules = (List<String>) health.getDetails().get("modules");
         assertThat(modules)
                 .contains("framework-core", "framework-monitor", "framework-job", "framework-tools");
+        assertThat(FrameworkModuleRegistry.defaultModules())
+                .extracting(FrameworkModuleRegistry.ModuleMarker::name)
+                .contains("framework-job", "framework-file");
         assertThat(JobHandler.class.getName()).isEqualTo("com.framework.job.service.JobHandler");
     }
 
