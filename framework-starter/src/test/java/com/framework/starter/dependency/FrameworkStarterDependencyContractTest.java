@@ -1,5 +1,6 @@
 package com.framework.starter.dependency;
 
+import com.framework.core.module.FrameworkModuleRegistry;
 import org.junit.jupiter.api.Test;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
@@ -16,33 +17,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class FrameworkStarterDependencyContractTest {
 
-    private static final List<String> DEFAULT_FRAMEWORK_MODULES = List.of(
-            "framework-core",
-            "framework-web",
-            "framework-auth",
-            "framework-security",
-            "framework-cache",
-            "framework-lock",
-            "framework-idempotent",
-            "framework-crypto",
-            "framework-log",
-            "framework-rate-limiter",
-            "framework-mq",
-            "framework-retry",
-            "framework-tools",
-            "framework-notify",
-            "framework-local-message",
-            "framework-excel",
-            "framework-datasource",
-            "framework-redis",
-            "framework-feign",
-            "framework-monitor",
-            "framework-file"
-    );
-
     @Test
     void defaultStarterAggregatesCommonModulesButKeepsXxlJobOptIn() throws Exception {
         Path root = projectRoot();
+        List<String> defaultStarterModules = defaultStarterModules(root);
 
         assertThat(moduleNames(root.resolve("pom.xml"))).contains("framework-job");
 
@@ -52,8 +30,17 @@ class FrameworkStarterDependencyContractTest {
                 .toList();
 
         assertThat(starterModules)
-                .containsExactlyElementsOf(DEFAULT_FRAMEWORK_MODULES)
+                .containsExactlyElementsOf(defaultStarterModules)
                 .doesNotContain("framework-job");
+    }
+
+    private static List<String> defaultStarterModules(Path root) throws Exception {
+        assertThat(root.resolve("framework-core/src/main/java/com/framework/core/module/FrameworkModuleRegistry.java"))
+                .exists();
+        return FrameworkModuleRegistry.defaultModules().stream()
+                .map(FrameworkModuleRegistry.ModuleMarker::name)
+                .filter(module -> !"framework-job".equals(module))
+                .toList();
     }
 
     private static List<Dependency> dependencies(Path pom) throws Exception {

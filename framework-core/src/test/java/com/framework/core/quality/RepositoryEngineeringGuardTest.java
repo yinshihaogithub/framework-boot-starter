@@ -1,5 +1,6 @@
 package com.framework.core.quality;
 
+import com.framework.core.module.FrameworkModuleRegistry;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -98,6 +99,37 @@ class RepositoryEngineeringGuardTest {
                     .as(module + " must be managed by the root dependencyManagement")
                     .contains(module);
         }
+    }
+
+    @Test
+    void rootFrameworkModulesStayAlignedWithRuntimeRegistryAndStarterBoundary() throws Exception {
+        List<String> rootFrameworkModules = modules().stream()
+                .filter(module -> module.startsWith("framework-"))
+                .toList();
+        List<String> runtimeRegistryModules = FrameworkModuleRegistry.defaultModules().stream()
+                .map(FrameworkModuleRegistry.ModuleMarker::name)
+                .toList();
+        List<String> expectedRootFrameworkModules = new ArrayList<>(runtimeRegistryModules);
+        expectedRootFrameworkModules.add("framework-starter");
+        List<String> starterDependencies = artifactIds(read(root.resolve("framework-starter/pom.xml"))).stream()
+                .filter(runtimeRegistryModules::contains)
+                .toList();
+
+        assertThat(rootFrameworkModules)
+                .as("root pom framework modules must equal runtime registry modules plus framework-starter")
+                .containsExactlyElementsOf(expectedRootFrameworkModules);
+        assertThat(rootFrameworkModules)
+                .as("framework-starter must remain the only framework reactor module outside runtime registry")
+                .contains("framework-starter");
+        assertThat(runtimeRegistryModules)
+                .as("runtime registry must keep framework-job explicit and exclude the starter aggregator")
+                .contains("framework-job")
+                .doesNotContain("framework-starter");
+        assertThat(starterDependencies)
+                .as("framework-starter should aggregate every default runtime framework module except framework-job")
+                .containsExactlyElementsOf(runtimeRegistryModules.stream()
+                        .filter(module -> !"framework-job".equals(module))
+                        .toList());
     }
 
     @Test
