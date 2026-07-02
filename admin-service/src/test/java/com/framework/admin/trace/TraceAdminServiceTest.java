@@ -625,6 +625,11 @@ class TraceAdminServiceTest {
             public int delete(String tableName, Long id) {
                 return 0;
             }
+
+            @Override
+            public int deleteByStatus(String tableName, LocalMessageStatus status) {
+                return 0;
+            }
         };
     }
 
@@ -679,6 +684,11 @@ class TraceAdminServiceTest {
 
             @Override
             public int delete(String tableName, Long id) {
+                return 0;
+            }
+
+            @Override
+            public int deleteByStatus(String tableName, LocalMessageStatus status) {
                 return 0;
             }
         };

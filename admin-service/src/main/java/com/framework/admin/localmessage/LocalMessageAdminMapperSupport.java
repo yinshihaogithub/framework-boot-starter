@@ -100,6 +100,10 @@ public final class LocalMessageAdminMapperSupport {
         return mapper.delete(tableName, id) > 0;
     }
 
+    public static int deleteByStatus(LocalMessageMapper mapper, String tableName, LocalMessageStatus status) {
+        return mapper.deleteByStatus(tableName, status);
+    }
+
     private static void touch(LocalMessage message) {
         LocalDateTime now = LocalDateTime.now();
         if (message.getCreateTime() == null) {

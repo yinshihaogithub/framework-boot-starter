@@ -41,11 +41,18 @@ class LocalMessageAdminControllerTest {
     @Test
     void writeEndpointsRequireBothViewAndRetryPermissions() throws NoSuchMethodException {
         assertLocalMessageWritePermission("retryDueMessages", HttpServletRequest.class);
+        assertLocalMessageWritePermission("batchRetry", LocalMessageAdminDTO.BatchActionRequest.class,
+                HttpServletRequest.class);
         assertLocalMessageWritePermission("retryNow", Long.class, HttpServletRequest.class);
         assertLocalMessageWritePermission("markSuccess", Long.class, HttpServletRequest.class);
-        assertLocalMessageWritePermission("markFailure", Long.class, LocalMessageAdminController.FailureRequest.class,
+        assertLocalMessageWritePermission("batchMarkSuccess", LocalMessageAdminDTO.BatchActionRequest.class,
+                HttpServletRequest.class);
+        assertLocalMessageWritePermission("markFailure", Long.class, LocalMessageAdminDTO.BatchFailureRequest.class,
+                HttpServletRequest.class);
+        assertLocalMessageWritePermission("batchMarkFailure", LocalMessageAdminDTO.BatchFailureRequest.class,
                 HttpServletRequest.class);
         assertLocalMessageWritePermission("delete", Long.class, HttpServletRequest.class);
+        assertLocalMessageWritePermission("cleanProcessed", HttpServletRequest.class);
     }
 
     @Test
@@ -57,7 +64,7 @@ class LocalMessageAdminControllerTest {
                 .setMaxRetry(3)
                 .setNextRetryTime(LocalDateTime.now().plusMinutes(5));
         mapper.save(message);
-        LocalMessageAdminController.FailureRequest request = new LocalMessageAdminController.FailureRequest();
+        LocalMessageAdminDTO.BatchFailureRequest request = new LocalMessageAdminDTO.BatchFailureRequest();
         request.setReason("\u00A0manual stop\u3000");
         LocalMessageAdminController controller = controller(mapper);
 
@@ -78,7 +85,7 @@ class LocalMessageAdminControllerTest {
                 .setStatus(LocalMessageStatus.PENDING)
                 .setRetryCount(1)
                 .setNextRetryTime(LocalDateTime.now().plusMinutes(5)));
-        LocalMessageAdminController.FailureRequest request = new LocalMessageAdminController.FailureRequest();
+        LocalMessageAdminDTO.BatchFailureRequest request = new LocalMessageAdminDTO.BatchFailureRequest();
         request.setReason("\u00A0\u3000");
         LocalMessageAdminController controller = controller(mapper);
 
@@ -167,7 +174,7 @@ class LocalMessageAdminControllerTest {
         assertThat(auditService.action).isEqualTo("人工标记本地消息成功");
         assertThat(auditService.params).containsEntry("operator", "alice");
 
-        LocalMessageAdminController.FailureRequest request = new LocalMessageAdminController.FailureRequest();
+        LocalMessageAdminDTO.BatchFailureRequest request = new LocalMessageAdminDTO.BatchFailureRequest();
         request.setReason("manual stop");
         Result<String> failureResult = controller.markFailure(23L, request, null);
         assertThat(failureResult.isSuccess()).isTrue();
@@ -326,7 +333,7 @@ class LocalMessageAdminControllerTest {
                 .setStatus(LocalMessageStatus.PENDING)
                 .setRetryCount(1));
         mapper.updateAffected = false;
-        LocalMessageAdminController.FailureRequest request = new LocalMessageAdminController.FailureRequest();
+        LocalMessageAdminDTO.BatchFailureRequest request = new LocalMessageAdminDTO.BatchFailureRequest();
         request.setReason("manual stop");
         LocalMessageAdminController controller = controller(mapper);
 
@@ -350,7 +357,7 @@ class LocalMessageAdminControllerTest {
                 .setErrorMessage("old error")
                 .setNextRetryTime(nextRetryTime));
         mapper.failOnSave = true;
-        LocalMessageAdminController.FailureRequest request = new LocalMessageAdminController.FailureRequest();
+        LocalMessageAdminDTO.BatchFailureRequest request = new LocalMessageAdminDTO.BatchFailureRequest();
         request.setReason("manual stop");
         LocalMessageAdminController controller = controller(mapper);
 
@@ -408,13 +415,37 @@ class LocalMessageAdminControllerTest {
     @Test
     void idEndpointsRejectInvalidIdBeforeProviderLookup() {
         LocalMessageAdminController controller = failingController();
-        LocalMessageAdminController.FailureRequest failureRequest = new LocalMessageAdminController.FailureRequest();
+        LocalMessageAdminDTO.BatchFailureRequest failureRequest = new LocalMessageAdminDTO.BatchFailureRequest();
 
         assertInvalidId(controller.detail(0L));
         assertInvalidId(controller.retryNow(0L, null));
         assertInvalidId(controller.markSuccess(0L, null));
         assertInvalidId(controller.markFailure(0L, failureRequest, null));
         assertInvalidId(controller.delete(0L, null));
+    }
+
+    @Test
+    void batchEndpointsRejectEmptyOrInvalidIdsBeforeProviderLookup() {
+        LocalMessageAdminController controller = failingController();
+        LocalMessageAdminDTO.BatchActionRequest emptyRequest = new LocalMessageAdminDTO.BatchActionRequest();
+        LocalMessageAdminDTO.BatchActionRequest invalidRequest = new LocalMessageAdminDTO.BatchActionRequest();
+        invalidRequest.setIds(List.of(1L, 0L));
+        LocalMessageAdminDTO.BatchFailureRequest invalidFailureRequest = new LocalMessageAdminDTO.BatchFailureRequest();
+        invalidFailureRequest.setIds(List.of(0L));
+
+        Result<LocalMessageAdminDTO.BatchActionResult> emptyRetry = controller.batchRetry(emptyRequest, null);
+        Result<LocalMessageAdminDTO.BatchActionResult> invalidRetry = controller.batchRetry(invalidRequest, null);
+        Result<LocalMessageAdminDTO.BatchActionResult> invalidSuccess = controller.batchMarkSuccess(invalidRequest, null);
+        Result<LocalMessageAdminDTO.BatchActionResult> invalidFailure =
+                controller.batchMarkFailure(invalidFailureRequest, null);
+
+        assertThat(emptyRetry.isSuccess()).isFalse();
+        assertThat(emptyRetry.getCode()).isEqualTo(ResultCode.PARAM_ERROR.getCode());
+        assertThat(emptyRetry.getMessage()).isEqualTo("请选择要处理的消息");
+        assertThat(invalidRetry.getCode()).isEqualTo(ResultCode.PARAM_ERROR.getCode());
+        assertThat(invalidRetry.getMessage()).isEqualTo("本地消息ID必须大于0");
+        assertThat(invalidSuccess.getCode()).isEqualTo(ResultCode.PARAM_ERROR.getCode());
+        assertThat(invalidFailure.getCode()).isEqualTo(ResultCode.PARAM_ERROR.getCode());
     }
 
     @Test
@@ -453,7 +484,7 @@ class LocalMessageAdminControllerTest {
 
         Result<String> retry = controller.retryNow(1L, null);
         Result<String> success = controller.markSuccess(1L, null);
-        LocalMessageAdminController.FailureRequest failureRequest = new LocalMessageAdminController.FailureRequest();
+        LocalMessageAdminDTO.BatchFailureRequest failureRequest = new LocalMessageAdminDTO.BatchFailureRequest();
         Result<String> failure = controller.markFailure(1L, failureRequest, null);
         Result<String> delete = controller.delete(1L, null);
 
@@ -463,6 +494,140 @@ class LocalMessageAdminControllerTest {
         assertThat(success.getCode()).isEqualTo(ResultCode.SERVICE_ERROR.getCode());
         assertThat(failure.getCode()).isEqualTo(ResultCode.SERVICE_ERROR.getCode());
         assertThat(delete.getCode()).isEqualTo(ResultCode.SERVICE_ERROR.getCode());
+    }
+
+    @Test
+    void batchEndpointsReportServiceErrorWhenMapperProviderFails() {
+        LocalMessageAdminController controller = failingController();
+        LocalMessageAdminDTO.BatchActionRequest request = new LocalMessageAdminDTO.BatchActionRequest();
+        request.setIds(List.of(1L));
+        LocalMessageAdminDTO.BatchFailureRequest failureRequest = new LocalMessageAdminDTO.BatchFailureRequest();
+        failureRequest.setIds(List.of(1L));
+        Result<LocalMessageAdminDTO.BatchActionResult> retry = controller.batchRetry(request, null);
+        Result<LocalMessageAdminDTO.BatchActionResult> success = controller.batchMarkSuccess(request, null);
+        Result<LocalMessageAdminDTO.BatchActionResult> failure = controller.batchMarkFailure(failureRequest, null);
+        Result<String> clean = controller.cleanProcessed(null);
+
+        assertThat(retry.isSuccess()).isFalse();
+        assertThat(retry.getCode()).isEqualTo(ResultCode.SERVICE_ERROR.getCode());
+        assertThat(retry.getMessage()).isEqualTo("本地消息表未启用");
+        assertThat(success.getCode()).isEqualTo(ResultCode.SERVICE_ERROR.getCode());
+        assertThat(failure.getCode()).isEqualTo(ResultCode.SERVICE_ERROR.getCode());
+        assertThat(clean.getCode()).isEqualTo(ResultCode.SERVICE_ERROR.getCode());
+    }
+
+    @Test
+    void batchRetryDeduplicatesIdsAndReportsFailures() {
+        UserContextHolder.set(new LoginUser().setUserId(8L).setUsername("batch-user"));
+        FakeLocalMessageMapper mapper = new FakeLocalMessageMapper();
+        mapper.save(localMessage(31L)
+                .setStatus(LocalMessageStatus.FAILED)
+                .setRetryCount(3)
+                .setErrorMessage("timeout")
+                .setNextRetryTime(null));
+        mapper.save(localMessage(32L)
+                .setStatus(LocalMessageStatus.FAILED)
+                .setRetryCount(1)
+                .setErrorMessage("handler missing")
+                .setNextRetryTime(null));
+        mapper.updateFailures.add(32L);
+        RecordingAuditService auditService = new RecordingAuditService();
+        LocalMessageAdminController controller = controller(mapper, auditService);
+        LocalMessageAdminDTO.BatchActionRequest request = new LocalMessageAdminDTO.BatchActionRequest();
+        request.setIds(List.of(31L, 31L, 32L, 404L));
+
+        Result<LocalMessageAdminDTO.BatchActionResult> result = controller.batchRetry(request, null);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getData().getTotal()).isEqualTo(3);
+        assertThat(result.getData().getSuccess()).isEqualTo(1);
+        assertThat(result.getData().getFailed()).isEqualTo(2);
+        assertThat(result.getData().getFailedMessages()).containsExactly("32: 消息不存在", "404: 消息不存在");
+        LocalMessage retried = mapper.findById(31L).orElseThrow();
+        assertThat(retried.getStatus()).isEqualTo(LocalMessageStatus.PENDING);
+        assertThat(retried.getRetryCount()).isZero();
+        assertThat(retried.getErrorMessage()).isNull();
+        assertThat(retried.getOperator()).isEqualTo("batch-user");
+        assertThat(auditService.action).isEqualTo("批量立即重试本地消息");
+        assertThat(auditService.params).containsEntry("operator", "batch-user");
+        assertThat(auditService.params).containsEntry("success", 1);
+        assertThat(auditService.params).containsEntry("failed", 2);
+    }
+
+    @Test
+    void batchMarkFailureUsesDefaultReasonAndCurrentOperator() {
+        UserContextHolder.set(new LoginUser().setUserId(9L).setUsername("operator-a"));
+        FakeLocalMessageMapper mapper = new FakeLocalMessageMapper();
+        mapper.save(localMessage(41L)
+                .setStatus(LocalMessageStatus.PENDING)
+                .setRetryCount(2)
+                .setNextRetryTime(LocalDateTime.now().plusMinutes(5)));
+        mapper.save(localMessage(42L)
+                .setStatus(LocalMessageStatus.PROCESSING)
+                .setRetryCount(1)
+                .setNextRetryTime(LocalDateTime.now().plusMinutes(2)));
+        RecordingAuditService auditService = new RecordingAuditService();
+        LocalMessageAdminController controller = controller(mapper, auditService);
+        LocalMessageAdminDTO.BatchFailureRequest request = new LocalMessageAdminDTO.BatchFailureRequest();
+        request.setIds(List.of(41L, 42L));
+        request.setReason("\u00A0\u3000");
+
+        Result<LocalMessageAdminDTO.BatchActionResult> result = controller.batchMarkFailure(request, null);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getData().getSuccess()).isEqualTo(2);
+        assertThat(result.getData().getFailed()).isZero();
+        assertThat(mapper.findById(41L).orElseThrow().getErrorMessage()).isEqualTo("manual terminate");
+        assertThat(mapper.findById(42L).orElseThrow().getErrorMessage()).isEqualTo("manual terminate");
+        assertThat(mapper.findById(41L).orElseThrow().getOperator()).isEqualTo("operator-a");
+        assertThat(auditService.action).isEqualTo("批量标记本地消息失败");
+        assertThat(auditService.params).containsEntry("reason", "manual terminate");
+    }
+
+    @Test
+    void batchMarkSuccessSucceedsWhenAuditServiceFails() {
+        FakeLocalMessageMapper mapper = new FakeLocalMessageMapper();
+        mapper.save(localMessage(51L)
+                .setStatus(LocalMessageStatus.PENDING)
+                .setRetryCount(2)
+                .setErrorMessage("old error")
+                .setNextRetryTime(LocalDateTime.now().plusMinutes(5)));
+        mapper.save(localMessage(52L)
+                .setStatus(LocalMessageStatus.FAILED)
+                .setRetryCount(3)
+                .setErrorMessage("handler missing"));
+        LocalMessageAdminController controller = controller(mapper, new ThrowingAuditService());
+        LocalMessageAdminDTO.BatchActionRequest request = new LocalMessageAdminDTO.BatchActionRequest();
+        request.setIds(List.of(51L, 52L));
+
+        Result<LocalMessageAdminDTO.BatchActionResult> result = controller.batchMarkSuccess(request, null);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getData().getSuccess()).isEqualTo(2);
+        assertThat(mapper.findById(51L).orElseThrow().getStatus()).isEqualTo(LocalMessageStatus.SUCCESS);
+        assertThat(mapper.findById(52L).orElseThrow().getErrorMessage()).isNull();
+    }
+
+    @Test
+    void cleanProcessedDeletesOnlySuccessMessages() {
+        UserContextHolder.set(new LoginUser().setUserId(10L).setUsername("cleaner"));
+        FakeLocalMessageMapper mapper = new FakeLocalMessageMapper();
+        mapper.save(localMessage(61L).setStatus(LocalMessageStatus.SUCCESS));
+        mapper.save(localMessage(62L).setStatus(LocalMessageStatus.SUCCESS));
+        mapper.save(localMessage(63L).setStatus(LocalMessageStatus.FAILED));
+        RecordingAuditService auditService = new RecordingAuditService();
+        LocalMessageAdminController controller = controller(mapper, auditService);
+
+        Result<String> result = controller.cleanProcessed(null);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getData()).isEqualTo("已清理 2 条记录");
+        assertThat(mapper.findById(61L)).isEmpty();
+        assertThat(mapper.findById(62L)).isEmpty();
+        assertThat(mapper.findById(63L)).isPresent();
+        assertThat(auditService.action).isEqualTo("清理本地消息成功记录");
+        assertThat(auditService.params).containsEntry("status", "SUCCESS");
+        assertThat(auditService.params).containsEntry("cleaned", 2);
     }
 
     @Test
@@ -774,6 +939,7 @@ class LocalMessageAdminControllerTest {
 
     private static class FakeLocalMessageMapper implements LocalMessageMapper {
         private final Map<Long, LocalMessage> messages = new LinkedHashMap<>();
+        private final java.util.Set<Long> updateFailures = new java.util.LinkedHashSet<>();
         private boolean failOnSave;
         private boolean updateAffected = true;
         private boolean deleteAffected = true;
@@ -789,6 +955,9 @@ class LocalMessageAdminControllerTest {
         public boolean update(LocalMessage message) {
             if (failOnSave) {
                 throw new IllegalStateException("save failed");
+            }
+            if (updateFailures.contains(message.getId())) {
+                return false;
             }
             if (!updateAffected) {
                 return false;
@@ -810,6 +979,15 @@ class LocalMessageAdminControllerTest {
                 return false;
             }
             return messages.remove(id) != null;
+        }
+
+        public int deleteByStatus(LocalMessageStatus status) {
+            List<Long> ids = messages.values().stream()
+                    .filter(message -> status == message.getStatus())
+                    .map(LocalMessage::getId)
+                    .toList();
+            ids.forEach(messages::remove);
+            return ids.size();
         }
 
         @Override
@@ -889,6 +1067,11 @@ class LocalMessageAdminControllerTest {
         @Override
         public int delete(String tableName, Long id) {
             return delete(id) ? 1 : 0;
+        }
+
+        @Override
+        public int deleteByStatus(String tableName, LocalMessageStatus status) {
+            return deleteByStatus(status);
         }
 
         private boolean matches(LocalMessage message,

@@ -605,6 +605,13 @@
         </section>
 
         <section v-if="activeView === 'local'" class="view">
+          <div class="metrics compact">
+            <div class="metric"><span>待处理</span><strong>{{ metric(localStats, 'PENDING') }}</strong></div>
+            <div class="metric"><span>处理中</span><strong>{{ metric(localStats, 'PROCESSING') }}</strong></div>
+            <div class="metric"><span>成功</span><strong>{{ metric(localStats, 'SUCCESS') }}</strong></div>
+            <div class="metric"><span>失败</span><strong>{{ metric(localStats, 'FAILED') }}</strong></div>
+            <div class="metric"><span>总量</span><strong>{{ metric(localStats, 'TOTAL') }}</strong></div>
+          </div>
           <el-card shadow="never">
             <template #header>
               <div class="section-head">
@@ -621,10 +628,39 @@
                   <el-input v-model="localQuery.traceId" clearable placeholder="Trace ID" class="filter" />
                   <el-button :icon="Search" circle type="primary" @click="loadLocal" />
                   <el-button v-if="can('local-message:retry')" :icon="RefreshRight" circle @click="retryLocal" />
+                  <el-button
+                    v-if="can('local-message:retry')"
+                    :icon="RefreshRight"
+                    circle
+                    :disabled="selectedLocalMessageIds.length === 0"
+                    @click="batchRetryLocal"
+                  />
+                  <el-button
+                    v-if="can('local-message:retry')"
+                    :icon="Check"
+                    circle
+                    :disabled="selectedLocalMessageIds.length === 0"
+                    @click="batchMarkLocalSuccess"
+                  />
+                  <el-button
+                    v-if="can('local-message:retry')"
+                    :icon="Close"
+                    circle
+                    :disabled="selectedLocalMessageIds.length === 0"
+                    @click="batchMarkLocalFailure"
+                  />
+                  <el-button
+                    v-if="can('local-message:retry')"
+                    :icon="Delete"
+                    circle
+                    :disabled="metric(localStats, 'SUCCESS') === 0"
+                    @click="cleanLocal"
+                  />
                 </div>
               </div>
             </template>
-            <el-table :data="localMessages.records" height="500" stripe>
+            <el-table :data="localMessages.records" height="500" stripe @selection-change="handleLocalSelectionChange">
+              <el-table-column type="selection" width="44" />
               <el-table-column prop="id" label="ID" width="86" />
               <el-table-column prop="status" label="状态" width="126">
                 <template #default="{ row }"><el-tag :type="localStatusType(row.status)" size="small">{{ row.status }}</el-tag></template>
@@ -653,7 +689,7 @@
                   <el-button v-if="can('local-message:retry')" :icon="Check" circle size="small" @click="markLocalSuccess(row)" />
                   <el-button v-if="can('local-message:retry')" :icon="Close" circle size="small" @click="markLocalFailure(row)" />
                   <el-button v-if="can('local-message:retry')" :icon="Delete" circle size="small" @click="deleteLocal(row)" />
-                  <el-button :icon="View" circle size="small" @click="openDetail(row)" />
+                  <el-button :icon="View" circle size="small" @click="openLocalDetail(row.id)" />
                 </template>
               </el-table-column>
             </el-table>
@@ -1427,6 +1463,7 @@ import {
   isAuthExpiredError,
   setToken,
   trimBoundarySpace,
+  type BatchActionResult,
   trimToUndefined,
   type ApiError,
   type AdminUser,
@@ -1586,7 +1623,9 @@ const mqStats = ref<MqStats>()
 const mqQueues = ref<MqQueueInfo[]>([])
 const mqMessages = reactive<PageResult<MqFailedMessage>>({ records: [], total: 0, pageNum: 1, pageSize: 20, pages: 0 })
 const selectedMqMessageIds = ref<number[]>([])
+const localStats = ref<Record<string, number>>({})
 const localMessages = reactive<PageResult<LocalMessage>>({ records: [], total: 0, pageNum: 1, pageSize: 20, pages: 0 })
+const selectedLocalMessageIds = ref<number[]>([])
 const notifyStats = ref<Record<string, number>>({})
 const notifyTemplates = reactive<PageResult<NotifyTemplate>>({ records: [], total: 0, pageNum: 1, pageSize: 20, pages: 0 })
 const notifyRecords = reactive<PageResult<NotifyRecord>>({ records: [], total: 0, pageNum: 1, pageSize: 20, pages: 0 })
@@ -2033,7 +2072,11 @@ async function loadMq() {
 }
 
 async function loadLocal() {
-  const page = await api.localMessages(localQuery)
+  const [stats, page] = await Promise.all([
+    api.localMessageStats(),
+    api.localMessages(localQuery)
+  ])
+  localStats.value = stats
   Object.assign(localMessages, page)
 }
 
@@ -2428,6 +2471,10 @@ function handleMqSelectionChange(rows: MqFailedMessage[]) {
   selectedMqMessageIds.value = rows.map((row) => row.id)
 }
 
+function handleLocalSelectionChange(rows: LocalMessage[]) {
+  selectedLocalMessageIds.value = rows.map((row) => row.id)
+}
+
 async function batchRetryMq() {
   if (selectedMqMessageIds.value.length === 0) {
     ElMessage.warning('请选择要重发的消息')
@@ -2491,6 +2538,18 @@ async function retryLocal() {
   await loadLocal()
 }
 
+async function batchRetryLocal() {
+  if (selectedLocalMessageIds.value.length === 0) {
+    ElMessage.warning('请选择要处理的消息')
+    return
+  }
+  await confirmAction(`批量重试 ${selectedLocalMessageIds.value.length} 条本地消息？`, '确认批量重试')
+  const result = await api.batchRetryLocalMessages(selectedLocalMessageIds.value)
+  showBatchActionResult(result, '已提交')
+  selectedLocalMessageIds.value = []
+  await loadLocal()
+}
+
 async function retryLocalMessage(row: LocalMessage) {
   await confirmAction(`立即重试本地消息 ${row.messageId || row.id}？`, '确认重试')
   const message = await api.retryLocalMessage(row.id)
@@ -2498,10 +2557,34 @@ async function retryLocalMessage(row: LocalMessage) {
   await loadLocal()
 }
 
+async function batchMarkLocalSuccess() {
+  if (selectedLocalMessageIds.value.length === 0) {
+    ElMessage.warning('请选择要处理的消息')
+    return
+  }
+  await confirmAction(`批量标记 ${selectedLocalMessageIds.value.length} 条本地消息为成功？`, '确认批量标记')
+  const result = await api.batchMarkLocalMessagesSuccess(selectedLocalMessageIds.value)
+  showBatchActionResult(result, '已处理')
+  selectedLocalMessageIds.value = []
+  await loadLocal()
+}
+
 async function markLocalSuccess(row: LocalMessage) {
   await confirmAction(`标记本地消息 ${row.messageId || row.id} 为成功？`, '确认标记')
   const message = await api.markLocalMessageSuccess(row.id)
   ElMessage.success(message)
+  await loadLocal()
+}
+
+async function batchMarkLocalFailure() {
+  if (selectedLocalMessageIds.value.length === 0) {
+    ElMessage.warning('请选择要处理的消息')
+    return
+  }
+  const reason = await promptRemark(`批量标记 ${selectedLocalMessageIds.value.length} 条本地消息为失败`)
+  const result = await api.batchMarkLocalMessagesFailure(selectedLocalMessageIds.value, reason)
+  showBatchActionResult(result, '已处理')
+  selectedLocalMessageIds.value = []
   await loadLocal()
 }
 
@@ -2515,6 +2598,18 @@ async function markLocalFailure(row: LocalMessage) {
 async function deleteLocal(row: LocalMessage) {
   await confirmDelete(`删除本地消息 ${row.messageId || row.id}？`)
   const message = await api.deleteLocalMessage(row.id)
+  ElMessage.success(message)
+  await loadLocal()
+}
+
+async function openLocalDetail(id: number) {
+  const message = await api.localMessage(id)
+  openDetail(message)
+}
+
+async function cleanLocal() {
+  await confirmDelete('清理所有已成功的本地消息记录？')
+  const message = await api.cleanLocalProcessed()
   ElMessage.success(message)
   await loadLocal()
 }
@@ -2960,6 +3055,17 @@ async function promptRemark(title: string) {
     cancelButtonText: '取消'
   })
   return trimBoundarySpace(String(result.value || ''))
+}
+
+function showBatchActionResult(result: BatchActionResult, prefix: string) {
+  const summary = result.failed > 0
+    ? `${prefix} ${result.total} 条，成功 ${result.success} 条，失败 ${result.failed} 条`
+    : `${prefix} ${result.total} 条，成功 ${result.success} 条`
+  if (result.failed > 0) {
+    ElMessage.warning(summary)
+    return
+  }
+  ElMessage.success(summary)
 }
 
 function mqStatusType(status?: string) {

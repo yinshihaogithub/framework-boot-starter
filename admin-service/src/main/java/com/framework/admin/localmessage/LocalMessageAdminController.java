@@ -6,7 +6,6 @@ import com.framework.security.annotation.RequirePermission;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
-import lombok.Data;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -63,6 +62,15 @@ public class LocalMessageAdminController {
         return toResult(localMessageAdminService.retryDueMessages(servletRequest));
     }
 
+    @Operation(summary = "批量立即重试本地消息")
+    @PostMapping("/batch-retry")
+    @RequirePermission(value = {"local-message:view", "local-message:retry"}, logicalAnd = true)
+    public Result<LocalMessageAdminDTO.BatchActionResult> batchRetry(
+            @RequestBody(required = false) LocalMessageAdminDTO.BatchActionRequest request,
+            HttpServletRequest servletRequest) {
+        return toResult(localMessageAdminService.batchRetry(request, servletRequest));
+    }
+
     @Operation(summary = "立即重试本地消息")
     @PostMapping("/{id}/retry")
     @RequirePermission(value = {"local-message:view", "local-message:retry"}, logicalAnd = true)
@@ -77,14 +85,32 @@ public class LocalMessageAdminController {
         return toResult(localMessageAdminService.markSuccess(id, servletRequest));
     }
 
+    @Operation(summary = "批量标记本地消息成功")
+    @PostMapping("/batch-success")
+    @RequirePermission(value = {"local-message:view", "local-message:retry"}, logicalAnd = true)
+    public Result<LocalMessageAdminDTO.BatchActionResult> batchMarkSuccess(
+            @RequestBody(required = false) LocalMessageAdminDTO.BatchActionRequest request,
+            HttpServletRequest servletRequest) {
+        return toResult(localMessageAdminService.batchMarkSuccess(request, servletRequest));
+    }
+
     @Operation(summary = "标记失败")
     @PostMapping("/{id}/failure")
     @RequirePermission(value = {"local-message:view", "local-message:retry"}, logicalAnd = true)
     public Result<String> markFailure(@PathVariable Long id,
-                                      @RequestBody(required = false) FailureRequest request,
+                                      @RequestBody(required = false) LocalMessageAdminDTO.BatchFailureRequest request,
                                       HttpServletRequest servletRequest) {
         String reason = request == null ? null : request.getReason();
         return toResult(localMessageAdminService.markFailure(id, reason, servletRequest));
+    }
+
+    @Operation(summary = "批量标记本地消息失败")
+    @PostMapping("/batch-failure")
+    @RequirePermission(value = {"local-message:view", "local-message:retry"}, logicalAnd = true)
+    public Result<LocalMessageAdminDTO.BatchActionResult> batchMarkFailure(
+            @RequestBody(required = false) LocalMessageAdminDTO.BatchFailureRequest request,
+            HttpServletRequest servletRequest) {
+        return toResult(localMessageAdminService.batchMarkFailure(request, servletRequest));
     }
 
     @Operation(summary = "删除本地消息")
@@ -94,12 +120,14 @@ public class LocalMessageAdminController {
         return toResult(localMessageAdminService.delete(id, servletRequest));
     }
 
-    private <T> Result<T> toResult(LocalMessageAdminService.ActionResult<T> result) {
-        return result.success() ? Result.success(result.data()) : Result.fail(result.code(), result.message());
+    @Operation(summary = "清理本地消息成功记录")
+    @DeleteMapping("/clean")
+    @RequirePermission(value = {"local-message:view", "local-message:retry"}, logicalAnd = true)
+    public Result<String> cleanProcessed(HttpServletRequest servletRequest) {
+        return toResult(localMessageAdminService.cleanProcessed(servletRequest));
     }
 
-    @Data
-    public static class FailureRequest {
-        private String reason;
+    private <T> Result<T> toResult(LocalMessageAdminService.ActionResult<T> result) {
+        return result.success() ? Result.success(result.data()) : Result.fail(result.code(), result.message());
     }
 }

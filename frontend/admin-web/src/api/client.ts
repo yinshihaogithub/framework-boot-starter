@@ -112,6 +112,13 @@ export interface ManualRetryResult {
   failedMessages: string[]
 }
 
+export interface BatchActionResult {
+  total: number
+  success: number
+  failed: number
+  failedMessages: string[]
+}
+
 export interface LocalMessage {
   id: number
   messageId: string
@@ -606,14 +613,23 @@ export const api = {
   deleteMqMessage: (id: number) => deleteData<string>(`/admin/mq/failed-messages/${id}`),
   cleanMqProcessed: () => deleteData<string>('/admin/mq/failed-messages/clean'),
   mqQueues: () => getData<MqQueueInfo[]>('/admin/mq/queues'),
+  localMessageStats: () => getData<Record<string, number>>('/admin/local-messages/stats'),
   localMessages: (params: Record<string, unknown>) =>
     getData<PageResult<LocalMessage>>('/admin/local-messages', params),
+  localMessage: (id: number) => getData<LocalMessage>(`/admin/local-messages/${id}`),
   retryDueLocalMessages: () => postData<number>('/admin/local-messages/retry-due'),
+  batchRetryLocalMessages: (ids: number[]) =>
+    postData<BatchActionResult>('/admin/local-messages/batch-retry', { ids }),
   retryLocalMessage: (id: number) => postData<string>(`/admin/local-messages/${id}/retry`),
+  batchMarkLocalMessagesSuccess: (ids: number[]) =>
+    postData<BatchActionResult>('/admin/local-messages/batch-success', { ids }),
   markLocalMessageSuccess: (id: number) => postData<string>(`/admin/local-messages/${id}/success`),
+  batchMarkLocalMessagesFailure: (ids: number[], reason: string) =>
+    postData<BatchActionResult>('/admin/local-messages/batch-failure', { ids, reason }),
   markLocalMessageFailure: (id: number, reason: string) =>
     postData<string>(`/admin/local-messages/${id}/failure`, { reason }),
   deleteLocalMessage: (id: number) => deleteData<string>(`/admin/local-messages/${id}`),
+  cleanLocalProcessed: () => deleteData<string>('/admin/local-messages/clean'),
   logs: (params: Record<string, unknown>) => getData<PageResult<OperationLog>>('/admin/logs', params),
   loginLogs: (params: Record<string, unknown>) => getData<PageResult<LoginLog>>('/admin/logs/login', params),
   sessions: (params: Record<string, unknown>) => getData<PageResult<OnlineSession>>('/admin/sessions', params),

@@ -18,9 +18,12 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 @Slf4j
 @Service
@@ -259,6 +262,48 @@ public class LocalMessageAdminService {
         }
     }
 
+    public ActionResult<LocalMessageAdminDTO.BatchActionResult> batchRetry(LocalMessageAdminDTO.BatchActionRequest request,
+                                                                           HttpServletRequest servletRequest) {
+        List<Long> ids = request == null ? null : request.getIds();
+        return batchUpdate(ids, servletRequest, "批量立即重试本地消息",
+                (message, operator) -> retryMessage(message, operator));
+    }
+
+    public ActionResult<LocalMessageAdminDTO.BatchActionResult> batchMarkSuccess(
+            LocalMessageAdminDTO.BatchActionRequest request,
+            HttpServletRequest servletRequest) {
+        List<Long> ids = request == null ? null : request.getIds();
+        return batchUpdate(ids, servletRequest, "批量标记本地消息成功",
+                (message, operator) -> successMessage(message, operator));
+    }
+
+    public ActionResult<LocalMessageAdminDTO.BatchActionResult> batchMarkFailure(
+            LocalMessageAdminDTO.BatchFailureRequest request,
+            HttpServletRequest servletRequest) {
+        List<Long> ids = request == null ? null : request.getIds();
+        String reason = defaultFailureReason(request == null ? null : request.getReason());
+        return batchUpdate(ids, servletRequest, "批量标记本地消息失败",
+                (message, operator) -> failedMessage(message, operator, reason),
+                "reason", reason);
+    }
+
+    public ActionResult<String> cleanProcessed(HttpServletRequest servletRequest) {
+        LocalMessageMapper mapper = available(mapperProvider);
+        String tableName = tableName();
+        if (mapper == null || tableName == null) {
+            return ActionResult.fail(ResultCode.SERVICE_ERROR, "本地消息表未启用");
+        }
+        try {
+            String operator = operator();
+            int cleaned = LocalMessageAdminMapperSupport.deleteByStatus(mapper, tableName, LocalMessageStatus.SUCCESS);
+            auditSuccess(servletRequest, "清理本地消息成功记录", "DELETE",
+                    "operator", operator, "status", LocalMessageStatus.SUCCESS.name(), "cleaned", cleaned);
+            return ActionResult.success("已清理 " + cleaned + " 条记录");
+        } catch (Exception ignored) {
+            return ActionResult.fail(ResultCode.SERVICE_ERROR, "本地消息清理失败");
+        }
+    }
+
     private boolean isBlank(String value) {
         return !AdminTextSupport.hasText(value);
     }
@@ -300,6 +345,118 @@ public class LocalMessageAdminService {
     private Map<String, Long> zero(Map<String, Long> stats) {
         stats.replaceAll((key, value) -> 0L);
         return stats;
+    }
+
+    private ActionResult<LocalMessageAdminDTO.BatchActionResult> batchUpdate(List<Long> ids,
+                                                                             HttpServletRequest servletRequest,
+                                                                             String action,
+                                                                             BatchUpdater updater,
+                                                                             Object... extraAuditParams) {
+        if (ids == null || ids.isEmpty()) {
+            return ActionResult.fail(ResultCode.PARAM_ERROR, "请选择要处理的消息");
+        }
+        if (hasInvalidId(ids)) {
+            return ActionResult.fail(ResultCode.PARAM_ERROR, "本地消息ID必须大于0");
+        }
+        LocalMessageMapper mapper = available(mapperProvider);
+        String tableName = tableName();
+        if (mapper == null || tableName == null) {
+            return ActionResult.fail(ResultCode.SERVICE_ERROR, "本地消息表未启用");
+        }
+        List<Long> distinctIds = distinctIds(ids);
+        String operator = operator();
+        List<String> failedMessages = new ArrayList<>();
+        int success = 0;
+        for (Long id : distinctIds) {
+            try {
+                LocalMessage message = LocalMessageAdminMapperSupport.findById(mapper, tableName, id).orElse(null);
+                if (message == null) {
+                    failedMessages.add(id + ": 消息不存在");
+                    continue;
+                }
+                LocalMessage updated = updater.apply(message, operator);
+                if (!LocalMessageAdminMapperSupport.update(mapper, tableName, updated)) {
+                    failedMessages.add(id + ": 消息不存在");
+                    continue;
+                }
+                success++;
+            } catch (RuntimeException e) {
+                failedMessages.add(id + ": " + defaultFailureDetail(e));
+            }
+        }
+        LocalMessageAdminDTO.BatchActionResult result = new LocalMessageAdminDTO.BatchActionResult()
+                .setTotal(distinctIds.size())
+                .setSuccess(success)
+                .setFailed(distinctIds.size() - success)
+                .setFailedMessages(failedMessages);
+        Object[] auditParams = new Object[] {
+                "ids", distinctIds,
+                "operator", operator,
+                "success", result.getSuccess(),
+                "failed", result.getFailed(),
+                "failedMessages", failedMessages
+        };
+        auditSuccess(servletRequest, action, "UPDATE", mergeAuditParams(auditParams, extraAuditParams));
+        return ActionResult.success(result);
+    }
+
+    private Object[] mergeAuditParams(Object[] base, Object... extra) {
+        if (extra == null || extra.length == 0) {
+            return base;
+        }
+        Object[] merged = new Object[base.length + extra.length];
+        System.arraycopy(base, 0, merged, 0, base.length);
+        System.arraycopy(extra, 0, merged, base.length, extra.length);
+        return merged;
+    }
+
+    private LocalMessage retryMessage(LocalMessage message, String operator) {
+        LocalMessage updated = copyForUpdate(message);
+        updated.setStatus(LocalMessageStatus.PENDING);
+        updated.setRetryCount(0);
+        updated.setErrorMessage(null);
+        updated.setNextRetryTime(LocalDateTime.now());
+        updated.setOperator(operator);
+        return updated;
+    }
+
+    private LocalMessage successMessage(LocalMessage message, String operator) {
+        LocalMessage updated = copyForUpdate(message);
+        updated.setStatus(LocalMessageStatus.SUCCESS);
+        updated.setRetryCount(0);
+        updated.setErrorMessage(null);
+        updated.setNextRetryTime(null);
+        updated.setOperator(operator);
+        return updated;
+    }
+
+    private LocalMessage failedMessage(LocalMessage message, String operator, String reason) {
+        LocalMessage updated = copyForUpdate(message);
+        updated.setStatus(LocalMessageStatus.FAILED);
+        updated.setRetryCount(0);
+        updated.setErrorMessage(reason);
+        updated.setNextRetryTime(null);
+        updated.setOperator(operator);
+        return updated;
+    }
+
+    private String defaultFailureReason(String reason) {
+        String safeReason = trimToNull(reason);
+        return safeReason == null ? "manual terminate" : safeReason;
+    }
+
+    private String defaultFailureDetail(Exception exception) {
+        String message = trimToNull(exception == null ? null : exception.getMessage());
+        return message == null ? "操作失败" : message;
+    }
+
+    private boolean hasInvalidId(List<Long> ids) {
+        return ids.stream().anyMatch(id -> id == null || id <= 0);
+    }
+
+    private List<Long> distinctIds(List<Long> ids) {
+        Set<Long> distinct = new LinkedHashSet<>(ids);
+        return List.copyOf(distinct);
     }
 
     private LocalMessage copyForUpdate(LocalMessage message) {
@@ -372,5 +529,10 @@ public class LocalMessageAdminService {
         public static <T> ActionResult<T> fail(ResultCode code, String message) {
             return new ActionResult<>(false, code.getCode(), message, null);
         }
+    }
+
+    @FunctionalInterface
+    private interface BatchUpdater {
+        LocalMessage apply(LocalMessage message, String operator);
     }
 }

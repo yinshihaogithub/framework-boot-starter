@@ -201,4 +201,8 @@ public interface LocalMessageMapper {
 
     @Delete("DELETE FROM ${tableName} WHERE id = #{id}")
     int delete(@Param("tableName") String tableName, @Param("id") Long id);
+
+    @Delete("DELETE FROM ${tableName} WHERE status = #{status}")
+    int deleteByStatus(@Param("tableName") String tableName,
+                       @Param("status") LocalMessageStatus status);
 }

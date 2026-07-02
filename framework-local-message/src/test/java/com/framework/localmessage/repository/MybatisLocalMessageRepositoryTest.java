@@ -197,5 +197,11 @@ class MybatisLocalMessageRepositoryTest {
             this.deletedId = id;
             return affectedRows;
         }
+
+        @Override
+        public int deleteByStatus(String tableName, LocalMessageStatus status) {
+            this.tableName = tableName;
+            return 0;
+        }
     }
 }
