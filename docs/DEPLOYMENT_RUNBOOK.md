@@ -129,7 +129,13 @@ GitHub Actions 已提供基础 CI：
 
 - 后端：`mvn -q test`
 - 前端：`npm ci && npm run build`
-- 交付入口：脚本语法、脚本可执行权限、Docker Compose 配置解析
+- 交付入口：`./scripts/check-delivery.sh`
+
+本地也可以直接运行交付入口检查：
+
+```bash
+./scripts/check-delivery.sh
+```
 
 ## 本地烟测
 
