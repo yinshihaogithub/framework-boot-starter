@@ -1933,137 +1933,6 @@
         </section>
       </template>
 
-      <template v-else-if="detailKind === 'dept' && detailDept">
-        <section class="detail-section">
-          <div class="detail-section-title">部门信息</div>
-          <el-descriptions :column="1" border size="small" class="detail-descriptions">
-            <el-descriptions-item label="部门 ID">{{ detailDept.id }}</el-descriptions-item>
-            <el-descriptions-item label="部门名称">{{ displayDetailValue(detailDept.deptName) }}</el-descriptions-item>
-            <el-descriptions-item label="租户 ID">{{ displayDetailValue(detailDept.tenantId) }}</el-descriptions-item>
-            <el-descriptions-item label="父部门 ID">{{ displayDetailValue(detailDept.parentId) }}</el-descriptions-item>
-            <el-descriptions-item label="状态">
-              <el-tag size="small" :type="detailDept.status === 'ENABLED' ? 'success' : 'info'">
-                {{ detailDept.status || '-' }}
-              </el-tag>
-            </el-descriptions-item>
-            <el-descriptions-item label="排序">{{ displayDetailValue(detailDept.sortOrder) }}</el-descriptions-item>
-            <el-descriptions-item label="子部门数">{{ displayDetailValue(detailDept.children?.length ?? 0) }}</el-descriptions-item>
-            <el-descriptions-item label="创建时间">{{ displayDetailValue(detailDept.createTime) }}</el-descriptions-item>
-          </el-descriptions>
-        </section>
-      </template>
-
-      <template v-else-if="detailKind === 'admin-user' && detailAdminUser">
-        <section class="detail-section">
-          <div class="detail-section-title">用户信息</div>
-          <el-descriptions :column="1" border size="small" class="detail-descriptions">
-            <el-descriptions-item label="用户 ID">{{ detailAdminUser.id }}</el-descriptions-item>
-            <el-descriptions-item label="用户名">{{ displayDetailValue(detailAdminUser.username) }}</el-descriptions-item>
-            <el-descriptions-item label="昵称">{{ displayDetailValue(detailAdminUser.nickname) }}</el-descriptions-item>
-            <el-descriptions-item label="手机号">{{ displayDetailValue(detailAdminUser.mobile) }}</el-descriptions-item>
-            <el-descriptions-item label="邮箱">{{ displayDetailValue(detailAdminUser.email) }}</el-descriptions-item>
-            <el-descriptions-item label="部门 ID">{{ displayDetailValue(detailAdminUser.deptId) }}</el-descriptions-item>
-            <el-descriptions-item label="角色">{{ displayArrayValue(detailAdminUser.roles) }}</el-descriptions-item>
-            <el-descriptions-item label="状态">
-              <el-tag size="small" :type="detailAdminUser.status === 'ENABLED' ? 'success' : 'danger'">
-                {{ detailAdminUser.status || '-' }}
-              </el-tag>
-            </el-descriptions-item>
-            <el-descriptions-item label="创建时间">{{ displayDetailValue(detailAdminUser.createTime) }}</el-descriptions-item>
-            <el-descriptions-item label="最后登录">{{ displayDetailValue(detailAdminUser.lastLoginTime) }}</el-descriptions-item>
-          </el-descriptions>
-        </section>
-
-        <section class="detail-section">
-          <div class="detail-section-title">登录安全</div>
-          <el-descriptions :column="1" border size="small" class="detail-descriptions">
-            <el-descriptions-item label="锁定状态">
-              <el-tag size="small" :type="detailAdminUser.loginLocked ? 'danger' : 'success'">
-                {{ detailAdminUser.loginLocked ? '已锁定' : '正常' }}
-              </el-tag>
-            </el-descriptions-item>
-            <el-descriptions-item label="失败次数">{{ displayDetailValue(detailAdminUser.loginFailCount ?? 0) }}</el-descriptions-item>
-            <el-descriptions-item label="锁定剩余">
-              {{ detailAdminUser.loginLockTtlMinutes ? `${detailAdminUser.loginLockTtlMinutes}m` : '-' }}
-            </el-descriptions-item>
-          </el-descriptions>
-        </section>
-      </template>
-
-      <template v-else-if="detailKind === 'role' && detailRole">
-        <section class="detail-section">
-          <div class="detail-section-title">角色信息</div>
-          <el-descriptions :column="1" border size="small" class="detail-descriptions">
-            <el-descriptions-item label="角色 ID">{{ detailRole.id }}</el-descriptions-item>
-            <el-descriptions-item label="角色编码">{{ displayDetailValue(detailRole.roleCode) }}</el-descriptions-item>
-            <el-descriptions-item label="角色名称">{{ displayDetailValue(detailRole.roleName) }}</el-descriptions-item>
-            <el-descriptions-item label="状态">
-              <el-tag size="small" :type="detailRole.status === 'ENABLED' ? 'success' : 'info'">
-                {{ detailRole.status || '-' }}
-              </el-tag>
-            </el-descriptions-item>
-            <el-descriptions-item label="排序">{{ displayDetailValue(detailRole.sortOrder) }}</el-descriptions-item>
-          </el-descriptions>
-        </section>
-      </template>
-
-      <template v-else-if="detailKind === 'menu-item' && detailMenuItem">
-        <section class="detail-section">
-          <div class="detail-section-title">菜单信息</div>
-          <el-descriptions :column="1" border size="small" class="detail-descriptions">
-            <el-descriptions-item label="菜单 ID">{{ detailMenuItem.id }}</el-descriptions-item>
-            <el-descriptions-item label="菜单名称">{{ displayDetailValue(detailMenuItem.menuName) }}</el-descriptions-item>
-            <el-descriptions-item label="父菜单 ID">{{ displayDetailValue(detailMenuItem.parentId) }}</el-descriptions-item>
-            <el-descriptions-item label="菜单类型">{{ displayDetailValue(detailMenuItem.menuType) }}</el-descriptions-item>
-            <el-descriptions-item label="路由">{{ displayDetailValue(detailMenuItem.routePath) }}</el-descriptions-item>
-            <el-descriptions-item label="组件">{{ displayDetailValue(detailMenuItem.component) }}</el-descriptions-item>
-            <el-descriptions-item label="权限标识">{{ displayDetailValue(detailMenuItem.permission) }}</el-descriptions-item>
-            <el-descriptions-item label="图标">{{ displayDetailValue(detailMenuItem.icon) }}</el-descriptions-item>
-            <el-descriptions-item label="可见">
-              <el-tag size="small" :type="detailMenuItem.visible === false ? 'info' : 'success'">
-                {{ detailMenuItem.visible === false ? '隐藏' : '显示' }}
-              </el-tag>
-            </el-descriptions-item>
-            <el-descriptions-item label="排序">{{ displayDetailValue(detailMenuItem.sortOrder) }}</el-descriptions-item>
-            <el-descriptions-item label="子菜单数">{{ displayDetailValue(detailMenuItem.children?.length ?? 0) }}</el-descriptions-item>
-          </el-descriptions>
-        </section>
-      </template>
-
-      <template v-else-if="detailKind === 'dict-type' && detailDictType">
-        <section class="detail-section">
-          <div class="detail-section-title">字典类型</div>
-          <el-descriptions :column="1" border size="small" class="detail-descriptions">
-            <el-descriptions-item label="类型 ID">{{ detailDictType.id }}</el-descriptions-item>
-            <el-descriptions-item label="字典编码">{{ displayDetailValue(detailDictType.dictCode) }}</el-descriptions-item>
-            <el-descriptions-item label="字典名称">{{ displayDetailValue(detailDictType.dictName) }}</el-descriptions-item>
-            <el-descriptions-item label="状态">
-              <el-tag size="small" :type="detailDictType.status === 'ENABLED' ? 'success' : 'info'">
-                {{ detailDictType.status || '-' }}
-              </el-tag>
-            </el-descriptions-item>
-          </el-descriptions>
-        </section>
-      </template>
-
-      <template v-else-if="detailKind === 'dict-item' && detailDictItem">
-        <section class="detail-section">
-          <div class="detail-section-title">字典项</div>
-          <el-descriptions :column="1" border size="small" class="detail-descriptions">
-            <el-descriptions-item label="字典项 ID">{{ detailDictItem.id }}</el-descriptions-item>
-            <el-descriptions-item label="字典编码">{{ displayDetailValue(detailDictItem.dictCode) }}</el-descriptions-item>
-            <el-descriptions-item label="标签">{{ displayDetailValue(detailDictItem.itemLabel) }}</el-descriptions-item>
-            <el-descriptions-item label="值">{{ displayDetailValue(detailDictItem.itemValue) }}</el-descriptions-item>
-            <el-descriptions-item label="排序">{{ displayDetailValue(detailDictItem.sortOrder) }}</el-descriptions-item>
-            <el-descriptions-item label="状态">
-              <el-tag size="small" :type="detailDictItem.status === 'ENABLED' ? 'success' : 'info'">
-                {{ detailDictItem.status || '-' }}
-              </el-tag>
-            </el-descriptions-item>
-          </el-descriptions>
-        </section>
-      </template>
-
       <template v-else-if="detailKind === 'config-item' && detailConfigItem">
         <section class="detail-section">
           <div class="detail-section-title">参数信息</div>
@@ -2143,7 +2012,12 @@
         </section>
       </template>
 
-      <pre v-else class="detail">{{ detailJsonText }}</pre>
+      <section v-if="detailKind !== 'json' && detailJsonText !== '-'" class="detail-section">
+        <div class="detail-section-title">原始数据</div>
+        <pre class="detail-code">{{ detailJsonText }}</pre>
+      </section>
+
+      <pre v-else-if="detailKind === 'json'" class="detail">{{ detailJsonText }}</pre>
     </div>
   </el-drawer>
 </template>
