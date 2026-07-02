@@ -212,9 +212,11 @@ MQ 治理第一版已经按工程级后台闭环实现：`framework-mq` 保留 R
 ### 1. 环境要求
 
 - JDK 17+
-- Maven 3.8+
+- Maven 3.9+
+- Node.js 18+
 - MySQL 8.0+
 - Redis 6.0+（推荐；本地只运行 `admin-service` 时默认不纳入健康检查）
+- Docker Compose（可选；用于一键启动后台和 MQ 样例）
 
 ### 2. 启动基础组件
 
@@ -252,11 +254,24 @@ mysql -uroot -proot framework_admin < sql/mysql/framework_boot_starter_init.sql
 ./scripts/start-admin.sh
 ```
 
-### 3. 编译
+后端启动后可以跑后台核心接口烟测：
+
+```bash
+./scripts/smoke-admin.sh
+```
+
+如需本地启动 MQ 中间件样例：
+
+```bash
+./scripts/start-mq.sh
+```
+
+### 3. 编译与构建
 
 ```bash
 cd framework-boot-starter
 mvn clean install -DskipTests
+npm --prefix frontend/admin-web run build
 ```
 
 ### 4. 启动 Demo
