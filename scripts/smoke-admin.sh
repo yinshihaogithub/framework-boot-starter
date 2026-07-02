@@ -45,6 +45,7 @@ const endpoints = [
   '/admin/dashboard',
   '/admin/sessions?pageNum=1&pageSize=5',
   '/admin/mq/stats',
+  '/admin/mq/queues',
   '/admin/local-messages/stats',
   '/admin/local-messages?pageNum=1&pageSize=5',
   '/admin/logs/stats',
