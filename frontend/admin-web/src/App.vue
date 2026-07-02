@@ -233,8 +233,9 @@
               </el-table-column>
               <el-table-column prop="sortOrder" label="排序" width="90" />
               <el-table-column prop="createTime" label="创建时间" min-width="170" />
-              <el-table-column label="操作" width="148" fixed="right">
+              <el-table-column label="操作" width="184" fixed="right">
                 <template #default="{ row }">
+                  <el-button :icon="View" circle size="small" @click="openDetail(row, 'dept')" />
                   <el-button v-if="can('system:dept:create')" :icon="Plus" circle size="small" @click="openCreateDept(row)" />
                   <el-button v-if="can('system:dept:update')" :icon="Edit" circle size="small" @click="openEditDept(row)" />
                   <el-button v-if="can('system:dept:delete')" :icon="Delete" circle size="small" @click="deleteDept(row)" />
@@ -285,8 +286,9 @@
                   <el-tag :type="row.status === 'ENABLED' ? 'success' : 'danger'" size="small">{{ row.status }}</el-tag>
                 </template>
               </el-table-column>
-              <el-table-column label="操作" width="232" fixed="right">
+              <el-table-column label="操作" width="268" fixed="right">
                 <template #default="{ row }">
+                  <el-button :icon="View" circle size="small" @click="openDetail(row, 'admin-user')" />
                   <el-button v-if="can('system:user:update')" :icon="Edit" circle size="small" @click="openEditUser(row)" />
                   <el-button v-if="can('system:user:reset-password')" :icon="RefreshRight" circle size="small" @click="resetUserPassword(row.id)" />
                   <el-button v-if="can('system:user:unlock') && row.loginLocked" :icon="Unlock" circle size="small" @click="unlockUser(row)" />
@@ -322,8 +324,9 @@
               <el-table-column prop="roleName" label="角色名称" min-width="180" />
               <el-table-column prop="status" label="状态" width="120" />
               <el-table-column prop="sortOrder" label="排序" width="100" />
-              <el-table-column label="操作" width="148" fixed="right">
+              <el-table-column label="操作" width="184" fixed="right">
                 <template #default="{ row }">
+                  <el-button :icon="View" circle size="small" @click="openDetail(row, 'role')" />
                   <el-button v-if="can('system:role:update')" :icon="Edit" circle size="small" @click="openEditRole(row)" />
                   <el-button v-if="can('system:role:authorize')" :icon="Setting" circle size="small" @click="openRoleAuth(row)" />
                   <el-button v-if="can('system:role:delete')" :icon="Delete" circle size="small" @click="deleteRole(row)" />
@@ -354,8 +357,9 @@
                 <template #default="{ row }"><el-tag :type="row.visible === false ? 'info' : 'success'" size="small">{{ row.visible === false ? '隐藏' : '显示' }}</el-tag></template>
               </el-table-column>
               <el-table-column prop="sortOrder" label="排序" width="90" />
-              <el-table-column label="操作" width="148" fixed="right">
+              <el-table-column label="操作" width="184" fixed="right">
                 <template #default="{ row }">
+                  <el-button :icon="View" circle size="small" @click="openDetail(row, 'menu-item')" />
                   <el-button v-if="can('system:menu:create')" :icon="Plus" circle size="small" @click="openCreateMenu(row)" />
                   <el-button v-if="can('system:menu:update')" :icon="Edit" circle size="small" @click="openEditMenu(row)" />
                   <el-button v-if="can('system:menu:delete')" :icon="Delete" circle size="small" @click="deleteMenu(row)" />
@@ -386,8 +390,9 @@
               <el-table-column prop="dictCode" label="编码" min-width="150" />
               <el-table-column prop="dictName" label="名称" min-width="150" />
               <el-table-column prop="status" label="状态" width="100" />
-              <el-table-column label="操作" width="108" fixed="right">
+              <el-table-column label="操作" width="144" fixed="right">
                 <template #default="{ row }">
+                  <el-button :icon="View" circle size="small" @click.stop="openDetail(row, 'dict-type')" />
                   <el-button v-if="can('system:dict:update')" :icon="Edit" circle size="small" @click.stop="openEditDictType(row)" />
                   <el-button v-if="can('system:dict:delete')" :icon="Delete" circle size="small" @click.stop="deleteDictType(row)" />
                 </template>
@@ -419,8 +424,9 @@
               <el-table-column prop="itemValue" label="值" min-width="140" />
               <el-table-column prop="sortOrder" label="排序" width="90" />
               <el-table-column prop="status" label="状态" width="100" />
-              <el-table-column label="操作" width="108" fixed="right">
+              <el-table-column label="操作" width="144" fixed="right">
                 <template #default="{ row }">
+                  <el-button :icon="View" circle size="small" @click="openDetail(row, 'dict-item')" />
                   <el-button v-if="can('system:dict:update')" :icon="Edit" circle size="small" @click="openEditDictItem(row)" />
                   <el-button v-if="can('system:dict:delete')" :icon="Delete" circle size="small" @click="deleteDictItem(row)" />
                 </template>
@@ -1798,6 +1804,135 @@
         </section>
       </template>
 
+      <template v-else-if="detailKind === 'dept' && detailDept">
+        <section class="detail-section">
+          <div class="detail-section-title">部门信息</div>
+          <el-descriptions :column="1" border size="small" class="detail-descriptions">
+            <el-descriptions-item label="部门 ID">{{ detailDept.id }}</el-descriptions-item>
+            <el-descriptions-item label="部门名称">{{ displayDetailValue(detailDept.deptName) }}</el-descriptions-item>
+            <el-descriptions-item label="租户">{{ displayDetailValue(detailDept.tenantId) }}</el-descriptions-item>
+            <el-descriptions-item label="父部门 ID">{{ displayDetailValue(detailDept.parentId) }}</el-descriptions-item>
+            <el-descriptions-item label="状态">
+              <el-tag size="small" :type="detailDept.status === 'ENABLED' ? 'success' : 'info'">
+                {{ detailDept.status || '-' }}
+              </el-tag>
+            </el-descriptions-item>
+            <el-descriptions-item label="排序">{{ displayDetailValue(detailDept.sortOrder) }}</el-descriptions-item>
+            <el-descriptions-item label="子部门数">{{ displayDetailValue(detailDept.children?.length ?? 0) }}</el-descriptions-item>
+            <el-descriptions-item label="创建时间">{{ displayDetailValue(detailDept.createTime) }}</el-descriptions-item>
+          </el-descriptions>
+        </section>
+      </template>
+
+      <template v-else-if="detailKind === 'admin-user' && detailAdminUser">
+        <section class="detail-section">
+          <div class="detail-section-title">用户信息</div>
+          <el-descriptions :column="1" border size="small" class="detail-descriptions">
+            <el-descriptions-item label="用户 ID">{{ detailAdminUser.id }}</el-descriptions-item>
+            <el-descriptions-item label="用户名">{{ displayDetailValue(detailAdminUser.username) }}</el-descriptions-item>
+            <el-descriptions-item label="昵称">{{ displayDetailValue(detailAdminUser.nickname) }}</el-descriptions-item>
+            <el-descriptions-item label="手机号">{{ displayDetailValue(detailAdminUser.mobile) }}</el-descriptions-item>
+            <el-descriptions-item label="邮箱">{{ displayDetailValue(detailAdminUser.email) }}</el-descriptions-item>
+            <el-descriptions-item label="部门 ID">{{ displayDetailValue(detailAdminUser.deptId) }}</el-descriptions-item>
+            <el-descriptions-item label="角色">{{ displayArrayValue(detailAdminUser.roles) }}</el-descriptions-item>
+            <el-descriptions-item label="状态">
+              <el-tag size="small" :type="detailAdminUser.status === 'ENABLED' ? 'success' : 'danger'">
+                {{ detailAdminUser.status || '-' }}
+              </el-tag>
+            </el-descriptions-item>
+            <el-descriptions-item label="创建时间">{{ displayDetailValue(detailAdminUser.createTime) }}</el-descriptions-item>
+            <el-descriptions-item label="最后登录">{{ displayDetailValue(detailAdminUser.lastLoginTime) }}</el-descriptions-item>
+          </el-descriptions>
+        </section>
+
+        <section class="detail-section">
+          <div class="detail-section-title">登录安全</div>
+          <el-descriptions :column="1" border size="small" class="detail-descriptions">
+            <el-descriptions-item label="锁定状态">
+              <el-tag size="small" :type="detailAdminUser.loginLocked ? 'danger' : 'success'">
+                {{ detailAdminUser.loginLocked ? '已锁定' : '正常' }}
+              </el-tag>
+            </el-descriptions-item>
+            <el-descriptions-item label="失败次数">{{ displayDetailValue(detailAdminUser.loginFailCount ?? 0) }}</el-descriptions-item>
+            <el-descriptions-item label="锁定剩余">{{ displayDetailValue(detailAdminUser.loginLockTtlMinutes ? `${detailAdminUser.loginLockTtlMinutes}m` : '-') }}</el-descriptions-item>
+          </el-descriptions>
+        </section>
+      </template>
+
+      <template v-else-if="detailKind === 'role' && detailRole">
+        <section class="detail-section">
+          <div class="detail-section-title">角色信息</div>
+          <el-descriptions :column="1" border size="small" class="detail-descriptions">
+            <el-descriptions-item label="角色 ID">{{ detailRole.id }}</el-descriptions-item>
+            <el-descriptions-item label="角色编码">{{ displayDetailValue(detailRole.roleCode) }}</el-descriptions-item>
+            <el-descriptions-item label="角色名称">{{ displayDetailValue(detailRole.roleName) }}</el-descriptions-item>
+            <el-descriptions-item label="状态">
+              <el-tag size="small" :type="detailRole.status === 'ENABLED' ? 'success' : 'info'">
+                {{ detailRole.status || '-' }}
+              </el-tag>
+            </el-descriptions-item>
+            <el-descriptions-item label="排序">{{ displayDetailValue(detailRole.sortOrder) }}</el-descriptions-item>
+          </el-descriptions>
+        </section>
+      </template>
+
+      <template v-else-if="detailKind === 'menu-item' && detailMenuItem">
+        <section class="detail-section">
+          <div class="detail-section-title">菜单信息</div>
+          <el-descriptions :column="1" border size="small" class="detail-descriptions">
+            <el-descriptions-item label="菜单 ID">{{ detailMenuItem.id }}</el-descriptions-item>
+            <el-descriptions-item label="菜单名称">{{ displayDetailValue(detailMenuItem.menuName) }}</el-descriptions-item>
+            <el-descriptions-item label="父菜单 ID">{{ displayDetailValue(detailMenuItem.parentId) }}</el-descriptions-item>
+            <el-descriptions-item label="类型">{{ displayDetailValue(detailMenuItem.menuType) }}</el-descriptions-item>
+            <el-descriptions-item label="路由">{{ displayDetailValue(detailMenuItem.routePath) }}</el-descriptions-item>
+            <el-descriptions-item label="组件">{{ displayDetailValue(detailMenuItem.component) }}</el-descriptions-item>
+            <el-descriptions-item label="权限标识">{{ displayDetailValue(detailMenuItem.permission) }}</el-descriptions-item>
+            <el-descriptions-item label="图标">{{ displayDetailValue(detailMenuItem.icon) }}</el-descriptions-item>
+            <el-descriptions-item label="可见">
+              <el-tag size="small" :type="detailMenuItem.visible === false ? 'info' : 'success'">
+                {{ detailMenuItem.visible === false ? '隐藏' : '显示' }}
+              </el-tag>
+            </el-descriptions-item>
+            <el-descriptions-item label="排序">{{ displayDetailValue(detailMenuItem.sortOrder) }}</el-descriptions-item>
+            <el-descriptions-item label="子菜单数">{{ displayDetailValue(detailMenuItem.children?.length ?? 0) }}</el-descriptions-item>
+          </el-descriptions>
+        </section>
+      </template>
+
+      <template v-else-if="detailKind === 'dict-type' && detailDictType">
+        <section class="detail-section">
+          <div class="detail-section-title">字典类型</div>
+          <el-descriptions :column="1" border size="small" class="detail-descriptions">
+            <el-descriptions-item label="类型 ID">{{ detailDictType.id }}</el-descriptions-item>
+            <el-descriptions-item label="字典编码">{{ displayDetailValue(detailDictType.dictCode) }}</el-descriptions-item>
+            <el-descriptions-item label="字典名称">{{ displayDetailValue(detailDictType.dictName) }}</el-descriptions-item>
+            <el-descriptions-item label="状态">
+              <el-tag size="small" :type="detailDictType.status === 'ENABLED' ? 'success' : 'info'">
+                {{ detailDictType.status || '-' }}
+              </el-tag>
+            </el-descriptions-item>
+          </el-descriptions>
+        </section>
+      </template>
+
+      <template v-else-if="detailKind === 'dict-item' && detailDictItem">
+        <section class="detail-section">
+          <div class="detail-section-title">字典项</div>
+          <el-descriptions :column="1" border size="small" class="detail-descriptions">
+            <el-descriptions-item label="字典项 ID">{{ detailDictItem.id }}</el-descriptions-item>
+            <el-descriptions-item label="字典编码">{{ displayDetailValue(detailDictItem.dictCode) }}</el-descriptions-item>
+            <el-descriptions-item label="标签">{{ displayDetailValue(detailDictItem.itemLabel) }}</el-descriptions-item>
+            <el-descriptions-item label="值">{{ displayDetailValue(detailDictItem.itemValue) }}</el-descriptions-item>
+            <el-descriptions-item label="排序">{{ displayDetailValue(detailDictItem.sortOrder) }}</el-descriptions-item>
+            <el-descriptions-item label="状态">
+              <el-tag size="small" :type="detailDictItem.status === 'ENABLED' ? 'success' : 'info'">
+                {{ detailDictItem.status || '-' }}
+              </el-tag>
+            </el-descriptions-item>
+          </el-descriptions>
+        </section>
+      </template>
+
       <template v-else-if="detailKind === 'config-item' && detailConfigItem">
         <section class="detail-section">
           <div class="detail-section-title">参数信息</div>
@@ -2001,6 +2136,12 @@ type DetailKind =
   | 'file-record'
   | 'login-log'
   | 'tenant'
+  | 'dept'
+  | 'admin-user'
+  | 'role'
+  | 'menu-item'
+  | 'dict-type'
+  | 'dict-item'
   | 'config-item'
   | 'excel-error-page'
   | 'online-session'
@@ -2155,6 +2296,12 @@ const detailDrawerTitle = computed(() => {
   if (detailKind.value === 'file-record') return '文件详情'
   if (detailKind.value === 'login-log') return '登录日志详情'
   if (detailKind.value === 'tenant') return '租户详情'
+  if (detailKind.value === 'dept') return '部门详情'
+  if (detailKind.value === 'admin-user') return '用户详情'
+  if (detailKind.value === 'role') return '角色详情'
+  if (detailKind.value === 'menu-item') return '菜单详情'
+  if (detailKind.value === 'dict-type') return '字典类型详情'
+  if (detailKind.value === 'dict-item') return '字典项详情'
   if (detailKind.value === 'config-item') return '参数详情'
   if (detailKind.value === 'excel-error-page') return 'Excel 错误详情'
   if (detailKind.value === 'online-session') return '在线会话详情'
@@ -2186,6 +2333,24 @@ const detailLoginLog = computed(() =>
 )
 const detailTenant = computed(() =>
   detailKind.value === 'tenant' ? (detailRecord.value as Tenant | undefined) : undefined
+)
+const detailDept = computed(() =>
+  detailKind.value === 'dept' ? (detailRecord.value as Dept | undefined) : undefined
+)
+const detailAdminUser = computed(() =>
+  detailKind.value === 'admin-user' ? (detailRecord.value as AdminUser | undefined) : undefined
+)
+const detailRole = computed(() =>
+  detailKind.value === 'role' ? (detailRecord.value as Role | undefined) : undefined
+)
+const detailMenuItem = computed(() =>
+  detailKind.value === 'menu-item' ? (detailRecord.value as MenuItem | undefined) : undefined
+)
+const detailDictType = computed(() =>
+  detailKind.value === 'dict-type' ? (detailRecord.value as DictType | undefined) : undefined
+)
+const detailDictItem = computed(() =>
+  detailKind.value === 'dict-item' ? (detailRecord.value as DictItem | undefined) : undefined
 )
 const detailConfigItem = computed(() =>
   detailKind.value === 'config-item' ? (detailRecord.value as ConfigItem | undefined) : undefined
