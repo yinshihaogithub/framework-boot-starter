@@ -50,13 +50,18 @@ const endpoints = [
   '/admin/local-messages?pageNum=1&pageSize=5',
   '/admin/logs/stats',
   '/admin/logs?pageNum=1&pageSize=5',
+  '/admin/logs/login?pageNum=1&pageSize=5',
   '/admin/monitor/health',
   '/admin/monitor/jvm',
   '/admin/notify/stats',
   '/admin/files/stats',
   '/admin/files?pageNum=1&pageSize=5',
   '/admin/excel/stats',
-  '/admin/excel/tasks?pageNum=1&pageSize=5'
+  '/admin/excel/tasks?pageNum=1&pageSize=5',
+  '/admin/system/roles?pageNum=1&pageSize=5',
+  '/admin/system/menus',
+  '/admin/system/dict-types?pageNum=1&pageSize=5',
+  '/admin/system/configs?pageNum=1&pageSize=5'
 ]
 
 let failed = false
