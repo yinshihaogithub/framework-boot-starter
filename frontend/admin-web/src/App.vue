@@ -1090,14 +1090,36 @@
               </div>
             </template>
             <div class="health-grid">
-              <div v-for="(component, name) in health?.components ?? {}" :key="name" class="health-item">
+              <div
+                v-for="(component, name) in health?.components ?? {}"
+                :key="name"
+                :class="['health-item', { 'health-item-framework': name === 'framework' }]"
+              >
                 <div class="health-title">
                   <span>{{ name }}</span>
                   <el-tag size="small" :type="component.status === 'UP' ? 'success' : 'danger'">
                     {{ component.status }}
                   </el-tag>
                 </div>
-                <div class="health-detail">{{ formatHealthDetails(component.details) }}</div>
+                <template v-if="name === 'framework'">
+                  <div class="framework-health-grid">
+                    <div v-for="item in frameworkHealthMeta" :key="item.label" class="framework-health-item">
+                      <span>{{ item.label }}</span>
+                      <strong>{{ item.value }}</strong>
+                    </div>
+                  </div>
+                  <div class="framework-module-section">
+                    <div class="framework-module-head">
+                      <span>模块</span>
+                      <el-tag size="small" type="info">{{ frameworkHealthModules.length }}</el-tag>
+                    </div>
+                    <div v-if="frameworkHealthModules.length" class="framework-module-list">
+                      <span v-for="module in frameworkHealthModules" :key="module" class="framework-module-chip">{{ module }}</span>
+                    </div>
+                    <div v-else class="health-detail">-</div>
+                  </div>
+                </template>
+                <div v-else class="health-detail">{{ formatHealthDetails(component.details) }}</div>
               </div>
             </div>
           </el-card>
@@ -1458,6 +1480,13 @@ type AlertItem = {
   type: 'danger' | 'warning' | 'success' | 'info' | 'primary'
   view: ViewName
 }
+type FrameworkHealthDetails = {
+  application?: string
+  frameworkVersion?: string
+  javaVersion?: string
+  os?: string
+  modules: string[]
+}
 
 const viewTitles: Record<ViewName, string> = {
   dashboard: '数据看板',
@@ -1751,6 +1780,14 @@ const alertItems = computed<AlertItem[]>(() => {
 const alertCount = computed(() => alertItems.value.reduce((total, item) => total + item.count, 0))
 const alertBadge = computed(() => alertCount.value > 99 ? '99+' : alertCount.value)
 const traceWarnings = computed(() => traceDetail.value?.warnings ?? [])
+const frameworkHealthDetails = computed<FrameworkHealthDetails>(() => parseFrameworkHealthDetails(health.value?.components?.framework?.details))
+const frameworkHealthMeta = computed(() => [
+  { label: '应用', value: frameworkHealthDetails.value.application || '-' },
+  { label: '框架版本', value: frameworkHealthDetails.value.frameworkVersion || '-' },
+  { label: 'Java 版本', value: frameworkHealthDetails.value.javaVersion || '-' },
+  { label: '操作系统', value: frameworkHealthDetails.value.os || '-' }
+])
+const frameworkHealthModules = computed(() => frameworkHealthDetails.value.modules)
 
 function can(permission: string) {
   return currentUser.value?.permissions?.includes(permission) ?? false
@@ -3025,6 +3062,28 @@ function formatHealthDetails(details?: Record<string, unknown>) {
     .map(([key, value]) => `${key}: ${formatRuntime(value)}`)
     .join(' · ')
 }
+
+function parseFrameworkHealthDetails(details?: Record<string, unknown>): FrameworkHealthDetails {
+  return {
+    application: stringifyHealthValue(details?.application),
+    frameworkVersion: stringifyHealthValue(details?.frameworkVersion),
+    javaVersion: stringifyHealthValue(details?.javaVersion),
+    os: stringifyHealthValue(details?.os),
+    modules: Array.isArray(details?.modules)
+      ? details.modules.map((item) => stringifyHealthValue(item)).filter((item): item is string => Boolean(item))
+      : []
+  }
+}
+
+function stringifyHealthValue(value: unknown) {
+  if (value === undefined || value === null) {
+    return ''
+  }
+  if (typeof value === 'string') {
+    return value
+  }
+  return String(value)
+}
 </script>
 
 <style scoped>
@@ -3538,6 +3597,10 @@ function formatHealthDetails(details?: Record<string, unknown>) {
   background: #fff;
 }
 
+.health-item-framework {
+  grid-column: 1 / -1;
+}
+
 .health-title {
   display: flex;
   align-items: center;
@@ -3553,6 +3616,68 @@ function formatHealthDetails(details?: Record<string, unknown>) {
   font-size: 12px;
   line-height: 1.55;
   overflow-wrap: anywhere;
+}
+
+.framework-health-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.framework-health-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 60px;
+  padding: 10px 12px;
+  border: 1px solid #f1f1f1;
+  border-radius: 8px;
+  background: #fafafa;
+}
+
+.framework-health-item span,
+.framework-module-head {
+  color: #71717a;
+  font-size: 12px;
+}
+
+.framework-health-item strong {
+  color: #18181b;
+  font-size: 13px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.framework-module-section {
+  margin-top: 12px;
+}
+
+.framework-module-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.framework-module-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.framework-module-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border: 1px solid #ececec;
+  border-radius: 999px;
+  background: #fff;
+  color: #202124;
+  font-size: 12px;
+  line-height: 1;
 }
 
 .trace-timeline {
