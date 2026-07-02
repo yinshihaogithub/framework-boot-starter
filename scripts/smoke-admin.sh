@@ -45,11 +45,15 @@ const endpoints = [
   '/admin/dashboard',
   '/admin/sessions?pageNum=1&pageSize=5',
   '/admin/mq/stats',
+  '/admin/local-messages/stats',
   '/admin/local-messages?pageNum=1&pageSize=5',
+  '/admin/logs/stats',
   '/admin/logs?pageNum=1&pageSize=5',
   '/admin/monitor/health',
   '/admin/notify/stats',
+  '/admin/files/stats',
   '/admin/files?pageNum=1&pageSize=5',
+  '/admin/excel/stats',
   '/admin/excel/tasks?pageNum=1&pageSize=5'
 ]
 
