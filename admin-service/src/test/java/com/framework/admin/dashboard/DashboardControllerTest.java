@@ -44,7 +44,7 @@ class DashboardControllerTest {
 
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getData().modules())
-                .hasSize(21)
+                .hasSize(22)
                 .extracting(DashboardController.ModuleStatus::name)
                 .contains(
                         "framework-core",
@@ -54,8 +54,9 @@ class DashboardControllerTest {
                         "framework-datasource",
                         "framework-redis",
                         "framework-feign",
+                        "framework-job",
                         "framework-file")
-                .doesNotContain("framework-job");
+                .doesNotHaveDuplicates();
     }
 
     @Test

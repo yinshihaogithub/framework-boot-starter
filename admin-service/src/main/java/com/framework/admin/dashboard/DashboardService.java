@@ -276,6 +276,7 @@ public class DashboardService {
                 module("framework-redis", "com.framework.redis.config.RedisAutoConfiguration"),
                 module("framework-feign", "com.framework.feign.config.FeignAutoConfiguration"),
                 module("framework-monitor", "com.framework.monitor.health.FrameworkHealthIndicator"),
+                module("framework-job", "com.framework.job.config.JobAutoConfiguration"),
                 module("framework-file", "com.framework.file.service.FileStorageService"));
     }
 
