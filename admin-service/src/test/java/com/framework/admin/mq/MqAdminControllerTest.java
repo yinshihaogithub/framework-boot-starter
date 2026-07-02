@@ -20,6 +20,7 @@ import com.framework.security.annotation.RequirePermission;
 import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.amqp.core.Queue;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.support.StaticApplicationContext;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -198,6 +199,20 @@ class MqAdminControllerTest {
 
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getData().getRuntime().isRetryAvailable()).isTrue();
+    }
+
+    @Test
+    void listQueuesReturnsDeclaredQueues() {
+        StaticApplicationContext context = new StaticApplicationContext();
+        context.getBeanFactory().registerSingleton("orderQueue", new Queue("order.queue"));
+        MqAdminController controller = controller(null, new MqProperties(), null, null, auditService(), context);
+
+        Result<List<MqAdminDTO.MqQueueInfo>> result = controller.listQueues();
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getData())
+                .extracting(MqAdminDTO.MqQueueInfo::getQueueName, MqAdminDTO.MqQueueInfo::getState)
+                .containsExactly(org.assertj.core.groups.Tuple.tuple("order.queue", "UNKNOWN"));
     }
 
     @Test
@@ -820,6 +835,15 @@ class MqAdminControllerTest {
                                                 MqMessageSender sender,
                                                 MqRetryScheduler scheduler,
                                                 AdminAuditService auditService) {
+        return controller(handler, properties, sender, scheduler, auditService, new StaticApplicationContext());
+    }
+
+    private static MqAdminController controller(DeadLetterHandler handler,
+                                                MqProperties properties,
+                                                MqMessageSender sender,
+                                                MqRetryScheduler scheduler,
+                                                AdminAuditService auditService,
+                                                StaticApplicationContext applicationContext) {
         MqAdminService service = new MqAdminService(
                 provider(handler),
                 provider(scheduler),
@@ -827,7 +851,7 @@ class MqAdminControllerTest {
                 provider(mapper(handler)),
                 provider(sender),
                 provider(null),
-                new StaticApplicationContext(),
+                applicationContext,
                 auditService);
         return new MqAdminController(service);
     }
