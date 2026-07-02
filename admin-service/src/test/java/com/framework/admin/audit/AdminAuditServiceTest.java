@@ -200,6 +200,11 @@ class AdminAuditServiceTest {
         }
 
         @Override
+        public OperationLogEntity findById(Long id) {
+            return inserted != null && id.equals(inserted.getId()) ? inserted : null;
+        }
+
+        @Override
         public int deleteBefore(Date beforeDate) {
             return 0;
         }

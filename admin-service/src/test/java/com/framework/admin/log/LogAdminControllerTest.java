@@ -14,6 +14,34 @@ import static org.assertj.core.api.Assertions.assertThat;
 class LogAdminControllerTest {
 
     @Test
+    void detailReturnsOperationLogFromService() {
+        RecordingLogAdminService service = new RecordingLogAdminService();
+        service.detailResult = LogAdminService.ActionResult.success(operationLog(9L));
+        LogAdminController controller = new LogAdminController(service);
+
+        Result<OperationLogEntity> result = controller.detail(9L);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(service.detailId).isEqualTo(9L);
+        assertThat(result.getData()).isNotNull();
+        assertThat(result.getData().getId()).isEqualTo(9L);
+    }
+
+    @Test
+    void detailMapsServiceFailureToResult() {
+        RecordingLogAdminService service = new RecordingLogAdminService();
+        service.detailResult = LogAdminService.ActionResult.fail(ResultCode.NOT_FOUND, "日志不存在");
+        LogAdminController controller = new LogAdminController(service);
+
+        Result<OperationLogEntity> result = controller.detail(404L);
+
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(service.detailId).isEqualTo(404L);
+        assertThat(result.getCode()).isEqualTo(ResultCode.NOT_FOUND.getCode());
+        assertThat(result.getMessage()).isEqualTo("日志不存在");
+    }
+
+    @Test
     void traceRejectsBlankTraceId() {
         RecordingLogAdminService service = new RecordingLogAdminService();
         LogAdminController controller = new LogAdminController(service);
@@ -53,12 +81,20 @@ class LogAdminControllerTest {
     }
 
     private static final class RecordingLogAdminService extends LogAdminService {
+        private Long detailId;
+        private ActionResult<OperationLogEntity> detailResult = ActionResult.success(operationLog(1L));
         private String traceId;
         private int pageNum;
         private int pageSize;
 
         private RecordingLogAdminService() {
             super(null, null);
+        }
+
+        @Override
+        public ActionResult<OperationLogEntity> detail(Long id) {
+            this.detailId = id;
+            return detailResult;
         }
 
         @Override
@@ -78,5 +114,11 @@ class LogAdminControllerTest {
         public PageResult<LoginLog> loginLogs(String username, Boolean success, int pageNum, int pageSize) {
             return PageResult.empty(1, 20);
         }
+    }
+
+    private static OperationLogEntity operationLog(Long id) {
+        OperationLogEntity log = new OperationLogEntity();
+        log.setId(id);
+        return log;
     }
 }

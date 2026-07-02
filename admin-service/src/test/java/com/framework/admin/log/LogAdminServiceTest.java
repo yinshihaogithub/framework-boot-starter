@@ -4,6 +4,7 @@ import com.framework.admin.system.AdminSystemModels.LoginLog;
 import com.framework.admin.system.AdminSystemMapperSupport;
 import com.framework.admin.support.AdminPageSupport;
 import com.framework.core.result.PageResult;
+import com.framework.core.result.ResultCode;
 import com.framework.log.entity.OperationLogEntity;
 import com.framework.log.mapper.OperationLogMapper;
 import org.junit.jupiter.api.Test;
@@ -17,6 +18,65 @@ import java.util.stream.Stream;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class LogAdminServiceTest {
+
+    @Test
+    void detailRejectsInvalidLogIdBeforeLoadingMapper() {
+        LogAdminService service = new LogAdminService(failingProvider(), systemMapperSupport(List.of()));
+
+        LogAdminService.ActionResult<OperationLogEntity> result = service.detail(0L);
+
+        assertThat(result.success()).isFalse();
+        assertThat(result.code()).isEqualTo(ResultCode.PARAM_ERROR.getCode());
+        assertThat(result.message()).isEqualTo("日志ID必须大于0");
+    }
+
+    @Test
+    void detailReturnsServiceErrorWhenMapperIsUnavailable() {
+        LogAdminService service = new LogAdminService(failingProvider(), systemMapperSupport(List.of()));
+
+        LogAdminService.ActionResult<OperationLogEntity> result = service.detail(1L);
+
+        assertThat(result.success()).isFalse();
+        assertThat(result.code()).isEqualTo(ResultCode.SERVICE_ERROR.getCode());
+        assertThat(result.message()).isEqualTo("操作日志存储未启用");
+    }
+
+    @Test
+    void detailReturnsNotFoundWhenLogDoesNotExist() {
+        LogAdminService service = new LogAdminService(provider(mapper(List.of(
+                operationLog(1L, "system", "OPERATION", true, "trace-a")))), systemMapperSupport(List.of()));
+
+        LogAdminService.ActionResult<OperationLogEntity> result = service.detail(2L);
+
+        assertThat(result.success()).isFalse();
+        assertThat(result.code()).isEqualTo(ResultCode.NOT_FOUND.getCode());
+        assertThat(result.message()).isEqualTo("日志不存在");
+    }
+
+    @Test
+    void detailReturnsOperationLogWhenFound() {
+        LogAdminService service = new LogAdminService(provider(mapper(List.of(
+                operationLog(1L, "system", "OPERATION", true, "trace-a"),
+                operationLog(2L, "mq", "API", false, "trace-b")))), systemMapperSupport(List.of()));
+
+        LogAdminService.ActionResult<OperationLogEntity> result = service.detail(2L);
+
+        assertThat(result.success()).isTrue();
+        assertThat(result.data()).isNotNull();
+        assertThat(result.data().getId()).isEqualTo(2L);
+        assertThat(result.data().getTraceId()).isEqualTo("trace-b");
+    }
+
+    @Test
+    void detailReturnsServiceErrorWhenQueryFails() {
+        LogAdminService service = new LogAdminService(provider(failingMapper()), systemMapperSupport(List.of()));
+
+        LogAdminService.ActionResult<OperationLogEntity> result = service.detail(1L);
+
+        assertThat(result.success()).isFalse();
+        assertThat(result.code()).isEqualTo(ResultCode.SERVICE_ERROR.getCode());
+        assertThat(result.message()).isEqualTo("日志查询失败");
+    }
 
     @Test
     void returnsZeroStatsWhenMapperIsMissing() {
@@ -223,6 +283,14 @@ class LogAdminServiceTest {
             }
 
             @Override
+            public OperationLogEntity findById(Long id) {
+                return logs.stream()
+                        .filter(log -> id.equals(log.getId()))
+                        .findFirst()
+                        .orElse(null);
+            }
+
+            @Override
             public int deleteBefore(Date beforeDate) {
                 return 0;
             }
@@ -247,6 +315,11 @@ class LogAdminServiceTest {
 
             @Override
             public long count(String module, String logType, Long operatorId, Boolean success, String traceId) {
+                throw new IllegalStateException("operation log table unavailable");
+            }
+
+            @Override
+            public OperationLogEntity findById(Long id) {
                 throw new IllegalStateException("operation log table unavailable");
             }
 

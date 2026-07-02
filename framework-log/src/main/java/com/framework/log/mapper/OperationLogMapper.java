@@ -132,6 +132,17 @@ public interface OperationLogMapper {
             @Param("traceId") String traceId);
 
     /**
+     * 查询日志详情
+     */
+    @Select("""
+            SELECT
+            """ + LOG_COLUMNS + """
+            FROM sys_operation_log
+            WHERE id = #{id}
+            """)
+    OperationLogEntity findById(@Param("id") Long id);
+
+    /**
      * 清理指定天数前的日志
      */
     @Delete("DELETE FROM sys_operation_log WHERE create_time &lt; #{beforeDate}")

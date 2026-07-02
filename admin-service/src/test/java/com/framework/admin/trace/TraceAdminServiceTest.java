@@ -385,6 +385,14 @@ class TraceAdminServiceTest {
             }
 
             @Override
+            public OperationLogEntity findById(Long id) {
+                return logs.stream()
+                        .filter(log -> id.equals(log.getId()))
+                        .findFirst()
+                        .orElse(null);
+            }
+
+            @Override
             public int deleteBefore(Date beforeDate) {
                 return 0;
             }
@@ -410,6 +418,11 @@ class TraceAdminServiceTest {
             @Override
             public long count(String module, String logType, Long operatorId, Boolean success, String traceId) {
                 return 0;
+            }
+
+            @Override
+            public OperationLogEntity findById(Long id) {
+                throw new IllegalStateException("operation log table unavailable");
             }
 
             @Override

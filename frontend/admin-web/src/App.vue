@@ -966,7 +966,7 @@
                   <el-table-column prop="uri" label="URI" min-width="180" show-overflow-tooltip />
                   <el-table-column prop="elapsedMs" label="耗时" width="92" />
                   <el-table-column label="操作" width="80" fixed="right">
-                    <template #default="{ row }"><el-button :icon="View" circle size="small" @click="openDetail(row)" /></template>
+                    <template #default="{ row }"><el-button :icon="View" circle size="small" @click="openLogDetail(row.id, row)" /></template>
                   </el-table-column>
                 </el-table>
               </el-tab-pane>
@@ -1056,7 +1056,7 @@
               <el-table-column prop="errorMessage" label="错误" min-width="180" show-overflow-tooltip />
               <el-table-column prop="createTime" label="时间" min-width="170" />
               <el-table-column label="操作" width="80" fixed="right">
-                <template #default="{ row }"><el-button :icon="View" circle size="small" @click="openDetail(row)" /></template>
+                <template #default="{ row }"><el-button :icon="View" circle size="small" @click="openLogDetail(row.id, row)" /></template>
               </el-table-column>
             </el-table>
             <el-pagination v-model:current-page="logQuery.pageNum" v-model:page-size="logQuery.pageSize" class="pager" layout="total, sizes, prev, pager, next" :total="logs.total" @change="loadLogs" />
@@ -1440,8 +1440,183 @@
     </template>
   </el-dialog>
 
-  <el-drawer v-model="detailVisible" title="详情" size="46%">
-    <pre class="detail">{{ JSON.stringify(detailRecord, null, 2) }}</pre>
+  <el-drawer v-model="detailVisible" :title="detailDrawerTitle" size="46%" class="detail-drawer">
+    <div v-loading="detailLoading" class="detail-panel">
+      <template v-if="detailKind === 'operation-log' && detailOperationLog">
+        <section class="detail-section">
+          <div class="detail-section-title">基本信息</div>
+          <el-descriptions :column="1" border size="small" class="detail-descriptions">
+            <el-descriptions-item label="日志 ID">{{ detailOperationLog.id }}</el-descriptions-item>
+            <el-descriptions-item label="日志类型">{{ displayDetailValue(detailOperationLog.logType) }}</el-descriptions-item>
+            <el-descriptions-item label="模块">{{ displayDetailValue(detailOperationLog.module) }}</el-descriptions-item>
+            <el-descriptions-item label="动作">{{ displayDetailValue(detailOperationLog.action) }}</el-descriptions-item>
+            <el-descriptions-item label="结果">
+              <el-tag size="small" :type="operationLogResultType(detailOperationLog.success)">
+                {{ operationLogResultLabel(detailOperationLog.success) }}
+              </el-tag>
+            </el-descriptions-item>
+            <el-descriptions-item label="Trace ID">
+              <el-button
+                link
+                type="primary"
+                class="trace-link"
+                :disabled="!detailOperationLog.traceId"
+                @click="openTrace(detailOperationLog.traceId)"
+              >
+                {{ detailOperationLog.traceId || '-' }}
+              </el-button>
+            </el-descriptions-item>
+            <el-descriptions-item label="时间">{{ displayDetailValue(detailOperationLog.createTime) }}</el-descriptions-item>
+            <el-descriptions-item label="耗时">{{ formatElapsedMs(detailOperationLog.elapsedMs) }}</el-descriptions-item>
+          </el-descriptions>
+        </section>
+
+        <section class="detail-section">
+          <div class="detail-section-title">请求上下文</div>
+          <el-descriptions :column="1" border size="small" class="detail-descriptions">
+            <el-descriptions-item label="HTTP 方法">{{ displayDetailValue(detailOperationLog.httpMethod) }}</el-descriptions-item>
+            <el-descriptions-item label="请求 URI">{{ displayDetailValue(detailOperationLog.uri) }}</el-descriptions-item>
+            <el-descriptions-item label="处理方法">{{ displayDetailValue(detailOperationLog.method) }}</el-descriptions-item>
+            <el-descriptions-item label="操作人">
+              {{ displayDetailValue(detailOperationLog.operatorName || detailOperationLog.operatorId) }}
+            </el-descriptions-item>
+            <el-descriptions-item label="客户端 IP">{{ displayDetailValue(detailOperationLog.clientIp) }}</el-descriptions-item>
+          </el-descriptions>
+        </section>
+
+        <section v-if="detailOperationLog.errorMessage" class="detail-section">
+          <div class="detail-section-title">错误信息</div>
+          <pre class="detail-code">{{ formatJsonDetailText(detailOperationLog.errorMessage) }}</pre>
+        </section>
+
+        <section v-if="detailOperationLog.params" class="detail-section">
+          <div class="detail-section-title">请求参数</div>
+          <pre class="detail-code">{{ formatJsonDetailText(detailOperationLog.params) }}</pre>
+        </section>
+
+        <section v-if="detailOperationLog.result" class="detail-section">
+          <div class="detail-section-title">响应结果</div>
+          <pre class="detail-code">{{ formatJsonDetailText(detailOperationLog.result) }}</pre>
+        </section>
+      </template>
+
+      <template v-else-if="detailKind === 'mq-failed-message' && detailMqMessage">
+        <section class="detail-section">
+          <div class="detail-section-title">消息概览</div>
+          <el-descriptions :column="1" border size="small" class="detail-descriptions">
+            <el-descriptions-item label="记录 ID">{{ detailMqMessage.id }}</el-descriptions-item>
+            <el-descriptions-item label="状态">
+              <el-tag size="small" :type="mqStatusType(detailMqMessage.status)">{{ detailMqMessage.status || '-' }}</el-tag>
+            </el-descriptions-item>
+            <el-descriptions-item label="消息类型">{{ displayDetailValue(detailMqMessage.messageType) }}</el-descriptions-item>
+            <el-descriptions-item label="消息 ID">{{ displayDetailValue(detailMqMessage.messageId) }}</el-descriptions-item>
+            <el-descriptions-item label="父消息 ID">{{ displayDetailValue(detailMqMessage.parentMessageId) }}</el-descriptions-item>
+            <el-descriptions-item label="业务键">{{ displayDetailValue(detailMqMessage.businessKey) }}</el-descriptions-item>
+            <el-descriptions-item label="Trace ID">
+              <el-button
+                link
+                type="primary"
+                class="trace-link"
+                :disabled="!detailMqMessage.traceId"
+                @click="openTrace(detailMqMessage.traceId)"
+              >
+                {{ detailMqMessage.traceId || '-' }}
+              </el-button>
+            </el-descriptions-item>
+            <el-descriptions-item label="租户">{{ displayDetailValue(detailMqMessage.tenantId) }}</el-descriptions-item>
+          </el-descriptions>
+        </section>
+
+        <section class="detail-section">
+          <div class="detail-section-title">路由与处理</div>
+          <el-descriptions :column="1" border size="small" class="detail-descriptions">
+            <el-descriptions-item label="队列">{{ displayDetailValue(detailMqMessage.queueName) }}</el-descriptions-item>
+            <el-descriptions-item label="交换机">{{ displayDetailValue(detailMqMessage.exchange) }}</el-descriptions-item>
+            <el-descriptions-item label="路由键">{{ displayDetailValue(detailMqMessage.routingKey) }}</el-descriptions-item>
+            <el-descriptions-item label="来源">{{ displayDetailValue(detailMqMessage.source) }}</el-descriptions-item>
+            <el-descriptions-item label="操作人">{{ displayDetailValue(detailMqMessage.operator) }}</el-descriptions-item>
+            <el-descriptions-item label="创建时间">{{ displayDetailValue(detailMqMessage.createTime) }}</el-descriptions-item>
+            <el-descriptions-item label="更新时间">{{ displayDetailValue(detailMqMessage.updateTime) }}</el-descriptions-item>
+          </el-descriptions>
+        </section>
+
+        <section class="detail-section">
+          <div class="detail-section-title">重试与补偿</div>
+          <el-descriptions :column="1" border size="small" class="detail-descriptions">
+            <el-descriptions-item label="重试次数">{{ formatRetrySummary(detailMqMessage.retryCount, detailMqMessage.maxRetry) }}</el-descriptions-item>
+            <el-descriptions-item label="下次重试">{{ displayDetailValue(detailMqMessage.nextRetryTime) }}</el-descriptions-item>
+            <el-descriptions-item label="补偿备注">{{ displayDetailValue(detailMqMessage.compensateRemark) }}</el-descriptions-item>
+          </el-descriptions>
+        </section>
+
+        <section v-if="detailMqMessage.errorMessage" class="detail-section">
+          <div class="detail-section-title">错误信息</div>
+          <pre class="detail-code">{{ formatJsonDetailText(detailMqMessage.errorMessage) }}</pre>
+        </section>
+
+        <section v-if="detailMqMessage.errorStack" class="detail-section">
+          <div class="detail-section-title">错误堆栈</div>
+          <pre class="detail-code">{{ formatJsonDetailText(detailMqMessage.errorStack) }}</pre>
+        </section>
+
+        <section v-if="detailMqMessage.payload" class="detail-section">
+          <div class="detail-section-title">消息体</div>
+          <pre class="detail-code">{{ formatJsonDetailText(detailMqMessage.payload) }}</pre>
+        </section>
+      </template>
+
+      <template v-else-if="detailKind === 'local-message' && detailLocalMessage">
+        <section class="detail-section">
+          <div class="detail-section-title">消息概览</div>
+          <el-descriptions :column="1" border size="small" class="detail-descriptions">
+            <el-descriptions-item label="记录 ID">{{ detailLocalMessage.id }}</el-descriptions-item>
+            <el-descriptions-item label="状态">
+              <el-tag size="small" :type="localStatusType(detailLocalMessage.status)">{{ detailLocalMessage.status || '-' }}</el-tag>
+            </el-descriptions-item>
+            <el-descriptions-item label="Topic">{{ displayDetailValue(detailLocalMessage.topic) }}</el-descriptions-item>
+            <el-descriptions-item label="消息 ID">{{ displayDetailValue(detailLocalMessage.messageId) }}</el-descriptions-item>
+            <el-descriptions-item label="父消息 ID">{{ displayDetailValue(detailLocalMessage.parentMessageId) }}</el-descriptions-item>
+            <el-descriptions-item label="业务键">{{ displayDetailValue(detailLocalMessage.businessKey) }}</el-descriptions-item>
+            <el-descriptions-item label="Trace ID">
+              <el-button
+                link
+                type="primary"
+                class="trace-link"
+                :disabled="!detailLocalMessage.traceId"
+                @click="openTrace(detailLocalMessage.traceId)"
+              >
+                {{ detailLocalMessage.traceId || '-' }}
+              </el-button>
+            </el-descriptions-item>
+            <el-descriptions-item label="租户">{{ displayDetailValue(detailLocalMessage.tenantId) }}</el-descriptions-item>
+          </el-descriptions>
+        </section>
+
+        <section class="detail-section">
+          <div class="detail-section-title">投递与处理</div>
+          <el-descriptions :column="1" border size="small" class="detail-descriptions">
+            <el-descriptions-item label="来源">{{ displayDetailValue(detailLocalMessage.source) }}</el-descriptions-item>
+            <el-descriptions-item label="操作人">{{ displayDetailValue(detailLocalMessage.operator) }}</el-descriptions-item>
+            <el-descriptions-item label="创建时间">{{ displayDetailValue(detailLocalMessage.createTime) }}</el-descriptions-item>
+            <el-descriptions-item label="更新时间">{{ displayDetailValue(detailLocalMessage.updateTime) }}</el-descriptions-item>
+            <el-descriptions-item label="重试次数">{{ formatRetrySummary(detailLocalMessage.retryCount, detailLocalMessage.maxRetry) }}</el-descriptions-item>
+            <el-descriptions-item label="下次重试">{{ displayDetailValue(detailLocalMessage.nextRetryTime) }}</el-descriptions-item>
+          </el-descriptions>
+        </section>
+
+        <section v-if="detailLocalMessage.errorMessage" class="detail-section">
+          <div class="detail-section-title">错误信息</div>
+          <pre class="detail-code">{{ formatJsonDetailText(detailLocalMessage.errorMessage) }}</pre>
+        </section>
+
+        <section v-if="detailLocalMessage.payload" class="detail-section">
+          <div class="detail-section-title">消息体</div>
+          <pre class="detail-code">{{ formatJsonDetailText(detailLocalMessage.payload) }}</pre>
+        </section>
+      </template>
+
+      <pre v-else class="detail">{{ detailJsonText }}</pre>
+    </div>
   </el-drawer>
 </template>
 
@@ -1553,6 +1728,7 @@ type FrameworkHealthDetails = {
   os?: string
   modules: string[]
 }
+type DetailKind = 'json' | 'operation-log' | 'mq-failed-message' | 'local-message'
 
 const viewTitles: Record<ViewName, string> = {
   dashboard: '数据看板',
@@ -1681,7 +1857,25 @@ const dictItems = reactive<PageResult<DictItem>>({ records: [], total: 0, pageNu
 const configs = reactive<PageResult<ConfigItem>>({ records: [], total: 0, pageNum: 1, pageSize: 20, pages: 0 })
 const jvm = ref<Record<string, unknown>>({})
 const detailVisible = ref(false)
+const detailKind = ref<DetailKind>('json')
+const detailLoading = ref(false)
 const detailRecord = ref<unknown>()
+const detailDrawerTitle = computed(() => {
+  if (detailKind.value === 'operation-log') return '日志详情'
+  if (detailKind.value === 'mq-failed-message') return 'MQ 失败消息详情'
+  if (detailKind.value === 'local-message') return '本地消息详情'
+  return '详情'
+})
+const detailOperationLog = computed(() =>
+  detailKind.value === 'operation-log' ? (detailRecord.value as OperationLog | undefined) : undefined
+)
+const detailMqMessage = computed(() =>
+  detailKind.value === 'mq-failed-message' ? (detailRecord.value as MqFailedMessage | undefined) : undefined
+)
+const detailLocalMessage = computed(() =>
+  detailKind.value === 'local-message' ? (detailRecord.value as LocalMessage | undefined) : undefined
+)
+const detailJsonText = computed(() => formatJsonDetailText(detailRecord.value))
 const userDialogVisible = ref(false)
 const userDialogMode = ref<'create' | 'edit'>('create')
 const editingUserId = ref<number>()
@@ -2584,7 +2778,7 @@ async function deleteMq(row: MqFailedMessage) {
 
 async function openMqDetail(id: number) {
   const message = await api.mqFailedMessage(id)
-  openDetail(message)
+  openDetail(message, 'mq-failed-message')
 }
 
 async function openMqByTrace(value?: string, businessKey?: string) {
@@ -2680,7 +2874,7 @@ async function deleteLocal(row: LocalMessage) {
 
 async function openLocalDetail(id: number) {
   const message = await api.localMessage(id)
-  openDetail(message)
+  openDetail(message, 'local-message')
 }
 
 async function openLocalByTrace(value?: string, businessKey?: string) {
@@ -2810,7 +3004,7 @@ async function createImportFailureTask() {
 async function loadExcelErrors(row: ExcelTask) {
   const page = await api.excelErrors(row.id, { pageNum: 1, pageSize: 20 })
   Object.assign(excelErrors, page)
-  detailRecord.value = {
+  openDetail({
     task: row,
     errors: excelErrors.records,
     errorPage: {
@@ -2819,8 +3013,7 @@ async function loadExcelErrors(row: ExcelTask) {
       pageSize: excelErrors.pageSize,
       pages: excelErrors.pages
     }
-  }
-  detailVisible.value = true
+  })
 }
 
 function chooseFile() {
@@ -2919,41 +3112,23 @@ function traceLogRecord(id: number) {
   return traceDetail.value?.logs?.find((item) => item.id === id)
 }
 
-function traceMqRecord(id: number) {
-  return traceDetail.value?.mqMessages?.find((item) => item.id === id)
-}
-
-function traceLocalRecord(id: number) {
-  return traceDetail.value?.localMessages?.find((item) => item.id === id)
-}
-
 async function openTraceEventDetail(event: TraceEvent) {
   const id = traceEventSourceId(event)
   if (!id) return
   if (event.source === 'LOG') {
     const record = traceLogRecord(id)
     if (record) {
-      openDetail(record)
+      await openLogDetail(record.id, record)
       return
     }
     await openLogsByTrace(event.traceId)
     return
   }
   if (event.source === 'MQ') {
-    const record = traceMqRecord(id)
-    if (record) {
-      openDetail(record)
-      return
-    }
     await openMqDetail(id)
     return
   }
   if (event.source === 'LOCAL_MESSAGE') {
-    const record = traceLocalRecord(id)
-    if (record) {
-      openDetail(record)
-      return
-    }
     await openLocalDetail(id)
   }
 }
@@ -3106,7 +3281,33 @@ async function deleteConfig(row: ConfigItem) {
   await loadConfigs()
 }
 
-function openDetail(row: unknown) {
+async function openLogDetail(id: number, fallback?: OperationLog) {
+  if (fallback) {
+    openDetail(fallback, 'operation-log')
+  } else {
+    detailKind.value = 'operation-log'
+    detailRecord.value = undefined
+    detailVisible.value = true
+  }
+  detailLoading.value = true
+  try {
+    detailRecord.value = await api.logDetail(id)
+    detailKind.value = 'operation-log'
+  } catch (error) {
+    if (!fallback) {
+      detailVisible.value = false
+      detailKind.value = 'json'
+      detailRecord.value = undefined
+      throw error
+    }
+  } finally {
+    detailLoading.value = false
+  }
+}
+
+function openDetail(row: unknown, kind: DetailKind = 'json') {
+  detailLoading.value = false
+  detailKind.value = kind
   detailRecord.value = row
   detailVisible.value = true
 }
@@ -3278,6 +3479,18 @@ function statusType(status?: string) {
   return 'info'
 }
 
+function operationLogResultType(success?: boolean) {
+  if (success === false) return 'danger'
+  if (success === true) return 'success'
+  return 'info'
+}
+
+function operationLogResultLabel(success?: boolean) {
+  if (success === false) return 'FAIL'
+  if (success === true) return 'OK'
+  return 'UNKNOWN'
+}
+
 function traceSourceType(source?: string) {
   if (source === 'MQ') return 'warning'
   if (source === 'LOCAL_MESSAGE') return 'success'
@@ -3302,6 +3515,43 @@ function formatRuntime(value: unknown) {
     return `${(value / 1024 / 1024).toFixed(1)} MB`
   }
   return String(value)
+}
+
+function displayDetailValue(value: unknown) {
+  if (value === undefined || value === null || value === '') {
+    return '-'
+  }
+  return String(value)
+}
+
+function formatElapsedMs(value?: number) {
+  return typeof value === 'number' ? `${value} ms` : '-'
+}
+
+function formatRetrySummary(retryCount?: number, maxRetry?: number) {
+  return `${retryCount ?? 0} / ${maxRetry ?? '-'}`
+}
+
+function formatJsonDetailText(value: unknown) {
+  if (value === undefined || value === null || value === '') {
+    return '-'
+  }
+  if (typeof value === 'string') {
+    const text = value.trim()
+    if (!text) {
+      return '-'
+    }
+    try {
+      return JSON.stringify(JSON.parse(text), null, 2)
+    } catch {
+      return value
+    }
+  }
+  try {
+    return JSON.stringify(value, null, 2)
+  } catch {
+    return String(value)
+  }
 }
 
 function formatBytes(value?: number) {
@@ -4024,18 +4274,49 @@ function stringifyHealthValue(value: unknown) {
   margin-top: 14px;
 }
 
-.detail {
+.detail-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 360px;
+}
+
+.detail-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.detail-section-title {
+  color: #303133;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.detail,
+.detail-code {
   margin: 0;
   padding: 14px;
-  min-height: 360px;
   overflow: auto;
   border-radius: 8px;
-  border: 1px solid #27272a;
-  background: #18181b;
-  color: #e4e4e7;
+  border: 1px solid #e5e7eb;
+  background: #fafafa;
+  color: #1f2937;
   font-size: 13px;
   line-height: 1.6;
   white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.detail {
+  min-height: 360px;
+}
+
+.detail-panel :deep(.detail-descriptions .el-descriptions__label) {
+  width: 112px;
+}
+
+.detail-panel :deep(.detail-descriptions .el-descriptions__content) {
   word-break: break-word;
 }
 

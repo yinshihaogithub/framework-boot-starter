@@ -52,6 +52,13 @@ public class LogAdminController {
         return Result.success(logAdminService.list(module, logType, operatorId, success, traceId, pageNum, pageSize));
     }
 
+    @Operation(summary = "日志详情")
+    @GetMapping("/{id}")
+    @RequirePermission("log:view")
+    public Result<OperationLogEntity> detail(@PathVariable Long id) {
+        return toResult(logAdminService.detail(id));
+    }
+
     @Operation(summary = "按 traceId 查询链路日志")
     @GetMapping("/traces/{traceId}")
     @RequirePermission("trace:view")
@@ -76,5 +83,9 @@ public class LogAdminController {
                                                   @RequestParam(defaultValue = "1") int pageNum,
                                                   @RequestParam(defaultValue = "20") int pageSize) {
         return Result.success(logAdminService.loginLogs(username, success, pageNum, pageSize));
+    }
+
+    private <T> Result<T> toResult(LogAdminService.ActionResult<T> result) {
+        return result.success() ? Result.success(result.data()) : Result.fail(result.code(), result.message());
     }
 }

@@ -5,6 +5,7 @@ import com.framework.admin.system.AdminSystemMapperSupport;
 import com.framework.admin.support.AdminPageSupport;
 import com.framework.admin.support.AdminTextSupport;
 import com.framework.core.result.PageResult;
+import com.framework.core.result.ResultCode;
 import com.framework.core.trace.TraceContext;
 import com.framework.log.entity.OperationLogEntity;
 import com.framework.log.mapper.OperationLogMapper;
@@ -75,6 +76,27 @@ public class LogAdminService {
         return list(null, null, null, null, traceId, pageNum, pageSize);
     }
 
+    public ActionResult<OperationLogEntity> detail(Long id) {
+        ActionResult<OperationLogEntity> invalidId = invalidIdResult(id);
+        if (invalidId != null) {
+            return invalidId;
+        }
+        OperationLogMapper mapper = availableMapper();
+        if (mapper == null) {
+            return ActionResult.fail(ResultCode.SERVICE_ERROR, "操作日志存储未启用");
+        }
+        try {
+            OperationLogEntity logEntity = mapper.findById(id);
+            if (logEntity == null) {
+                return ActionResult.fail(ResultCode.NOT_FOUND, "日志不存在");
+            }
+            return ActionResult.success(logEntity);
+        } catch (Exception e) {
+            log.warn("[日志中心] 日志详情查询失败 logId={}, error={}", id, e.getMessage());
+            return ActionResult.fail(ResultCode.SERVICE_ERROR, "日志查询失败");
+        }
+    }
+
     public PageResult<LoginLog> loginLogs(String username, Boolean success, int pageNum, int pageSize) {
         int safePageNum = AdminPageSupport.safePageNum(pageNum);
         int safePageSize = AdminPageSupport.safePageSize(pageSize);
@@ -110,7 +132,17 @@ public class LogAdminService {
         return hasText(originalLogType) && normalizedLogType == null;
     }
 
+    private <T> ActionResult<T> invalidIdResult(Long id) {
+        if (id == null || id <= 0) {
+            return ActionResult.fail(ResultCode.PARAM_ERROR, "日志ID必须大于0");
+        }
+        return null;
+    }
+
     private OperationLogMapper availableMapper() {
+        if (mapperProvider == null) {
+            return null;
+        }
         try {
             return mapperProvider.getIfAvailable();
         } catch (RuntimeException e) {
@@ -128,6 +160,16 @@ public class LogAdminService {
             return mapper.count(module, logType, operatorId, success, traceId);
         } catch (Exception ignored) {
             return 0;
+        }
+    }
+
+    public record ActionResult<T>(boolean success, int code, String message, T data) {
+        public static <T> ActionResult<T> success(T data) {
+            return new ActionResult<>(true, ResultCode.SUCCESS.getCode(), null, data);
+        }
+
+        public static <T> ActionResult<T> fail(ResultCode code, String message) {
+            return new ActionResult<>(false, code.getCode(), message, null);
         }
     }
 
